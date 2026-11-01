@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Audit Trail — TeamMotor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="flex items-center gap-12">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Open menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <div class="topbar-title">
+          <h1>Audit Trail</h1>
+          <p>Who did what, and when (Admin only)</p>
+        </div>
+      </div>
+      <div class="topbar-actions" id="topbarActions"></div>
+    </header>
+
+    <main class="page">
+      <div class="page-header">
+        <div class="flex gap-8" style="flex-wrap:wrap;align-items:center;">
+          <div class="search-input" style="max-width:18rem;"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="auSearch" placeholder="Search action, user or ID..." aria-label="Search audit trail"></div>
+          <select class="select-filter" id="auAction" aria-label="Filter by action"><option value="">All actions</option></select>
+          <label class="au-sens"><input type="checkbox" id="auSensitive"> Sensitive only</label>
+          <label class="au-date-group"><span class="au-date-label">From</span> <input type="date" id="auFrom" class="au-date-input" aria-label="From date"></label>
+          <label class="au-date-group"><span class="au-date-label">To</span> <input type="date" id="auTo" class="au-date-input" aria-label="To date"></label>
+        </div>
+        <div class="actions"><button class="btn btn-secondary" id="auExport">Export CSV</button></div>
+      </div>
+      <div class="table-card"><div class="table-wrap au-wrap"><table class="au-table">
+        <thead><tr><th>When</th><th>User</th><th>Action</th><th>Record</th><th>Summary</th><th>IP</th><th class="text-center">View</th></tr></thead>
+        <tbody id="auTbody"></tbody>
+      </table></div>
+        <div id="auPager"></div></div>
+    </main>
+  </div>
+</div>
+
+
+<!-- Audit entry detail -->
+<div class="modal-overlay" id="auDetailOverlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2>Audit Entry <span class="mono-num text-muted" id="auDetailId" style="font-size:.85rem;"></span></h2>
+      <button class="modal-close" data-close="auDetailOverlay" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
+    </div>
+    <div class="modal-body" id="auDetailBody"></div>
+    <div class="modal-footer"><button class="btn btn-secondary" data-close="auDetailOverlay">Close</button></div>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/local-api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/audit.js"></script>
+
+</body>
+</html>

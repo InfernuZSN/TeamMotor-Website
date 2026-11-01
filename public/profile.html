@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile — TeamMotor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="flex items-center gap-12">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Open menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <div class="topbar-title">
+          <!-- "Admin Profile" / "Staff Profile" is filled in by profile.js from the signed-in role -->
+          <h1 id="profileTitle">Profile</h1>
+          <p>Manage personal credentials, work schedule attendance status, and technical expertise.</p>
+        </div>
+      </div>
+      <div class="topbar-actions" id="topbarActions"></div>
+    </header>
+
+    <main class="page page-profile">
+
+      <!-- Shown only for demo "guest" sign-ins that have no saved user record (see profile.js) -->
+      <div class="profile-guest-note" id="guestNote" hidden></div>
+
+      <div class="profile-grid">
+
+        <!-- ================= Left column ================= -->
+        <div class="profile-col">
+
+          <!-- Work Shift Status — STAFF ONLY. profile.js removes this card for Admins. -->
+          <section class="card profile-card shift-card" id="shiftCard" hidden aria-labelledby="shiftTitle">
+            <div class="shift-head">
+              <h3 class="shift-title" id="shiftTitle"><span data-icon="clock"></span> Work Shift Status</h3>
+              <span class="badge badge-neutral" id="shiftPill">OFF DUTY</span>
+            </div>
+            <div class="shift-panel">
+              <div class="shift-panel-label" id="shiftSwitchLabel">Shift Clock Toggle</div>
+              <div class="shift-toggle-row">
+                <span class="shift-side shift-side-off" id="shiftSideOff">Off Duty</span>
+                <button type="button" class="switch" id="shiftSwitch" role="switch" aria-checked="false" aria-labelledby="shiftSwitchLabel"><span class="switch-knob"></span></button>
+                <span class="shift-side shift-side-on" id="shiftSideOn">Present (In)</span>
+              </div>
+              <dl class="shift-rows" id="shiftRows"></dl>
+            </div>
+          </section>
+
+          <!-- Profile photo -->
+          <section class="card profile-card photo-card" aria-label="Profile photo">
+            <div class="profile-photo-wrap">
+              <div class="profile-photo" id="profilePhoto"></div>
+              <button type="button" class="photo-edit-btn" id="photoEditBtn" aria-label="Change profile photo" title="Change photo"><span data-icon="camera"></span></button>
+              <input type="file" id="photoInput" accept="image/*" hidden>
+            </div>
+            <h2 class="photo-name" id="photoName"></h2>
+            <div class="photo-role" id="photoRole"></div>
+            <div class="photo-id" id="photoId"></div>
+          </section>
+        </div>
+
+        <!-- ================= Right column ================= -->
+        <div class="profile-col">
+
+          <!-- Admin / Staff Details & Competencies — the main form (purple accent border) -->
+          <section class="card profile-card profile-details-card" aria-labelledby="detailsTitle">
+            <div class="profile-card-head">
+              <h3 id="detailsTitle"><span data-icon="user"></span> <span id="detailsTitleText">Profile Details &amp; Competencies</span></h3>
+              <span class="profile-required-note">* Required fields</span>
+            </div>
+
+            <form id="profileForm" novalidate autocomplete="off">
+              <div class="pf-grid">
+
+                <div class="pf-field" data-field="fullName">
+                  <label for="pfFullName">Full Name <span class="req">*</span></label>
+                  <div class="pf-control"><span class="pf-icon" data-icon="user"></span><input class="pf-input" type="text" id="pfFullName" maxlength="50" placeholder="Enter your full name" autocomplete="name"></div>
+                  <div class="pf-error" id="pfFullNameErr" role="alert"></div>
+                </div>
+
+                <div class="pf-field" data-field="position">
+                  <label for="pfPosition">Position / Role</label>
+                  <div class="pf-control"><span class="pf-icon" data-icon="briefcase"></span><input class="pf-input" type="text" id="pfPosition" readonly aria-readonly="true" tabindex="-1"></div>
+                </div>
+
+                <div class="pf-field" data-field="birthDate">
+                  <label for="pfBirthDate">Birth Date <span class="req">*</span></label>
+                  <div class="pf-control pf-control-date"><span class="pf-icon" data-icon="calendar"></span><input class="pf-input" type="date" id="pfBirthDate" autocomplete="bday"></div>
+                  <div class="pf-error" id="pfBirthDateErr" role="alert"></div>
+                </div>
+
+                <div class="pf-field" data-field="contact">
+                  <label for="pfContact">Contact Number <span class="req">*</span></label>
+                  <div class="pf-control"><span class="pf-icon" data-icon="phone"></span><input class="pf-input" type="tel" id="pfContact" maxlength="20" placeholder="+63 9XX XXX XXXX" autocomplete="tel"></div>
+                  <div class="pf-error" id="pfContactErr" role="alert"></div>
+                </div>
+
+                <div class="pf-field pf-span-2" data-field="email">
+                  <label for="pfEmail">Email Address <span class="req">*</span></label>
+                  <div class="pf-control"><span class="pf-icon" data-icon="mail"></span><input class="pf-input" type="email" id="pfEmail" maxlength="80" placeholder="name@example.com" autocomplete="email"></div>
+                  <div class="pf-error" id="pfEmailErr" role="alert"></div>
+                </div>
+
+              </div>
+
+              <div class="profile-actions">
+                <button type="button" class="btn btn-secondary" id="discardBtn">Discard Changes</button>
+                <button type="submit" class="btn btn-primary" id="saveBtn"><span data-icon="lock"></span> Save Profile Details</button>
+              </div>
+            </form>
+          </section>
+
+          <!-- Password & Security Credentials — Wired to PUT /api/users/me/password (bcrypt on the server). -->
+          <section class="card profile-card" aria-labelledby="securityTitle">
+            <div class="profile-card-head">
+              <h3 id="securityTitle"><span class="icon-accent" data-icon="key"></span> Password &amp; Security Credentials</h3>
+            </div>
+
+            <form id="passwordForm" novalidate autocomplete="off">
+              <div class="pf-grid pf-grid-3">
+
+                <div class="pf-field">
+                  <label for="pwCurrent">Current Password</label>
+                  <div class="pf-control pf-control-secret"><input class="pf-input" type="password" id="pwCurrent" placeholder="••••••••" autocomplete="off"><button type="button" class="pf-eye" data-toggle-secret="pwCurrent" aria-label="Show password"><span data-icon="eye"></span></button></div>
+                </div>
+
+                <div class="pf-field">
+                  <label for="pwNew">New Password</label>
+                  <div class="pf-control pf-control-secret"><input class="pf-input" type="password" id="pwNew" placeholder="••••••••" autocomplete="off"><button type="button" class="pf-eye" data-toggle-secret="pwNew" aria-label="Show password"><span data-icon="eye"></span></button></div>
+                  <!-- Visual strength hint only (3 segments). Nothing is stored or sent anywhere. -->
+                  <div class="pw-meter" id="pwMeter" aria-hidden="true"><i></i><i></i><i></i></div>
+                </div>
+
+                <div class="pf-field">
+                  <label for="pwConfirm">Confirm Password</label>
+                  <div class="pf-control pf-control-secret"><input class="pf-input" type="password" id="pwConfirm" placeholder="••••••••" autocomplete="off"><button type="button" class="pf-eye" data-toggle-secret="pwConfirm" aria-label="Show password"><span data-icon="eye"></span></button></div>
+                </div>
+
+              </div>
+
+              <div class="profile-actions profile-actions-split">
+                <span class="hint">Changing your password signs you out on your other devices. This device stays signed in.</span>
+                <button type="button" class="btn btn-secondary" id="clearPasswordBtn"><span data-icon="refresh"></span> Clear</button>
+                <button type="submit" class="btn btn-dark" id="savePasswordBtn"><span data-icon="lock"></span> Save Password</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      </div>
+
+      <footer class="profile-footer">Estacio Garage TeamMotor POS &amp; Inventory Management System &bull; Staff Profile &amp; Attendance Engine</footer>
+    </main>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/local-api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/shifts.js"></script>
+<script src="js/app.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/profile.js"></script>
+</body>
+</html>

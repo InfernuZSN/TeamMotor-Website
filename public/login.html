@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log In — TeamMotor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/responsive.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body data-public>
+
+<div class="login-shell">
+  <div class="login-visual">
+    <img class="login-hero" src="img/sidebar-logo.jpg" alt="Estacio Garage logo artwork">
+    <div class="pitch">
+      <h2>Run the shop without the spreadsheet</h2>
+      <p>Inventory, POS, and sales tracking in one place — built for the counter, not a corporate back office.</p>
+    </div>
+  </div>
+
+  <div class="login-form-side">
+    <div class="login-box">
+      <div class="login-brand">
+        <h1>TeamMotor</h1>
+        <p>Parts &amp; Accessories</p>
+      </div>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="login-password-wrap">
+            <input type="password" id="password" autocomplete="current-password" required>
+            <button type="button" class="login-eye" data-toggle-secret="password" aria-label="Show password" tabindex="-1">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <a class="login-link forgot-link" href="#">Forgot password</a>
+        <button type="submit" class="btn btn-primary btn-login">Log-in</button>
+      </form>
+
+      <div class="divider">Or continue with</div>
+      <button type="button" class="btn-google"><img src="img/google.png" alt="" width="28" height="28"> Google</button>
+
+      <div class="login-demo">
+        <div class="login-demo-note">Accounts are issued by the shop administrator. Owner/Admin and Staff/Cashier permissions are enforced by the server.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/local-api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+<script>
+Boot.ready(function () {
+  // Already signed in with a still-valid token? Skip the form.
+  if (Api.getToken() && getSession() && !/reason=/.test(location.search)) {
+    Api.get('/auth/me').then(function () { location.replace('index.html'); }).catch(function () { Api.clear(); });
+  }
+  Api.detect().then(function (mode) {
+    if (mode !== 'local') return;
+    const note = document.querySelector('.login-demo-note');
+    if (note) note.innerHTML = '<strong>Offline mode</strong> \u2014 everything is saved in this browser only.<br>Admin: <b>ronnie.manalo</b> / <b>Admin@12345</b><br>Staff: <b>juan.delacruz</b> / <b>Staff@12345</b>';
+  }).catch(function (e) { showToast(e.message, 'danger'); });
+  if (/reason=expired/.test(location.search)) showToast('Your session expired. Please log in again.', 'info');
+
+  document.querySelectorAll('[data-toggle-secret]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const targetId = btn.getAttribute('data-toggle-secret');
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.innerHTML = icon(show ? 'eyeOff' : 'eye');
+    });
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!username || !password) { showToast('Enter your username and password.', 'danger'); return; }
+    const btn = this.querySelector('button[type="submit"]');
+    await Utils.withBusy(btn, async function () {
+      try {
+        const res = await Api.post('/auth/login', { username: username, password: password });
+        setSession(res.token, res.user);
+        window.location.replace('index.html');
+      } catch (err) {
+        showToast(err.message, 'danger');
+        document.getElementById('password').value = '';
+      }
+    });
+  });
+
+  document.querySelector('.forgot-link').addEventListener('click', function (e) {
+    e.preventDefault();
+    showToast('Password resets are done by an administrator (Users page). Please contact the shop owner.', 'info');
+  });
+
+  /* ---- Google Sign-In with Account Chooser ---- */
+  let googleClient = null;
+  let googleClientId = '';
+
+  async function initGoogleAuth() {
+    try {
+      const cfg = await Api.get('/auth/google/config');
+      googleClientId = (cfg && cfg.clientId) || window.GOOGLE_CLIENT_ID || '';
+    } catch (e) {
+      googleClientId = window.GOOGLE_CLIENT_ID || '';
+    }
+    if (!googleClientId) return;
+
+    function setupClient() {
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        setTimeout(setupClient, 150);
+        return;
+      }
+      try {
+        googleClient = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: 'openid email profile',
+          prompt: 'select_account',
+          callback: async function (resp) {
+            console.log('[Google Auth] Response received from Google:', resp);
+            if (resp.error) {
+              console.warn('[Google Auth] Auth error:', resp.error);
+              if (resp.error === 'access_denied') {
+                showToast('Google sign-in was cancelled or access denied.', 'info');
+              } else {
+                showToast('Google sign-in failed: ' + resp.error, 'danger');
+              }
+              return;
+            }
+            if (!resp.access_token) {
+              console.warn('[Google Auth] No access token in response');
+              return;
+            }
+            const googleBtn = document.querySelector('.btn-google');
+            await Utils.withBusy(googleBtn, async function () {
+              try {
+                let googleEmail = '';
+                try {
+                  const gInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: 'Bearer ' + resp.access_token }
+                  });
+                  if (gInfoRes.ok) {
+                    const gInfo = await gInfoRes.json();
+                    googleEmail = (gInfo.email || '').trim().toLowerCase();
+                  }
+                } catch (e) {
+                  console.warn('[Google Auth] Client fetch userinfo failed, backend will verify:', e);
+                }
+
+                console.log('[Google Auth] Authenticating with TeamMotor...', { email: googleEmail });
+                const res = await Api.post('/auth/google', {
+                  accessToken: resp.access_token,
+                  email: googleEmail
+                });
+                console.log('[Google Auth] Authenticated successfully:', res.user);
+                setSession(res.token, res.user);
+                showToast('Welcome, ' + (res.user.name || res.user.username) + '!', 'ok');
+                setTimeout(function () {
+                  window.location.replace('index.html');
+                }, 250);
+              } catch (err) {
+                console.error('[Google Auth] TeamMotor login failed:', err);
+                showToast(err.message, 'danger');
+              }
+            });
+          },
+          error_callback: function (err) {
+            console.warn('[Google Auth] Error callback:', err);
+            if (err && (err.type === 'popup_closed' || err.message === 'popup_closed')) {
+              showToast('Google sign-in popup was closed.', 'info');
+            } else {
+              showToast('Unable to open Google sign-in window.', 'danger');
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Google Identity initialization failed:', err);
+      }
+    }
+    setupClient();
+  }
+  initGoogleAuth();
+
+  document.querySelector('.btn-google').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!googleClientId) {
+      showToast('Google Sign-In is not configured yet. Set GOOGLE_CLIENT_ID in server/.env.', 'warning');
+      return;
+    }
+    if (!googleClient) {
+      if (typeof google === 'undefined' || !google.accounts) {
+        showToast('Google services are still loading. Please try again in a moment.', 'info');
+      } else {
+        initGoogleAuth();
+        showToast('Initializing Google Sign-In... Please try again.', 'info');
+      }
+      return;
+    }
+    try {
+      // 'select_account' forces the official Google account chooser popup
+      googleClient.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      showToast('Could not launch Google Sign-In: ' + err.message, 'danger');
+    }
+  });
+});
+</script>
+</body>
+</html>

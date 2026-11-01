@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales — TeamMotor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="sidebar-scrim" id="sidebarScrim"></div>
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <header class="topbar">
+      <div class="flex items-center gap-12">
+        <button class="hamburger-btn" id="hamburgerBtn" aria-label="Open menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+        <div class="topbar-title">
+          <h1>Sales</h1>
+          <p>What's selling and what's moving</p>
+        </div>
+      </div>
+      <div class="topbar-actions" id="topbarActions"></div>
+    </header>
+
+    <main class="page page-sales">
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="overview">Transactions</button>
+        <button class="tab-btn" data-tab="analysis">Sales Analysis</button>
+        <button class="tab-btn" data-tab="movement">Product Movement</button>
+      </div>
+
+      <div class="tab-panel active" id="tab-overview">
+        <section class="card eod-card" id="eodCard" aria-label="Today's sales summary">
+          <div class="card-title-row">
+            <h3>Today's sales summary</h3>
+            <span class="hint" id="eodDate" style="margin:0;"></span>
+          </div>
+          <div class="eod-grid" id="eodGrid"></div>
+          <div class="eod-pay" id="eodPay"></div>
+          <p class="hint eod-note" id="eodNote" style="margin:.625rem 0 0;"></p>
+        </section>
+        <div class="card orders-card">
+            <div class="card-title-row">
+              <h3>Transactions</h3>
+              <div class="flex items-center gap-12" style="flex-wrap:wrap;">
+                <div class="search-input"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="salesSearch" placeholder="Search order, item, staff..." aria-label="Search transactions"></div>
+                <span class="hint" id="ordersSummary" style="margin:0;"></span>
+                <select class="select-filter" id="salesFilter" aria-label="Filter sales by time">
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                  <option value="all" selected>All</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="exportSalesBtn" type="button" title="Export sales to CSV"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke-width:2;fill:none;stroke:currentColor;"><line x1="12" y1="3" x2="12" y2="14"/><polyline points="7,10 12,15 17,10"/><line x1="4" y1="19" x2="20" y2="19"/></svg> Export CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap is-scroll"><table>
+              <thead><tr><th>Order</th><th>Date</th><th>Items</th><th>Staff</th><th>Payment</th><th>Status</th><th class="text-right">Total</th><th>Actions</th></tr></thead>
+              <tbody id="recentOrdersTbody"></tbody>
+            </table></div>
+            <div id="salesPager"></div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-analysis">
+        <div class="stat-grid stat-grid-5" id="salesStatGrid"></div>
+        <div class="card" style="margin-bottom:1rem;">
+          <div class="card-title-row">
+            <h3 id="analysisTrendTitle">Sales Trend — Last 7 Days</h3>
+            <div class="chip-row" id="analysisRange">
+              <span class="chip active" data-range="week">1 Week</span>
+              <span class="chip" data-range="month">1 Month</span>
+              <span class="chip" data-range="year">1 Year</span>
+            </div>
+          </div>
+          <div class="bar-chart" id="analysisChart"></div>
+        </div>
+        <div class="grid-2" style="margin-bottom:1rem;">
+          <div class="card">
+            <div class="card-title-row">
+              <h3>Payment Method Summary</h3>
+              <select class="select-filter" id="payPeriod" aria-label="Payment summary period">
+                <option value="day">Today</option><option value="week">Last 7 days</option><option value="month">This month</option><option value="year">This year</option><option value="all" selected>All time</option>
+              </select>
+            </div>
+            <div id="paymentSummary"></div>
+          </div>
+          <div class="card">
+            <div class="card-title-row"><h3>Top-Selling Products</h3></div>
+            <p style="color:var(--steel);font-size:.82rem;margin-top:-0.375rem;">What's moving — good candidates to keep well-stocked.</p>
+            <div id="topSellersList"></div>
+          </div>
+          <div class="card">
+            <div class="card-title-row"><h3>Slow-Moving Products</h3></div>
+            <p style="color:var(--steel);font-size:.82rem;margin-top:-0.375rem;">Barely selling — consider a promo or smaller reorders.</p>
+            <div id="slowMoversList"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tab-panel" id="tab-movement">
+        <div class="movement-grid">
+          <div class="card movement-card">
+            <div class="card-title-row">
+              <div>
+                <h3>Fast Moving</h3>
+                <p class="hint" style="margin:2px 0 0;">Top-selling products ranked by units sold across completed sales</p>
+              </div>
+              <span class="badge badge-ok">High Demand</span>
+            </div>
+            <div class="table-wrap"><table class="movement-table">
+              <thead><tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-right">Units Sold</th>
+                <th class="text-right">Revenue</th>
+                <th class="text-right">Current Stock</th>
+                <th>Stock Status</th>
+              </tr></thead>
+              <tbody id="fastMovingTbody"></tbody>
+            </table></div>
+          </div>
+          <div class="card movement-card">
+            <div class="card-title-row">
+              <div>
+                <h3>Slow Moving</h3>
+                <p class="hint" style="margin:2px 0 0;">Lowest-selling products — review stock levels or consider promotions</p>
+              </div>
+              <span class="badge badge-warn">Low Turnover</span>
+            </div>
+            <div class="table-wrap"><table class="movement-table">
+              <thead><tr>
+                <th>Product</th>
+                <th>Category</th>
+                <th class="text-right">Unit Price</th>
+                <th class="text-right">Units Sold</th>
+                <th class="text-right">Revenue</th>
+                <th class="text-right">Current Stock</th>
+                <th>Stock Status</th>
+              </tr></thead>
+              <tbody id="slowMovingTbody"></tbody>
+            </table></div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Sale details: every item in one order -->
+<div class="modal-overlay" id="saleModalOverlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 id="saleModalTitle">Order</h2>
+      <button class="modal-close" data-close="saleModalOverlay" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
+    </div>
+    <div class="modal-body" id="saleModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger" id="saleVoidBtn" type="button" style="display:none;margin-right:auto;">Void / Cancel / Refund</button>
+      <button class="btn btn-secondary" id="saleReprintBtn" type="button" title="Prints the original transaction marked DUPLICATE and logs the reprint">Reprint Receipt</button>
+      <button class="btn btn-secondary" data-close="saleModalOverlay">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Void / cancel / refund (Admin only — enforced by the server too) -->
+<div class="modal-overlay" id="voidOverlay">
+  <div class="modal">
+    <div class="modal-header"><h2>Void sale <span id="voidSaleLabel"></span></h2>
+      <button class="modal-close" data-close="voidOverlay" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button></div>
+    <div class="modal-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:.75rem;padding:.625rem .875rem;border:1px solid var(--line,#e3e5e8);border-radius:8px;margin-bottom:.875rem;"><span class="text-muted">Sale total to reverse</span><strong id="voidSaleTotal" style="font-size:1.05rem;color:var(--ink);"></strong></div>
+      <p class="text-muted" style="margin-top:0;">Stock for every item is returned to inventory, reverse transactions are recorded, linked warranties are voided, and the action is written to the audit trail. This cannot be undone.</p>
+      <div class="field"><label for="voidType">Action</label>
+        <select id="voidType"><option value="Voided">Void (entry error / cashier mistake)</option><option value="Cancelled">Cancel (customer changed mind)</option><option value="Refunded">Refund (returned after sale)</option></select></div>
+      <div class="field"><label for="voidReason">Reason *</label><textarea id="voidReason" rows="3" maxlength="300" placeholder="Why is this sale being reversed?"></textarea></div>
+      <div class="form-error" id="voidError" role="alert"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close="voidOverlay" type="button">Keep sale</button>
+      <button class="btn btn-danger" id="voidConfirmBtn" type="button">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/local-api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/receipt.js"></script>
+<script src="js/app.js"></script>
+<script src="js/notifications.js"></script>
+<script src="js/sales.js"></script>
+<script src="js/sales-trend.js"></script>
+</body>
+</html>
