@@ -18,6 +18,7 @@ const { ensureAtLeast } = require('../src/utils/counters');
 const { computeTotals } = require('../src/utils/money');
 const { addMonths, addDays, today } = require('../src/utils/dates');
 const { refreshNotifications } = require('../src/services/notifications');
+const { ensureDefaultFilters } = require('../src/services/filters');
 
 const RESET = process.argv.includes('--reset');
 
@@ -113,6 +114,9 @@ const maxSuffix = (ids, re) => ids.reduce((m, id) => { const x = String(id).matc
   for (const c of fx.CATEGORIES) {
     await ensureAtLeast('PRD-' + c.prefix, maxSuffix(products.filter(p => p.category === c.id).map(p => p.id), /-(\d+)$/));
   }
+
+  /* Manage Filters lists: brands used by the seeded products + the default motorcycle makes/models */
+  await ensureDefaultFilters();
 
   await refreshNotifications();
   console.log('Seeded: ' + products.length + ' products, ' + sales.length + ' sales, ' + fx.CUSTOMERS.length + ' customers, ' + fx.USERS.length + ' users.');

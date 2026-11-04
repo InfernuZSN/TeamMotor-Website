@@ -9,6 +9,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
+const ROOT = path.resolve(__dirname, '../..');
+const resolveRoot = (...segs) => path.join(ROOT, ...segs);
+
 const { computeTotals, round2 } = require('../src/utils/money');
 const { addMonths, addDays, calculateWarrantyExpiry, today } = require('../src/utils/dates');
 const { warrantyStatus } = require('../src/utils/warranty');
@@ -97,7 +100,7 @@ test('Centavo precision: handles 2-decimal-place comparisons correctly', () => {
    3. RECEIPT RENDERING & CASH VS NON-CASH RULES
    ------------------------------------------------------------------------------ */
 function loadReceiptEngine() {
-  const receiptPath = path.resolve('public/js/receipt.js');
+  const receiptPath = resolveRoot('public/js/receipt.js');
   const code = fs.readFileSync(receiptPath, 'utf8');
   const ctx = {
     Utils: {
@@ -358,13 +361,13 @@ test('warranty status: active / expiring soon / expired / claimed / voided', () 
    13. UI & SCOPE REFINEMENTS (PAYMENT METHODS, SKU/BARCODE, USER DELETION)
    ------------------------------------------------------------------------------ */
 test('POS Payment Methods: only Cash and GCash are accepted for new sales; legacy methods stay valid in the Sale model', () => {
-  const mockDataCode = fs.readFileSync(path.resolve('public/js/mock-data.js'), 'utf8');
+  const mockDataCode = fs.readFileSync(resolveRoot('public/js/mock-data.js'), 'utf8');
   const ctx = { console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp };
   vm.runInNewContext(mockDataCode + '; this.PAYMENT_METHODS = PAYMENT_METHODS; this.PRODUCTS = PRODUCTS;', ctx);
   assert.deepStrictEqual(Array.from(ctx.PAYMENT_METHODS), ['Cash', 'GCash']);
-  const svc = fs.readFileSync(path.resolve('server/src/services/sales.js'), 'utf8');
+  const svc = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
   assert.ok(svc.includes("const PAYMENT_METHODS = ['Cash', 'GCash'];"), 'server allowlist must match the frontend list');
-  const model = fs.readFileSync(path.resolve('server/src/models/index.js'), 'utf8');
+  const model = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
   ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Other'].forEach(m => assert.ok(model.includes("'" + m + "'"), m + ' must stay in the Sale model enum (historical sales)'));
 
   const eng003 = ctx.PRODUCTS.find(p => p.id === 'ENG-003');
@@ -397,13 +400,40 @@ test('POS Order Summary Removal: resets Total Paid and Change to 0 when all item
 });
 
 test('Inventory & Users: Add Product visible to Staff/Admin, SKU/Barcode in Overview, and Staff Deletion', () => {
-  const invCode = fs.readFileSync(path.resolve('public/js/inventory.js'), 'utf8');
+  const invCode = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
   assert.ok(invCode.includes("viewField('SKU'"), 'Inventory Overview must display SKU');
   assert.ok(invCode.includes("viewField('Barcode'"), 'Inventory Overview must display Barcode');
   assert.ok(!invCode.includes("['addProductBtn', 'manageCategoriesBtn']"), 'addProductBtn must not be hidden for Staff');
 
-  const usersCode = fs.readFileSync(path.resolve('public/js/users.js'), 'utf8');
+  const usersCode = fs.readFileSync(resolveRoot('public/js/users.js'), 'utf8');
   assert.ok(usersCode.includes('data-delete='), 'Users table must render Delete button for staff accounts');
   assert.ok(usersCode.includes("Api.del('/users/'"), 'Users script must call DELETE /users/:id');
 });
+
+test('Manage Filters: unifies Manage Categories, Manage Brands, Manage Suppliers, and Manage Motorcycle Compatibility across UI, LocalApi, and MongoDB models', () => {
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('Manage Filters'), 'Inventory page must have Manage Filters button and modal title');
+  assert.ok(invHtml.includes('Manage Categories'), 'Manage Filters must include Manage Categories tab');
+  assert.ok(invHtml.includes('Manage Brands'), 'Manage Filters must include Manage Brands tab');
+  assert.ok(invHtml.includes('Manage Suppliers'), 'Manage Filters must include Manage Suppliers tab');
+  assert.ok(invHtml.includes('Manage Motorcycle Compatibility'), 'Manage Filters must include Manage Motorcycle Compatibility tab');
+  assert.ok(!invHtml.includes('id="supplierManagerOverlay"'), 'Standalone Suppliers modal must be merged into Manage Filters');
+  assert.ok(/<select[^>]+id="pBrand"/.test(invHtml), 'Add Product Brand field must be a <select> populated from Manage Brands');
+
+  const modelsCode = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(modelsCode.includes("make('Brand', 'brands'"), 'Mongoose Brand model must exist');
+  assert.ok(modelsCode.includes("make('MotorcycleCompatibility', 'motorcycle_compatibility'"), 'Mongoose MotorcycleCompatibility model must exist');
+
+  const catalogCode = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogCode.includes('brands.post(') && catalogCode.includes('brands.delete('), 'Server catalog routes must support Brand CRUD');
+  assert.ok(catalogCode.includes('motoBrands.post(') && catalogCode.includes('motoBrands.delete('), 'Server catalog routes must support MotorcycleBrand & Model CRUD');
+  assert.ok(catalogCode.includes("suppliers.delete('/:id'"), 'Server catalog routes must support Supplier deletion');
+  assert.ok(catalogCode.includes('!models.length'), 'Server must enforce at least one model when creating motorcycle compatibility');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('data-sup-delete'), 'Supplier list must have delete action button');
+  assert.ok(invJs.includes('deleteSupplier('), 'Supplier deletion function must be implemented');
+  assert.ok(invJs.includes('!models.length'), 'Motorcycle compatibility creation must validate both brand and models');
+});
+
 

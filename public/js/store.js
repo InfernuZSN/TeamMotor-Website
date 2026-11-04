@@ -108,6 +108,8 @@ const Store = (function () {
     data = d;
     loaded = true;
     if (d.me) Api.setUser(d.me);
+    // Let pages re-draw anything derived from the cache (e.g. Sales page product-movement tables).
+    try { window.dispatchEvent(new CustomEvent('store:refreshed')); } catch (e) { /* very old browser */ }
     return d;
   }
   function get(key, fallback) {

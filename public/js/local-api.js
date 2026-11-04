@@ -80,6 +80,26 @@ const LocalApi = (function () {
     });
     if (changed) save();
   }
+  /* Manage Filters lists (mirrors server/src/services/filters.js):
+       • brands — every brand already written on a product is kept on the list, so existing products stay valid;
+       • motoBrands — the default motorcycle makes/models, added once (a missing key means "never filled"). */
+  function ensureDefaultFilters() {
+    if (!db || !Array.isArray(db.products)) return;
+    db.counters = db.counters || {};
+    let changed = false;
+    if (!Array.isArray(db.brands)) { db.brands = []; changed = true; }
+    const have = {}; db.brands.forEach(function (b) { have[b.name.toLowerCase()] = true; });
+    db.products.map(function (p) { return String(p.brand || '').trim(); }).filter(Boolean).sort(function (a, b) { return a.localeCompare(b); }).forEach(function (name) {
+      if (have[name.toLowerCase()]) return;
+      db.brands.push({ id: nextId('BRD', 'BRD', 3), name: name });
+      have[name.toLowerCase()] = true; changed = true;
+    });
+    if (!Array.isArray(db.motoBrands)) {
+      db.motoBrands = Object.keys(MOTO_BRANDS).map(function (name) { return { id: nextId('MOTO', 'MOTO', 3), name: name, models: MOTO_BRANDS[name].slice() }; });
+      changed = true;
+    }
+    if (changed) { try { save(); } catch (e) { /* storage blocked — kept in memory for this session */ } }
+  }
   /* Older saved databases carry the seed placeholder "[email protected]" on customers, which fails email validation and
      blocks editing. Swap it for the fixed seed address (or blank it for non-seed records). Real addresses are never touched. */
   function fixPlaceholderEmails() {
@@ -99,6 +119,7 @@ const LocalApi = (function () {
     try { lastStored = localStorage.getItem(KEY); db = JSON.parse(lastStored || 'null'); } catch (e) { db = null; memOnly = true; }
     if (!db) { db = seed(); try { save(); } catch (e) { memOnly = true; } }
     ensureDefaultCategories();
+    ensureDefaultFilters();
     fixPlaceholderEmails();
     if (db && Array.isArray(db.products)) {
       db.products.forEach(function (p, idx) {
@@ -378,6 +399,35 @@ const LocalApi = (function () {
     ['costPrice', 'sellingPrice', 'reorderLevel'].forEach(function (k) { if (o[k] !== undefined && (!isFinite(Number(o[k])) || Number(o[k]) < 0)) throw bad(k + ' must be a non-negative number.'); });
     return o;
   }
+  /* Manage Filters helpers (mirror server/src/routes/catalog.js) */
+  const sortByName = function (list) { return clone(list).sort(function (a, b) { return a.name.localeCompare(b.name); }); };
+  function cleanName(v, label, max) {
+    const name = String(v || '').trim().replace(/\s+/g, ' ');
+    if (!name) throw bad(label + ' is required.');
+    if (name.length > max) throw bad(label + ' must be ' + max + ' characters or fewer.');
+    return name;
+  }
+  const sameName = function (a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); };
+  const compatUsers = function (entries) { return db.products.filter(function (p) { return (p.compatibility || []).some(function (c) { return entries.indexOf(c) !== -1; }); }).length; };
+  /* Brand + compatibility must come from the Manage Filters lists; values a product already has are accepted on edit. */
+  function checkFilterValues(d, before) {
+    if (d.brand !== undefined) {
+      d.brand = String(d.brand || '').trim();
+      if (d.brand && !(before && before.brand === d.brand)) {
+        const b = (db.brands || []).find(function (x) { return sameName(x.name, d.brand); });
+        if (!b) throw bad('Unknown brand "' + d.brand + '". Add it under Manage Filters \u2192 Manage Brands first.');
+        d.brand = b.name;
+      }
+    }
+    if (d.compatibility !== undefined) {
+      if (!Array.isArray(d.compatibility)) throw bad('Compatibility must be a list.');
+      const had = before ? before.compatibility || [] : [];
+      const allowed = {}; (db.motoBrands || []).forEach(function (mb) { mb.models.forEach(function (m) { const full = mb.name + ' ' + m; allowed[full.toLowerCase()] = full; }); });
+      const unknown = d.compatibility.filter(function (c) { return c !== UNIVERSAL_FIT && had.indexOf(c) === -1 && !allowed[c.toLowerCase()]; });
+      if (unknown.length) throw bad('Unknown motorcycle model(s): ' + unknown.join(', ') + '. Add them under Manage Filters \u2192 Manage Motorcycle Compatibility first.');
+      d.compatibility = d.compatibility.map(function (c) { return allowed[c.toLowerCase()] || c; });
+    }
+  }
 
   const PW_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
   const checkPw = function (pw) { if (!PW_RE.test(String(pw || ''))) throw bad('Password must be at least 8 characters and include a letter and a number.'); };
@@ -436,7 +486,7 @@ const LocalApi = (function () {
     refreshNotifications();
     const admin = c.user.role === 'Admin';
     return {
-      me: pubUser(c.full), settings: db.settings, categories: db.categories, suppliers: db.suppliers, products: db.products,
+      me: pubUser(c.full), settings: db.settings, categories: db.categories, suppliers: db.suppliers, brands: sortByName(db.brands || []), motoBrands: sortByName(db.motoBrands || []), products: db.products,
       customers: db.customers.map(decorateCustomer), sales: db.sales.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).slice(0, 5000),
       inventoryTransactions: db.inventoryTransactions.slice(0, 3000), warranties: db.warranties.map(warrantyOut), notifications: db.notifications,
       users: admin ? db.users.map(pubUser) : [pubUser(c.full)], expiry: expiryReport(),
@@ -445,11 +495,21 @@ const LocalApi = (function () {
   });
 
   /* products / categories / suppliers */
+  R('GET', '/products', function () {
+    return clone(db.products.slice().sort(function (a, b) { return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; }));
+  });
+  R('GET', '/products/lookup/([^/]+)', function (c) {
+    const code = decodeURIComponent(c.m[1]).trim();
+    const p = db.products.find(function (x) { return !x.archived && (x.barcode === code || x.sku === code || x.id === code.toUpperCase()); });
+    if (!p) throw nf('No product matches "' + code + '".');
+    return clone(p);
+  });
   R('POST', '/products', function (c) {
     const d = cleanProduct(c.body);
     if (!d.name || !d.category) throw bad('Name and category are required.');
     if (d.sellingPrice === undefined) throw bad('Selling price is required.');
     const cat = db.categories.find(function (x) { return x.id === d.category; }); if (!cat) throw bad('Unknown category.');
+    checkFilterValues(d, null);
     const stock = Math.max(0, parseInt(c.body.stock, 10) || 0);
     const existingMax = maxSuffix(db.products.filter(function (p) { return p.id && p.id.indexOf(cat.prefix + '-') === 0; }).map(function (p) { return p.id; }), /-(\d+)$/);
     db.counters['PRD-' + cat.prefix] = Math.max(db.counters['PRD-' + cat.prefix] || 0, existingMax) + 1;
@@ -465,6 +525,7 @@ const LocalApi = (function () {
   R('PUT', '/products/([^/]+)', function (c) {
     needAdmin(c); const p = findProduct(c.m[1]); if (!p) throw nf('Product not found.');
     const d = cleanProduct(c.body), changes = {};
+    checkFilterValues(d, p);
     Object.keys(d).forEach(function (k) { if (k !== 'image' && JSON.stringify(p[k]) !== JSON.stringify(d[k])) changes[k] = { from: p[k], to: d[k] }; });
     Object.assign(p, d, { lastUpdated: nowISO() });
     audit(c.user, 'product.update', 'product', p.id, { name: p.name, changes: changes }); refreshNotifications();
@@ -526,6 +587,75 @@ const LocalApi = (function () {
     ['name', 'contactPerson', 'contactNumber', 'email', 'address', 'status', 'lastDelivery'].forEach(function (k) { if (c.body[k] !== undefined) { s[k] = c.body[k]; sKeys.push(k); } });
     audit(c.user, 'supplier.update', 'supplier', s.id, { name: s.name, changes: diff(sBefore, s, sKeys) }); return clone(s);
   });
+  R('DELETE', '/suppliers/([^/]+)', function (c) {
+    needAdmin(c); const id = decodeURIComponent(c.m[1]);
+    const s = db.suppliers.find(function (x) { return x.id === id; }); if (!s) throw nf('Supplier not found.');
+    const used = db.products.filter(function (p) { return p.supplier === s.id; }).length;
+    if (used) throw conflict('"' + s.name + '" is still linked to ' + used + ' product(s) (archived ones count). Change their supplier first.');
+    db.suppliers = db.suppliers.filter(function (x) { return x.id !== s.id; });
+    audit(c.user, 'supplier.delete', 'supplier', s.id, { name: s.name }); return { ok: true };
+  });
+
+  /* brands (Manage Filters → Manage Brands) — mirrors server/src/routes/catalog.js */
+  R('GET', '/brands', function () { return sortByName(db.brands || []); });
+  R('POST', '/brands', function (c) {
+    needAdmin(c); const name = cleanName(c.body.name, 'Brand name', 30);
+    if (db.brands.some(function (b) { return sameName(b.name, name); })) throw conflict('The brand "' + name + '" already exists.');
+    const b = { id: nextId('BRD', 'BRD', 3), name: name }; db.brands.push(b);
+    audit(c.user, 'brand.create', 'brand', b.id, { name: name }); return clone(b);
+  });
+  R('PUT', '/brands/([^/]+)', function (c) {
+    needAdmin(c); const id = decodeURIComponent(c.m[1]);
+    const b = db.brands.find(function (x) { return x.id === id; }); if (!b) throw nf('Brand not found.');
+    const name = cleanName(c.body.name, 'Brand name', 30);
+    if (db.brands.some(function (x) { return x.id !== b.id && sameName(x.name, name); })) throw conflict('The brand "' + name + '" already exists.');
+    const oldName = b.name; let n = 0;
+    b.name = name;
+    if (oldName !== name) db.products.forEach(function (p) { if (p.brand === oldName) { p.brand = name; p.lastUpdated = nowISO(); n++; } });
+    audit(c.user, 'brand.update', 'brand', b.id, { name: name, changes: { name: { from: oldName, to: name } }, productsUpdated: n }); return clone(b);
+  });
+  R('DELETE', '/brands/([^/]+)', function (c) {
+    needAdmin(c); const id = decodeURIComponent(c.m[1]);
+    const b = db.brands.find(function (x) { return x.id === id; }); if (!b) throw nf('Brand not found.');
+    const used = db.products.filter(function (p) { return p.brand === b.name; }).length;
+    if (used) throw conflict('"' + b.name + '" is still used by ' + used + ' product(s) (archived ones count). Change their brand first.');
+    db.brands = db.brands.filter(function (x) { return x.id !== b.id; });
+    audit(c.user, 'brand.delete', 'brand', b.id, { name: b.name }); return { ok: true };
+  });
+
+  /* motorcycle brands + models (Manage Filters → Manage Motorcycle Compatibility) */
+  const findMoto = function (c) { const id = decodeURIComponent(c.m[1]); const mb = db.motoBrands.find(function (x) { return x.id === id; }); if (!mb) throw nf('Motorcycle brand not found.'); return mb; };
+  R('GET', '/moto-brands', function () { return sortByName(db.motoBrands || []); });
+  R('POST', '/moto-brands', function (c) {
+    needAdmin(c); const name = cleanName(c.body.name, 'Motorcycle brand', 30);
+    if (db.motoBrands.some(function (x) { return sameName(x.name, name); })) throw conflict('The motorcycle brand "' + name + '" already exists.');
+    const models = [];
+    (Array.isArray(c.body.models) ? c.body.models : []).forEach(function (m) { const model = cleanName(m, 'Model name', 30); if (!models.some(function (x) { return sameName(x, model); })) models.push(model); });
+    if (!models.length) throw bad('At least one initial model is required when adding a motorcycle brand.');
+    const mb = { id: nextId('MOTO', 'MOTO', 3), name: name, models: models }; db.motoBrands.push(mb);
+    audit(c.user, 'moto.create', 'motorcycle_brand', mb.id, { name: name, models: models }); return clone(mb);
+  });
+  R('DELETE', '/moto-brands/([^/]+)', function (c) {
+    needAdmin(c); const mb = findMoto(c);
+    const used = compatUsers(mb.models.map(function (m) { return mb.name + ' ' + m; }));
+    if (used) throw conflict('"' + mb.name + '" models are still used by ' + used + ' product(s) (archived ones count). Remove them from those products first.');
+    db.motoBrands = db.motoBrands.filter(function (x) { return x.id !== mb.id; });
+    audit(c.user, 'moto.delete', 'motorcycle_brand', mb.id, { name: mb.name, models: mb.models }); return { ok: true };
+  });
+  R('POST', '/moto-brands/([^/]+)/models', function (c) {
+    needAdmin(c); const mb = findMoto(c); const model = cleanName(c.body.model, 'Model name', 30);
+    if (mb.models.some(function (m) { return sameName(m, model); })) throw conflict(mb.name + ' ' + model + ' is already on the list.');
+    mb.models.push(model);
+    audit(c.user, 'moto.model_add', 'motorcycle_brand', mb.id, { name: mb.name, model: model }); return clone(mb);
+  });
+  R('DELETE', '/moto-brands/([^/]+)/models/([^/]+)', function (c) {
+    needAdmin(c); const mb = findMoto(c); const model = decodeURIComponent(c.m[2]);
+    if (mb.models.indexOf(model) === -1) throw nf('Model not found.');
+    const used = compatUsers([mb.name + ' ' + model]);
+    if (used) throw conflict(mb.name + ' ' + model + ' is still used by ' + used + ' product(s) (archived ones count). Remove it from those products first.');
+    mb.models = mb.models.filter(function (m) { return m !== model; });
+    audit(c.user, 'moto.model_remove', 'motorcycle_brand', mb.id, { name: mb.name, model: model }); return clone(mb);
+  });
 
   /* inventory */
   R('POST', '/inventory/stock-in', function (c) {
@@ -564,10 +694,32 @@ const LocalApi = (function () {
     audit(c.user, 'stock.adjust', 'product', p.id, { productId: p.id, productName: p.name, qty: Math.abs(delta), from: r.txn.previousStock, to: r.txn.newStock, delta: delta, reason: reason }); refreshNotifications();
     return { product: clone(r.product), transaction: clone(r.txn) };
   });
-  R('GET', '/inventory/transactions', function () { return clone(db.inventoryTransactions.slice(0, 3000)); });
+  R('GET', '/inventory/transactions', function (c) {
+    const q = c.query || {};
+    let rows = db.inventoryTransactions.slice();
+    if (q.productId) rows = rows.filter(function (t) { return t.productId === q.productId; });
+    if (q.type) rows = rows.filter(function (t) { return t.type === q.type; });
+    rows.sort(function (a, b) { return a.date < b.date ? 1 : a.date > b.date ? -1 : (a.id < b.id ? 1 : -1); });
+    const limit = Math.min(parseInt(q.limit, 10) || 3000, 5000);
+    return clone(rows.slice(0, limit));
+  });
 
   /* sales */
-  R('GET', '/sales', function () { return clone(db.sales); });
+  R('GET', '/sales', function (c) {
+    const q = c.query || {};
+    let rows = db.sales.slice();
+    if (q.status) rows = rows.filter(function (s) { return s.status === q.status; });
+    if (q.customerId) rows = rows.filter(function (s) { return s.customerId === q.customerId; });
+    if (q.from) rows = rows.filter(function (s) { return s.date >= q.from; });
+    if (q.to) rows = rows.filter(function (s) { return s.date <= q.to; });
+    rows.sort(function (a, b) { return a.date < b.date ? 1 : -1; });
+    const limit = Math.min(parseInt(q.limit, 10) || 5000, 10000);
+    return clone(rows.slice(0, limit));
+  });
+  R('GET', '/sales/([^/]+)', function (c) {
+    const s = findSale(c.m[1]); if (!s) throw nf('Sale not found.');
+    return clone(s);
+  });
   R('POST', '/sales', function (c) { return createSale(c.body, c.user); });
   R('POST', '/sales/([^/]+)/void', function (c) { needAdmin(c); return voidSale(c.m[1], c.body.type || 'Voided', c.body.reason, c.user); });
   R('POST', '/sales/([^/]+)/reprint', function (c) {
@@ -579,7 +731,12 @@ const LocalApi = (function () {
   });
 
   /* customers */
-  R('GET', '/customers', function () { return db.customers.map(decorateCustomer); });
+  R('GET', '/customers', function (c) {
+    const q = c.query || {};
+    let list = db.customers;
+    if (q.status && ['Active', 'Inactive'].indexOf(q.status) !== -1) list = list.filter(function (cu) { return cu.status === q.status; });
+    return list.map(decorateCustomer);
+  });
   R('GET', '/customers/([^/]+)', function (c) {
     const cu = db.customers.find(function (x) { return x.id === c.m[1]; }); if (!cu) throw nf('Customer not found.');
     return { customer: decorateCustomer(cu), sales: clone(db.sales.filter(function (s) { return s.customerId === cu.id; })), warranties: db.warranties.filter(function (w) { return w.customerId === cu.id; }).map(warrantyOut) };
@@ -654,14 +811,15 @@ const LocalApi = (function () {
     needAdmin(c); const b = c.body; if (!b.name || !b.username) throw bad('Name and username are required.');
     if (['Admin', 'Staff'].indexOf(b.role) === -1) throw bad('Role must be Admin or Staff.'); checkPw(b.password);
     const un = String(b.username).trim().toLowerCase(); if (db.users.some(function (u) { return u.username.toLowerCase() === un; })) throw conflict('Duplicate value: username already exists.');
-    const u = { id: nextId('USR', 'USR', 3), name: String(b.name).trim(), username: un, email: b.email || '', role: b.role, status: 'Active', contactNumber: b.contactNumber || '', birthDate: b.birthDate || '', dateAdded: today(), photo: '', passwordHash: hashPw(b.password) };
+    const em = String(b.email || '').trim().toLowerCase(); if (em && db.users.some(function (u) { return (u.email || '').toLowerCase() === em; })) throw conflict('Duplicate value: email already exists.');
+    const u = { id: nextId('USR', 'USR', 3), name: String(b.name).trim(), username: un, email: em, role: b.role, status: 'Active', contactNumber: b.contactNumber || '', birthDate: b.birthDate || '', dateAdded: today(), photo: '', passwordHash: hashPw(b.password) };
     db.users.push(u); audit(c.user, 'user.create', 'user', u.id, { username: u.username, name: u.name, role: u.role }); return pubUser(u);
   });
   R('PUT', '/users/me/profile', function (c) {
     const u = c.full, b = c.body, PF = ['name', 'email', 'contactNumber', 'birthDate'], pBefore = {}; PF.forEach(function (k) { pBefore[k] = u[k]; });
     const photoBefore = u.photo || '';
     if (b.email && db.users.some(function (x) { return x.id !== u.id && (x.email || '').toLowerCase() === String(b.email).trim().toLowerCase(); })) throw conflict('Duplicate value: email already exists.');
-    ['name', 'email', 'contactNumber', 'birthDate'].forEach(function (k) { if (b[k] !== undefined) u[k] = String(b[k]).trim(); });
+    ['name', 'email', 'contactNumber', 'birthDate'].forEach(function (k) { if (b[k] !== undefined) u[k] = k === 'email' ? String(b[k]).trim().toLowerCase() : String(b[k]).trim(); });
     if (b.photo !== undefined) { if (b.photo && !/^data:image\/[a-z+.-]+;base64,[A-Za-z0-9+/=]+$/.test(b.photo)) throw bad('Photo must be an image data URL.'); u.photo = b.photo || ''; }
     const pd = Object.assign({ targetUsername: u.username }, splitDiff(diff(pBefore, u, PF))); if ((u.photo || '') !== photoBefore) pd.photoChanged = true;
     audit(c.user, 'user.profile_update', 'user', u.id, pd); save(); return pubUser(u);
@@ -675,7 +833,8 @@ const LocalApi = (function () {
     needAdmin(c); const u = db.users.find(function (x) { return x.id === c.m[1]; }); if (!u) throw nf('User not found.');
     const b = c.body, UF = ['name', 'username', 'email', 'contactNumber', 'birthDate', 'role', 'status'], beforeDoc = {}; UF.forEach(function (k) { beforeDoc[k] = u[k]; });
     if (u.id === c.user.id && ((b.role && b.role !== u.role) || (b.status && b.status !== 'Active'))) throw E(403, 'You cannot change your own role or deactivate yourself.');
-    ['name', 'email', 'contactNumber', 'birthDate'].forEach(function (k) { if (b[k] !== undefined) u[k] = String(b[k]).trim(); });
+    if (b.email && db.users.some(function (x) { return x.id !== u.id && (x.email || '').toLowerCase() === String(b.email).trim().toLowerCase(); })) throw conflict('Duplicate value: email already exists.');
+    ['name', 'email', 'contactNumber', 'birthDate'].forEach(function (k) { if (b[k] !== undefined) u[k] = k === 'email' ? String(b[k]).trim().toLowerCase() : String(b[k]).trim(); });
     if (b.username) { const un = String(b.username).trim().toLowerCase(); if (db.users.some(function (x) { return x.id !== u.id && x.username.toLowerCase() === un; })) throw conflict('Duplicate value: username already exists.'); u.username = un; }
     if (b.role) { if (['Admin', 'Staff'].indexOf(b.role) === -1) throw bad('Invalid role.'); u.role = b.role; }
     if (b.status) { if (['Active', 'Inactive'].indexOf(b.status) === -1) throw bad('Invalid status.'); u.status = b.status; }
@@ -692,6 +851,13 @@ const LocalApi = (function () {
     db.users = db.users.filter(function (x) { return x.id !== u.id; });
     audit(c.user, 'user.delete', 'user', u.id, { username: u.username, name: u.name, role: u.role });
     save(); return { ok: true };
+  });
+  R('GET', '/users/shifts/all', function (c) {
+    needAdmin(c);
+    return clone((db.shifts || []).slice().sort(function (a, b) { return new Date(b.clockIn) - new Date(a.clockIn); }).slice(0, 1000));
+  });
+  R('GET', '/users/shifts/mine', function (c) {
+    return clone((db.shifts || []).filter(function (s) { return s.username === c.user.username; }).sort(function (a, b) { return new Date(b.clockIn) - new Date(a.clockIn); }).slice(0, 200));
   });
   R('POST', '/users/shifts/clock-in', function (c) {
     const open = db.shifts.find(function (s) { return s.username === c.user.username && !s.clockOut; }); if (open) return clone(open);

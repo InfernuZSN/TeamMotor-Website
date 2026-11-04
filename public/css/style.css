@@ -538,6 +538,14 @@ input::placeholder, textarea::placeholder { color: var(--steel-light); }
 }
 .modal-overlay.open .modal { transform: translateY(0) scale(1); }
 .modal.modal-lg { max-width: 47.5rem; }
+.modal.modal-xl { max-width: 60rem; }
+#filterTabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+#filterTabs::-webkit-scrollbar { display: none; }
+#filterTabs .tab-btn { white-space: nowrap; }
+.tab-short { display: none; }
+.manage-filter-row { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; padding: 10px 0; border-bottom: 1px solid var(--border); }
+.manage-filter-info { min-width: 0; flex: 1 1 auto; }
+.manage-filter-actions { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 .modal > form { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .modal-header {
   display: flex; align-items: center; justify-content: space-between; padding: 1.125rem 1.375rem;
@@ -580,7 +588,7 @@ input::placeholder, textarea::placeholder { color: var(--steel-light); }
   animation: toast-in .18s ease;
 }
 .toast svg { width: 1.125rem; height: 1.125rem; stroke-width: 2; flex-shrink: 0; margin-top: 1px; }
-.toast.toast-ok svg { stroke: #4ade80; } .toast.toast-danger svg { stroke: #f87171; } .toast.toast-info svg { stroke: #93c5fd; }
+.toast.toast-ok svg { stroke: #4ade80; } .toast.toast-danger svg { stroke: #f87171; } .toast.toast-warning svg, .toast.toast-warn svg { stroke: #fbbf24; } .toast.toast-info svg { stroke: #93c5fd; }
 .toast .msg { font-size: .85rem; font-weight: 500; line-height: 1.4; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(0.375rem); } to { opacity: 1; transform: translateY(0); } }
 
@@ -1451,7 +1459,7 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .au-before { color: var(--danger); background: var(--danger-bg); } .au-after { color: var(--ok); background: var(--ok-bg); font-weight: 600; }
 
 /* ---- Today's sales summary ---- */
-.eod-card { margin-bottom: 1rem; }
+.page-sales .eod-card, .eod-card { margin-bottom: 1.5rem; }
 .eod-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
 .eod-stat { border: 1px solid var(--border); border-radius: 10px; padding: .625rem .875rem; background: var(--surface); }
 .eod-stat.is-ok { border-left: 4px solid var(--ok); } .eod-stat.is-bad { border-left: 4px solid var(--danger); } .eod-stat.is-net { border-left: 4px solid var(--ink); background: var(--paper); }
@@ -1517,7 +1525,7 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .sup-modal table { min-width: 0; width: 100%; table-layout: fixed; font-size: .8rem; }
 .sup-modal thead th, .sup-modal tbody td { padding: .5rem .5rem; overflow: hidden; text-overflow: ellipsis; }
 .sup-modal th:nth-child(2) { width: 28%; } .sup-modal th:nth-child(3) { width: 5.5rem; } .sup-modal th:nth-child(4) { width: 6.5rem; }
-.sup-modal th:nth-child(5) { width: 5rem; } .sup-modal th:nth-child(6) { width: 5.25rem; }
+.sup-modal th:nth-child(5) { width: 5rem; } .sup-modal th:nth-child(6) { width: 6.75rem; }
 .sup-modal .icon-btn { width: 1.75rem; height: 1.75rem; }
 .sup-modal .flex { gap: 4px; }
 .stock-product-ro { padding: .625rem .75rem; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--paper); font-weight: 600; color: var(--ink); overflow-wrap: anywhere; }
@@ -1573,7 +1581,7 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .sup-modal tbody td .cell-trunc + .cell-trunc { font-size: .72rem; }
 .sup-modal .icon-btn { width: 1.55rem; height: 1.55rem; }
 .sup-modal .badge { padding: .1rem .45rem; }
-.sup-modal th:nth-child(2) { width: 25%; } .sup-modal th:nth-child(4) { width: 6.75rem; } .sup-modal th:nth-child(5) { width: 5.75rem; } .sup-modal th:nth-child(6) { width: 5.5rem; }
+.sup-modal th:nth-child(2) { width: 25%; } .sup-modal th:nth-child(4) { width: 6.75rem; } .sup-modal th:nth-child(5) { width: 5.75rem; } .sup-modal th:nth-child(6) { width: 6.75rem; }
 .sup-modal .modal-body > .hint { margin: .375rem 0 0 !important; font-size: .75rem; }
 .sup-modal .modal-footer { padding-top: .625rem; padding-bottom: .625rem; }
 @media (max-height: 860px) { .sup-modal .modal-body > .hint { display: none; } }

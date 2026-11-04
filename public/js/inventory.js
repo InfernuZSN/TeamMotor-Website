@@ -7,7 +7,8 @@ Boot.ready(function () {
   const expiryMonths = function () { return (Store.get('settings', {}).expiryWarningMonths) || 3; };
   async function afterChange() {
     await Store.refresh();
-    populateStaticSelects(); renderProductsTable(); renderHistoryTable(); renderSupplierList();
+    populateStaticSelects(); populateCompatBrandSelect(); renderProductsTable(); renderHistoryTable();
+    renderCategoryList(); renderBrandList(); renderSupplierList(); renderMotoBrandList();
     const addBtn = document.getElementById('addProductBtn');
     if (addBtn) { addBtn.style.display = ''; addBtn.disabled = false; }
     if (window.Notifications) Notifications.render();
@@ -36,44 +37,90 @@ Boot.ready(function () {
   }
 
   /* ---------- Static dropdown population ---------- */
+  function getMotoBrandsMap() {
+    const list = Store.get('motoBrands', null);
+    if (Array.isArray(list)) {
+      const map = {};
+      list.forEach(mb => { if (mb && mb.name) map[mb.name] = Array.isArray(mb.models) ? mb.models : []; });
+      return map;
+    }
+    return MOTO_BRANDS;
+  }
+
+  function getManagedBrandNames() {
+    const list = Store.get('brands', null);
+    if (Array.isArray(list)) return list.map(b => b.name).filter(Boolean).slice().sort((a, b) => a.localeCompare(b));
+    const products = Store.get('products', []);
+    return Array.from(new Set(products.map(p => p.brand).filter(Boolean))).sort();
+  }
+
   function populateStaticSelects() {
     const categories = Store.get('categories', []);
     const suppliers = Store.get('suppliers', []);
-    const products = Store.get('products', []);
 
-    const catOptions = categories.map(c => '<option value="' + c.id + '">' + c.name + '</option>').join('');
+    const allCatOptions = categories.map(c => '<option value="' + c.id + '">' + Utils.escapeHtml(c.name) + '</option>').join('');
+    const activeCatOptions = categories.filter(c => c.status !== 'Inactive').map(c => '<option value="' + c.id + '">' + Utils.escapeHtml(c.name) + '</option>').join('');
     const prevCat = document.getElementById('filterCategory').value;
-    document.getElementById('filterCategory').innerHTML = '<option value="">All Categories</option>' + catOptions;
+    document.getElementById('filterCategory').innerHTML = '<option value="">All Categories</option>' + allCatOptions;
     document.getElementById('filterCategory').value = prevCat;
-    document.getElementById('pCategory').innerHTML = catOptions;
+    document.getElementById('pCategory').innerHTML = activeCatOptions;
 
-    const supOptions = suppliers.map(s => '<option value="' + s.id + '">' + Utils.escapeHtml(s.name) + '</option>').join('');
+    const allSupOptions = suppliers.map(s => '<option value="' + s.id + '">' + Utils.escapeHtml(s.name) + '</option>').join('');
+    const activeSupOptions = suppliers.filter(s => s.status !== 'Inactive').map(s => '<option value="' + s.id + '">' + Utils.escapeHtml(s.name) + '</option>').join('');
     const prevSup = document.getElementById('filterSupplier').value;
-    document.getElementById('pSupplier').innerHTML = supOptions;
-    document.getElementById('sSupplier').innerHTML = supOptions;
-    document.getElementById('filterSupplier').innerHTML = '<option value="">All Suppliers</option>' + supOptions;
+    document.getElementById('pSupplier').innerHTML = activeSupOptions;
+    document.getElementById('sSupplier').innerHTML = activeSupOptions;
+    document.getElementById('filterSupplier').innerHTML = '<option value="">All Suppliers</option>' + allSupOptions;
     document.getElementById('filterSupplier').value = prevSup;
 
-    const brands = Array.from(new Set(products.map(p => p.brand).filter(Boolean))).sort();
+    const brands = getManagedBrandNames();
+    const brandOptHtml = brands.map(b => '<option value="' + Utils.escapeHtml(b) + '">' + Utils.escapeHtml(b) + '</option>').join('');
     const prevProdBrand = document.getElementById('filterProductBrand').value;
-    document.getElementById('filterProductBrand').innerHTML = '<option value="">All Brands</option>' + brands.map(b => '<option value="' + Utils.escapeHtml(b) + '">' + Utils.escapeHtml(b) + '</option>').join('');
-    document.getElementById('filterProductBrand').value = prevProdBrand;
+    document.getElementById('filterProductBrand').innerHTML = '<option value="">All Brands</option>' + brandOptHtml;
+    document.getElementById('filterProductBrand').value = brands.includes(prevProdBrand) ? prevProdBrand : '';
 
-    const brandOptions = Object.keys(MOTO_BRANDS).map(b => '<option value="' + b + '">' + b + '</option>').join('');
+    const pBrandEl = document.getElementById('pBrand');
+    if (pBrandEl) {
+      const prevPBrand = pBrandEl.value;
+      pBrandEl.innerHTML = brands.length
+        ? brandOptHtml
+        : '<option value="">No brands — add one in Manage Filters</option>';
+      if (prevPBrand && brands.includes(prevPBrand)) pBrandEl.value = prevPBrand;
+    }
+
+    const motoMap = getMotoBrandsMap();
+    const brandOptions = Object.keys(motoMap).map(b => '<option value="' + Utils.escapeHtml(b) + '">' + Utils.escapeHtml(b) + '</option>').join('');
     const prevBrand = document.getElementById('filterBrand').value;
     document.getElementById('filterBrand').innerHTML = '<option value="">Any Brand</option>' + brandOptions;
-    document.getElementById('filterBrand').value = prevBrand;
+    document.getElementById('filterBrand').value = Object.prototype.hasOwnProperty.call(motoMap, prevBrand) ? prevBrand : '';
+    const curFilterBrand = document.getElementById('filterBrand').value;
+    const prevModel = document.getElementById('filterModel').value;
+    const filterModels = curFilterBrand ? (motoMap[curFilterBrand] || []) : [];
+    document.getElementById('filterModel').innerHTML = '<option value="">Any Model</option>' + filterModels.map(m => '<option value="' + Utils.escapeHtml(m) + '">' + Utils.escapeHtml(m) + '</option>').join('');
+    document.getElementById('filterModel').value = filterModels.includes(prevModel) ? prevModel : '';
 
+    const expOpt = document.querySelector('#filterStatus option[value="Expiring Soon"]');
+    if (expOpt) expOpt.textContent = 'Expiring Soon (' + expiryMonths() + ' mo)';
   }
 
   function populateCompatBrandSelect() {
+    const motoMap = getMotoBrandsMap();
     const brandSel = document.getElementById('pCompatBrand');
-    brandSel.innerHTML = Object.keys(MOTO_BRANDS).map(b => '<option value="' + b + '">' + b + '</option>').join('');
+    const prev = brandSel.value;
+    const keys = Object.keys(motoMap);
+    brandSel.innerHTML = keys.length
+      ? keys.map(b => '<option value="' + Utils.escapeHtml(b) + '">' + Utils.escapeHtml(b) + '</option>').join('')
+      : '<option value="">No motorcycle brands</option>';
+    if (prev && Object.prototype.hasOwnProperty.call(motoMap, prev)) brandSel.value = prev;
     updateCompatModelOptions();
   }
   function updateCompatModelOptions() {
+    const motoMap = getMotoBrandsMap();
     const brand = document.getElementById('pCompatBrand').value;
-    document.getElementById('pCompatModel').innerHTML = (MOTO_BRANDS[brand] || []).map(m => '<option value="' + m + '">' + m + '</option>').join('');
+    const models = motoMap[brand] || [];
+    document.getElementById('pCompatModel').innerHTML = models.length
+      ? models.map(m => '<option value="' + Utils.escapeHtml(m) + '">' + Utils.escapeHtml(m) + '</option>').join('')
+      : '<option value="">No models available</option>';
   }
 
   /* ---------- Products table ---------- */
@@ -188,7 +235,7 @@ Boot.ready(function () {
     const reasonFilter = document.getElementById('filterHistReason').value;
     const transactions = Store.get('inventoryTransactions', []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
     const filtered = transactions.filter(t => {
-      if (q && t.productName.toLowerCase().indexOf(q) === -1) return false;
+      if (q && [t.productName, t.productId, t.reference, t.notes, t.user].join(' ').toLowerCase().indexOf(q) === -1) return false;
       if (type && t.type !== type) return false;
       if (reasonFilter && movementReason(t).label !== reasonFilter) return false;
       return true;
@@ -292,6 +339,8 @@ Boot.ready(function () {
     const products = Store.get('products', []);
     const product = productId ? products.find(p => p.id === productId) : null;
 
+    populateStaticSelects();
+    populateCompatBrandSelect();
     document.getElementById('productModalTitle').textContent = mode === 'edit' ? 'Edit Product' : 'Add Product';
     document.getElementById('productForm').reset();
     document.querySelectorAll('#productForm .field.has-error').forEach(f => { f.classList.remove('has-error'); const m = f.querySelector('.field-error-msg'); if (m) m.remove(); });
@@ -304,11 +353,25 @@ Boot.ready(function () {
 
     if (mode === 'edit' && product) {
       document.getElementById('pName').value = product.name;
-      document.getElementById('pBrand').value = product.brand || '';
+      const pBrandEl = document.getElementById('pBrand');
+      if (product.brand && !Array.from(pBrandEl.options).some(o => o.value === product.brand)) {
+        pBrandEl.insertAdjacentHTML('beforeend', '<option value="' + Utils.escapeHtml(product.brand) + '">' + Utils.escapeHtml(product.brand) + '</option>');
+      }
+      pBrandEl.value = product.brand || '';
       if (document.getElementById('pSku')) document.getElementById('pSku').value = product.sku || ('TM-' + product.id);
       if (document.getElementById('pBarcode')) document.getElementById('pBarcode').value = product.barcode || '';
-      document.getElementById('pCategory').value = product.category;
-      document.getElementById('pSupplier').value = product.supplier;
+      const pCatEl = document.getElementById('pCategory');
+      if (product.category && !Array.from(pCatEl.options).some(o => o.value === product.category)) {
+        const curCat = Store.get('categories', []).find(c => c.id === product.category);
+        pCatEl.insertAdjacentHTML('beforeend', '<option value="' + Utils.escapeHtml(product.category) + '">' + Utils.escapeHtml(curCat ? curCat.name + ' (Inactive)' : product.category) + '</option>');
+      }
+      pCatEl.value = product.category;
+      const pSupEl = document.getElementById('pSupplier');
+      if (product.supplier && !Array.from(pSupEl.options).some(o => o.value === product.supplier)) {
+        const curSup = Store.get('suppliers', []).find(s => s.id === product.supplier);
+        pSupEl.insertAdjacentHTML('beforeend', '<option value="' + Utils.escapeHtml(product.supplier) + '">' + Utils.escapeHtml(curSup ? curSup.name + ' (Inactive)' : product.supplier) + '</option>');
+      }
+      pSupEl.value = product.supplier;
       document.getElementById('pSupplierRef').value = product.supplierRef || '';
       document.getElementById('pCompatYears').value = product.compatYears || '';
       stockInput.value = product.stock;
@@ -356,7 +419,17 @@ Boot.ready(function () {
     const form = document.getElementById('productForm');
     if (!validateForm(form)) return;
     const isUniversal = document.getElementById('pUniversal').checked;
-    const compatibility = isUniversal || !compatSelections.length ? [UNIVERSAL_FIT] : compatSelections.slice();   // no models picked = universal
+    let compatibility;
+    if (isUniversal) {
+      compatibility = [UNIVERSAL_FIT];
+    } else {
+      if (!compatSelections.length) {
+        const curB = document.getElementById('pCompatBrand').value;
+        const curM = document.getElementById('pCompatModel').value;
+        if (curB && curM) compatSelections.push(curB + ' ' + curM);
+      }
+      compatibility = compatSelections.length ? compatSelections.slice() : [UNIVERSAL_FIT];
+    }
     const categoryId = document.getElementById('pCategory').value;
     const hasWarranty = document.getElementById('pHasWarranty').checked;
     const warrantyDuration = hasWarranty ? (parseInt(document.getElementById('pWarrantyDuration').value, 10) || null) : null;
@@ -439,7 +512,7 @@ Boot.ready(function () {
     const products = Store.get('products', []);
     const categories = Store.get('categories', []);
     const suppliers = Store.get('suppliers', []);
-    const sales = Store.get('sales', []);
+    const sales = Store.get('sales', []).filter(Utils.isCountable);
     const transactions = Store.get('inventoryTransactions', []);
     const p = products.find(x => x.id === productId);
     if (!p) return;
@@ -517,7 +590,11 @@ Boot.ready(function () {
     document.querySelectorAll('#viewModalOverlay .tab-panel').forEach(function (tp) { tp.classList.remove('active'); });
     document.getElementById('vtab-overview').classList.add('active');
 
-    document.getElementById('viewToEditBtn').dataset.productId = p.id;
+    const viewToEditBtn = document.getElementById('viewToEditBtn');
+    if (viewToEditBtn) {
+      viewToEditBtn.dataset.productId = p.id;
+      viewToEditBtn.style.display = isAdmin ? '' : 'none';
+    }
     openModal('viewModalOverlay');
   }
 
@@ -611,7 +688,7 @@ Boot.ready(function () {
 
   /* ---------- CSV Export (MIG-03) ---------- */
   function exportInventoryCSV() {
-    const products = Store.get('products', []);
+    const products = getFilteredProducts();
     const categories = Store.get('categories', []);
     const suppliers = Store.get('suppliers', []);
     const headers = ['Product ID', 'Name', 'Brand', 'Category', 'Compatibility', 'Supplier', 'Cost Price', 'Selling Price', 'Current Stock', 'Reorder Level', 'Status', 'Archived', 'Expiration Date', 'Last Updated'];
@@ -664,15 +741,15 @@ Boot.ready(function () {
       const count = products.filter(p => p.category === c.id && !p.archived).length;
       const inUse = products.some(p => p.category === c.id);
       const isInactive = c.status === 'Inactive';
-      return '<div class="flex items-center justify-between" style="padding:10px 0;border-bottom:1px solid var(--border);">' +
-        '<div><div style="font-weight:600;color:var(--ink);font-size:.88rem;display:flex;align-items:center;gap:6px;">' +
+      return '<div class="manage-filter-row">' +
+        '<div class="manage-filter-info"><div style="font-weight:600;color:var(--ink);font-size:.88rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           Utils.escapeHtml(c.name) +
           '<span class="badge ' + (isInactive ? 'badge-danger' : 'badge-ok') + '" style="font-size:0.7rem;padding:2px 6px;">' + (isInactive ? 'Inactive' : 'Active') + '</span>' +
         '</div>' +
         '<div class="hint" style="margin:2px 0 0;">Prefix: ' + c.prefix + ' &bull; ' + count + ' product' + (count === 1 ? '' : 's') + '</div></div>' +
-        '<div class="flex items-center gap-8">' +
-          '<button type="button" class="btn btn-secondary btn-sm" data-edit-category="' + c.id + '" title="Edit category name">Rename</button>' +
+        '<div class="manage-filter-actions">' +
           '<button type="button" class="btn btn-secondary btn-sm" data-toggle-category="' + c.id + '" title="' + (isInactive ? 'Activate' : 'Deactivate') + ' category">' + (isInactive ? 'Activate' : 'Deactivate') + '</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-edit-category="' + c.id + '" title="Edit category name">Rename</button>' +
           '<button type="button" class="icon-btn" data-delete-category="' + c.id + '" aria-label="Delete category ' + Utils.escapeHtml(c.name) + '"' +
             (inUse ? ' title="In use \u2014 move its products to another category first" style="opacity:.45;"' : ' title="Delete category"') + '>' +
             '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' +
@@ -731,6 +808,160 @@ Boot.ready(function () {
     return candidate;
   }
 
+  /* ---------- Brand management (Manage Filters → Manage Brands) ---------- */
+  function renderBrandList() {
+    const brandListEl = document.getElementById('brandList');
+    if (!brandListEl) return;
+    const brands = Store.get('brands', []);
+    const products = Store.get('products', []);
+    if (!brands.length) {
+      brandListEl.innerHTML = '<div class="empty-state" style="padding:1.25rem 0;"><h3>No brands added yet</h3><p>Add a brand below so it can be selected when adding products.</p></div>';
+      return;
+    }
+    brandListEl.innerHTML = brands.map(b => {
+      const count = products.filter(p => p.brand === b.name && !p.archived).length;
+      const inUse = products.some(p => p.brand === b.name);
+      return '<div class="manage-filter-row">' +
+        '<div class="manage-filter-info"><div style="font-weight:600;color:var(--ink);font-size:.88rem;display:flex;align-items:center;gap:6px;word-break:break-word;">' +
+          Utils.escapeHtml(b.name) +
+        '</div>' +
+        '<div class="hint" style="margin:2px 0 0;">' + count + ' product' + (count === 1 ? '' : 's') + '</div></div>' +
+        '<div class="manage-filter-actions">' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-edit-brand="' + b.id + '" title="Rename brand">Rename</button>' +
+          '<button type="button" class="icon-btn" data-delete-brand="' + b.id + '" aria-label="Delete brand ' + Utils.escapeHtml(b.name) + '"' +
+            (inUse ? ' title="In use \u2014 change the brand on its products first" style="opacity:.45;"' : ' title="Delete brand"') + '>' +
+            '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  async function editBrand(brandId) {
+    const brand = Store.get('brands', []).find(b => b.id === brandId);
+    if (!brand) return;
+    const newName = prompt('Enter new brand name:', brand.name);
+    if (newName === null) return;
+    const trimmed = newName.trim();
+    if (!trimmed) { showToast('Brand name cannot be empty.', 'danger'); return; }
+    try {
+      await Api.put('/brands/' + encodeURIComponent(brandId), { name: trimmed });
+      await afterChange();
+      showToast('Renamed brand to "' + trimmed + '".', 'ok');
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  function deleteBrand(brandId) {
+    const brand = Store.get('brands', []).find(b => b.id === brandId);
+    if (!brand) return;
+    const used = Store.get('products', []).filter(p => p.brand === brand.name).length;
+    if (used) {
+      showToast('"' + brand.name + '" is still used by ' + used + ' product' + (used === 1 ? '' : 's') + ' (archived ones count too). Change their brand first (Edit product \u2192 Brand).', 'danger');
+      return;
+    }
+    showConfirm('Delete the "' + brand.name + '" brand?', 'It has no products. This removes it from the Brand dropdown and filters. You can add it again later.', async function () {
+      try {
+        await Api.del('/brands/' + encodeURIComponent(brandId));
+        await afterChange();
+        showToast('Deleted brand "' + brand.name + '".', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+  }
+
+  /* ---------- Motorcycle Compatibility management (Manage Filters → Manage Motorcycle Compatibility) ---------- */
+  function renderMotoBrandList() {
+    const wrap = document.getElementById('motoBrandList');
+    if (!wrap) return;
+    const motoBrands = Store.get('motoBrands', []);
+    const products = Store.get('products', []);
+    if (!motoBrands.length) {
+      wrap.innerHTML = '<div class="empty-state" style="padding:1.25rem 0;"><h3>No motorcycle brands configured</h3><p>Add a motorcycle brand and its models below.</p></div>';
+      return;
+    }
+    wrap.innerHTML = motoBrands.map(mb => {
+      const models = Array.isArray(mb.models) ? mb.models : [];
+      const brandEntries = models.map(m => mb.name + ' ' + m);
+      const brandUsedCount = products.filter(p => (p.compatibility || []).some(c => brandEntries.includes(c))).length;
+      const modelChips = models.length
+        ? models.map(m => {
+            const combo = mb.name + ' ' + m;
+            const mUsed = products.some(p => (p.compatibility || []).includes(combo));
+            return '<span class="chip" style="display:inline-flex;align-items:center;gap:6px;padding:3px 10px;font-size:.8rem;">' +
+              Utils.escapeHtml(m) +
+              '<button type="button" data-delete-moto-model="' + Utils.escapeHtml(m) + '" data-moto-id="' + mb.id + '" ' +
+                'style="background:none;border:none;cursor:pointer;padding:0;line-height:1;font-size:.95rem;color:var(--steel);' + (mUsed ? 'opacity:.4;' : '') + '" ' +
+                'title="' + (mUsed ? 'In use by a product \u2014 remove from product first' : 'Remove model ' + Utils.escapeHtml(m)) + '">&times;</button>' +
+            '</span>';
+          }).join('')
+        : '<span class="hint" style="margin:0;">No models yet \u2014 add one below.</span>';
+      return '<div style="padding:12px 0;border-bottom:1px solid var(--border);">' +
+        '<div class="flex items-center justify-between" style="margin-bottom:8px;gap:8px;">' +
+          '<div style="min-width:0;flex:1;">' +
+            '<div style="font-weight:600;color:var(--ink);font-size:.9rem;word-break:break-word;">' + Utils.escapeHtml(mb.name) + '</div>' +
+            '<div class="hint" style="margin:2px 0 0;">' + models.length + ' model' + (models.length === 1 ? '' : 's') + ' &bull; ' + brandUsedCount + ' product' + (brandUsedCount === 1 ? '' : 's') + ' linked</div>' +
+          '</div>' +
+          '<button type="button" class="icon-btn" data-delete-moto-brand="' + mb.id + '" aria-label="Delete motorcycle brand ' + Utils.escapeHtml(mb.name) + '"' +
+            (brandUsedCount ? ' title="In use \u2014 remove its models from products first" style="opacity:.45;"' : ' title="Delete motorcycle brand"') + '>' +
+            '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' +
+        '</div>' +
+        '<div class="chip-row" style="margin-bottom:8px;flex-wrap:wrap;">' + modelChips + '</div>' +
+        '<div class="flex gap-8" style="flex-wrap:wrap;">' +
+          '<input type="text" data-new-model-input="' + mb.id + '" maxlength="30" placeholder="Add model for ' + Utils.escapeHtml(mb.name) + ' (e.g. NMAX, Click 160)..." style="flex:1 1 10rem;min-width:0;padding:6px 10px;font-size:.82rem;">' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-add-moto-model="' + mb.id + '" style="white-space:nowrap;">+ Add Model</button>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  function deleteMotoBrand(motoId) {
+    const mb = Store.get('motoBrands', []).find(x => x.id === motoId);
+    if (!mb) return;
+    const entries = (mb.models || []).map(m => mb.name + ' ' + m);
+    const used = Store.get('products', []).filter(p => (p.compatibility || []).some(c => entries.includes(c))).length;
+    if (used) {
+      showToast('"' + mb.name + '" models are still used by ' + used + ' product' + (used === 1 ? '' : 's') + ' (archived ones count too). Remove them from those products first.', 'danger');
+      return;
+    }
+    showConfirm('Delete "' + mb.name + '" from Motorcycle Compatibility?', 'This removes ' + mb.name + ' and its models from the compatibility selectors. You can add it again later.', async function () {
+      try {
+        await Api.del('/moto-brands/' + encodeURIComponent(motoId));
+        await afterChange();
+        showToast('Deleted motorcycle brand "' + mb.name + '".', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+  }
+
+  async function addMotoModel(motoId) {
+    const mb = Store.get('motoBrands', []).find(x => x.id === motoId);
+    if (!mb) return;
+    const input = document.querySelector('[data-new-model-input="' + motoId + '"]');
+    const model = input ? input.value.trim() : '';
+    if (!model) { showToast('Enter a model name first.', 'danger'); return; }
+    try {
+      await Api.post('/moto-brands/' + encodeURIComponent(motoId) + '/models', { model: model });
+      if (input) input.value = '';
+      await afterChange();
+      showToast('Added model "' + model + '" to ' + mb.name + '.', 'ok');
+    } catch (err) { showToast(err.message, 'danger'); }
+  }
+
+  function deleteMotoModel(motoId, model) {
+    const mb = Store.get('motoBrands', []).find(x => x.id === motoId);
+    if (!mb) return;
+    const combo = mb.name + ' ' + model;
+    const used = Store.get('products', []).filter(p => (p.compatibility || []).includes(combo)).length;
+    if (used) {
+      showToast('"' + combo + '" is still used by ' + used + ' product' + (used === 1 ? '' : 's') + ' (archived ones count too). Remove it from those products first.', 'danger');
+      return;
+    }
+    showConfirm('Remove model "' + combo + '"?', 'It is not used by any products. You can add it back anytime.', async function () {
+      try {
+        await Api.del('/moto-brands/' + encodeURIComponent(motoId) + '/models/' + encodeURIComponent(model));
+        await afterChange();
+        showToast('Removed model "' + combo + '".', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
+  }
+
   /* ---------- Wiring ---------- */
   /* ---------- Suppliers (merged in from the old Suppliers page; Admin only) ---------- */
   let editingSupplierId = null;
@@ -761,9 +992,28 @@ Boot.ready(function () {
         '<td><span class="badge ' + (s.status === 'Active' ? 'badge-ok' : 'badge-neutral') + '">' + s.status + '</span></td>' +
         '<td><div class="flex gap-8">' +
           '<button class="icon-btn" title="View" data-sup-view="' + s.id + '">' + icon('eye') + '</button>' +
-          '<button class="icon-btn" title="Edit" data-sup-edit="' + s.id + '">' + icon('edit') + '</button>' +
+          (isAdmin ? '<button class="icon-btn" title="Edit" data-sup-edit="' + s.id + '">' + icon('edit') + '</button>' : '') +
+          (isAdmin ? '<button type="button" class="icon-btn" data-sup-delete="' + s.id + '" aria-label="Delete supplier ' + Utils.escapeHtml(s.name) + '"' +
+            (count ? ' title="In use \u2014 change the supplier on its products first" style="opacity:.45;"' : ' title="Delete supplier"') + '>' +
+            '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' : '') +
         '</div></td></tr>';
     }).join('');
+  }
+  function deleteSupplier(supplierId) {
+    const s = Store.get('suppliers', []).find(x => x.id === supplierId);
+    if (!s) return;
+    const used = productsSuppliedBy(s.id).length;
+    if (used) {
+      showToast('"' + s.name + '" is still linked to ' + used + ' product' + (used === 1 ? '' : 's') + ' (archived ones count too). Change their supplier first (Edit product \u2192 Supplier).', 'danger');
+      return;
+    }
+    showConfirm('Delete supplier "' + s.name + '"?', 'It has no products linked. This removes it from the Supplier list and filters. You can add it again later.', async function () {
+      try {
+        await Api.del('/suppliers/' + encodeURIComponent(supplierId));
+        await afterChange();
+        showToast('Deleted supplier "' + s.name + '".', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    });
   }
   function openSupplierModal(mode, supplierId) {
     editingSupplierId = mode === 'edit' ? supplierId : null;
@@ -828,7 +1078,9 @@ Boot.ready(function () {
               '<span>' + Utils.escapeHtml(t.productName) + (t.reference ? ' <span class="text-muted">(' + Utils.escapeHtml(t.reference) + ')</span>' : '') + '</span>' +
               '<span class="mono-num" style="white-space:nowrap;"><strong style="color:var(--ok);">+' + t.quantity + '</strong> &middot; ' + Utils.formatShortDate(t.date) + '</span></li>').join('') + '</ul>'
         : '<p class="text-muted" style="font-size:.85rem;">No stock-in recorded from this supplier yet.</p>');
-    document.getElementById('supplierViewToEdit').dataset.supplierId = s.id;
+    const supplierViewToEdit = document.getElementById('supplierViewToEdit');
+    supplierViewToEdit.dataset.supplierId = s.id;
+    supplierViewToEdit.style.display = isAdmin ? '' : 'none';   // editing suppliers is Admin-only (PUT /api/suppliers/:id)
     openModal('supplierViewOverlay');
   }
 
@@ -839,10 +1091,29 @@ Boot.ready(function () {
     renderHistoryTable();
    
     renderSupplierList();
-    if (!isAdmin) { ['manageCategoriesBtn', 'manageSuppliersBtn'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }); }
+    renderCategoryList();
+    renderBrandList();
+    renderMotoBrandList();
+    if (!isAdmin) { ['manageFiltersBtn', 'manageCategoriesBtn', 'manageSuppliersBtn'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }); }
     document.getElementById('adjSaveBtn').addEventListener('click', saveAdjustment);
 
-    document.getElementById('pCompatBrand').addEventListener('change', updateCompatModelOptions);
+    function syncSingleCompatSelection() {
+      if (document.getElementById('pUniversal').checked) return;
+      if (compatSelections.length <= 1) {
+        const brand = document.getElementById('pCompatBrand').value;
+        const model = document.getElementById('pCompatModel').value;
+        if (brand && model) {
+          compatSelections = [brand + ' ' + model];
+          renderCompatChips();
+        }
+      }
+    }
+
+    document.getElementById('pCompatBrand').addEventListener('change', function () {
+      updateCompatModelOptions();
+      syncSingleCompatSelection();
+    });
+    document.getElementById('pCompatModel').addEventListener('change', syncSingleCompatSelection);
     document.getElementById('pCategory').addEventListener('change', function () {
       if (!editingProductId) updateIdPreview();
       updateImagePreviewFallback();
@@ -850,6 +1121,7 @@ Boot.ready(function () {
     document.getElementById('addCompatBtn').addEventListener('click', function () {
       const brand = document.getElementById('pCompatBrand').value;
       const model = document.getElementById('pCompatModel').value;
+      if (!brand || !model) { showToast('Select a motorcycle brand and model first (or add one in Manage Filters).', 'danger'); return; }
       const combo = brand + ' ' + model;
       if (compatSelections.indexOf(combo) === -1) compatSelections.push(combo);
       renderCompatChips();
@@ -866,6 +1138,14 @@ Boot.ready(function () {
       document.getElementById('pCompatModel').disabled = disabled;
       document.getElementById('addCompatBtn').disabled = disabled;
       document.getElementById('compatChips').style.opacity = disabled ? '.4' : '1';
+      if (!disabled && compatSelections.length === 0) {
+        const brand = document.getElementById('pCompatBrand').value;
+        const model = document.getElementById('pCompatModel').value;
+        if (brand && model) {
+          compatSelections.push(brand + ' ' + model);
+          renderCompatChips();
+        }
+      }
     });
 
     document.getElementById('imageDropZone').addEventListener('click', function () { document.getElementById('pImageFile').click(); });
@@ -889,14 +1169,45 @@ Boot.ready(function () {
       openProductModal('edit', id);
     });
 
-    document.getElementById('manageCategoriesBtn').addEventListener('click', function () { renderCategoryList(); openModal('categoryModalOverlay'); });
-    document.getElementById('manageSuppliersBtn').addEventListener('click', function () { document.getElementById('supSearch').value = ''; pgSup.reset(); renderSupplierList(); openModal('supplierManagerOverlay'); });
+    const openManageFilters = function () {
+      renderCategoryList();
+      renderBrandList();
+      document.getElementById('supSearch').value = '';
+      pgSup.reset();
+      renderSupplierList();
+      renderMotoBrandList();
+      openModal('categoryModalOverlay');
+      const activeTab = document.querySelector('#filterTabs .tab-btn.active');
+      if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+        setTimeout(function () {
+          activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }, 50);
+      }
+    };
+    ['manageFiltersBtn', 'manageCategoriesBtn'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('click', openManageFilters);
+    });
+    document.querySelectorAll('#filterTabs .tab-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelectorAll('#filterTabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
+        document.querySelectorAll('#categoryModalOverlay .tab-panel').forEach(function (tp) { tp.classList.remove('active'); });
+        btn.classList.add('active');
+        const panel = document.getElementById('ftab-' + btn.dataset.filterTab);
+        if (panel) panel.classList.add('active');
+        if (typeof btn.scrollIntoView === 'function') {
+          btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+      });
+    });
     document.getElementById('supSearch').addEventListener('input', renderSupplierList);
     document.getElementById('addSupplierBtn').addEventListener('click', function () { openSupplierModal('add'); });
     document.getElementById('saveSupplierBtn').addEventListener('click', saveSupplier);
     document.getElementById('suppliersTbody').addEventListener('click', function (e) {
-      const v = e.target.closest('[data-sup-view]'), ed = e.target.closest('[data-sup-edit]');
-      if (v) openSupplierView(v.dataset.supView); else if (ed) openSupplierModal('edit', ed.dataset.supEdit);
+      const v = e.target.closest('[data-sup-view]'), ed = e.target.closest('[data-sup-edit]'), del = e.target.closest('[data-sup-delete]');
+      if (v) openSupplierView(v.dataset.supView);
+      else if (ed) openSupplierModal('edit', ed.dataset.supEdit);
+      else if (del) deleteSupplier(del.dataset.supDelete);
     });
     document.getElementById('supplierViewToEdit').addEventListener('click', function () {
       const id = this.dataset.supplierId; closeModal('supplierViewOverlay'); openSupplierModal('edit', id);
@@ -925,6 +1236,77 @@ Boot.ready(function () {
       const toggleBtn = e.target.closest('[data-toggle-category]');
       if (toggleBtn) { toggleCategoryStatus(toggleBtn.dataset.toggleCategory); return; }
     });
+
+    /* Manage Brands wiring */
+    const addBrandHandler = async function () {
+      const nameInput = document.getElementById('newBrandName');
+      const name = nameInput ? nameInput.value.trim() : '';
+      if (!name) { showToast('Enter a brand name first.', 'danger'); return; }
+      try {
+        await Api.post('/brands', { name: name });
+        nameInput.value = '';
+        await afterChange();
+        showToast('Added brand "' + name + '".', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    };
+    const addBrandBtn = document.getElementById('addBrandBtn');
+    if (addBrandBtn) addBrandBtn.addEventListener('click', addBrandHandler);
+    const newBrandInput = document.getElementById('newBrandName');
+    if (newBrandInput) newBrandInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addBrandHandler(); } });
+    const brandListEl = document.getElementById('brandList');
+    if (brandListEl) {
+      brandListEl.addEventListener('click', function (e) {
+        const delBtn = e.target.closest('[data-delete-brand]');
+        if (delBtn) { deleteBrand(delBtn.dataset.deleteBrand); return; }
+        const editBtn = e.target.closest('[data-edit-brand]');
+        if (editBtn) { editBrand(editBtn.dataset.editBrand); return; }
+      });
+    }
+
+    /* Manage Motorcycle Compatibility wiring */
+    const addMotoBrandHandler = async function () {
+      const nameInput = document.getElementById('newMotoBrandName');
+      const modelsInput = document.getElementById('newMotoBrandModels');
+      const name = nameInput ? nameInput.value.trim() : '';
+      const rawModels = modelsInput ? modelsInput.value.trim() : '';
+      const models = rawModels ? rawModels.split(',').map(m => m.trim()).filter(Boolean) : [];
+      if (!name || !models.length) {
+        showToast('Please fill in both Motorcycle Brand and Initial Models.', 'danger');
+        if (!name && nameInput) nameInput.focus();
+        else if (modelsInput) modelsInput.focus();
+        return;
+      }
+      try {
+        await Api.post('/moto-brands', { name: name, models: models });
+        if (nameInput) nameInput.value = '';
+        if (modelsInput) modelsInput.value = '';
+        await afterChange();
+        showToast('Added motorcycle brand "' + name + '" with ' + models.length + ' model' + (models.length === 1 ? '' : 's') + '.', 'ok');
+      } catch (err) { showToast(err.message, 'danger'); }
+    };
+    const addMotoBrandBtn = document.getElementById('addMotoBrandBtn');
+    if (addMotoBrandBtn) addMotoBrandBtn.addEventListener('click', addMotoBrandHandler);
+    const newMotoBrandNameInput = document.getElementById('newMotoBrandName');
+    if (newMotoBrandNameInput) newMotoBrandNameInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addMotoBrandHandler(); } });
+    const newMotoBrandModelsInput = document.getElementById('newMotoBrandModels');
+    if (newMotoBrandModelsInput) newMotoBrandModelsInput.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addMotoBrandHandler(); } });
+    const motoBrandListEl = document.getElementById('motoBrandList');
+    if (motoBrandListEl) {
+      motoBrandListEl.addEventListener('click', function (e) {
+        const delBrandBtn = e.target.closest('[data-delete-moto-brand]');
+        if (delBrandBtn) { deleteMotoBrand(delBrandBtn.dataset.deleteMotoBrand); return; }
+        const addModelBtn = e.target.closest('[data-add-moto-model]');
+        if (addModelBtn) { addMotoModel(addModelBtn.dataset.addMotoModel); return; }
+        const delModelBtn = e.target.closest('[data-delete-moto-model]');
+        if (delModelBtn) { deleteMotoModel(delModelBtn.dataset.motoId, delModelBtn.dataset.deleteMotoModel); return; }
+      });
+      motoBrandListEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && e.target.matches('[data-new-model-input]')) {
+          e.preventDefault();
+          addMotoModel(e.target.dataset.newModelInput);
+        }
+      });
+    }
 
     document.getElementById('productsTbody').addEventListener('click', function (e) {
       const viewBtn = e.target.closest('[data-view]');
@@ -963,7 +1345,8 @@ Boot.ready(function () {
     });
     document.getElementById('filterBrand').addEventListener('change', function () {
       const brand = document.getElementById('filterBrand').value;
-      document.getElementById('filterModel').innerHTML = '<option value="">Any Model</option>' + (MOTO_BRANDS[brand] || []).map(function (m) { return '<option value="' + m + '">' + m + '</option>'; }).join('');
+      const motoMap = getMotoBrandsMap();
+      document.getElementById('filterModel').innerHTML = '<option value="">Any Model</option>' + (motoMap[brand] || []).map(function (m) { return '<option value="' + Utils.escapeHtml(m) + '">' + Utils.escapeHtml(m) + '</option>'; }).join('');
       renderProductsTable();
     });
     document.getElementById('histSearch').addEventListener('input', renderHistoryTable);

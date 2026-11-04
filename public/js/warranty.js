@@ -13,7 +13,7 @@ Boot.ready(function () {
 
   function renderStats() {
     const warranties = Store.get('warranties', []);
-    const counts = { Active: 0, 'Expiring Soon': 0, Expired: 0, Claimed: 0 };
+    const counts = { Active: 0, 'Expiring Soon': 0, Expired: 0, Claimed: 0, Voided: 0 };
     warranties.forEach(function (w) {
       const currentStatus = Utils.getWarrantyStatus(w);
       counts[currentStatus] = (counts[currentStatus] || 0) + 1;
@@ -22,9 +22,12 @@ Boot.ready(function () {
       { label: 'Active', value: counts.Active, iconName: 'shield', tone: 'ok' },
       { label: 'Expiring Soon', value: counts['Expiring Soon'], iconName: 'clock', tone: 'warn' },
       { label: 'Expired', value: counts.Expired, iconName: 'xCircle', tone: 'danger' },
-      { label: 'Claimed', value: counts.Claimed, iconName: 'checkCircle', tone: 'accent' }
+      { label: 'Claimed', value: counts.Claimed, iconName: 'checkCircle', tone: 'accent' },
+      { label: 'Voided', value: counts.Voided, iconName: 'xCircle', tone: 'neutral' }
     ];
-    document.getElementById('warStatGrid').innerHTML = stats.map(function (s) {
+    const grid = document.getElementById('warStatGrid');
+    grid.className = 'stat-grid stat-grid-5';
+    grid.innerHTML = stats.map(function (s) {
       return '<div class="stat-card tone-' + s.tone + '"><div class="stat-icon tone-' + s.tone + '">' + icon(s.iconName) + '</div>' +
         '<div class="stat-label">' + s.label + '</div><div class="stat-value">' + s.value + '</div></div>';
     }).join('');

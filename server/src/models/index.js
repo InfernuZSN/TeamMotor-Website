@@ -7,7 +7,7 @@
    stripped from JSON output.
 
    Collections:
-     users, categories, suppliers, products, customers,
+     users, categories, suppliers, brands, motorcycle_compatibility, products, customers,
      sales, sale_items, inventory_transactions,
      warranties, warranty_claims, notifications, shifts,
      audit_logs, settings, counters
@@ -65,6 +65,23 @@ const Supplier = make('Supplier', 'suppliers', {
   address: { type: String, default: '' },
   lastDelivery: { type: String, default: '' },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' }
+});
+
+/* ---------- brands (Manage Filters → Manage Brands) ----------
+   The list a product's `brand` must be picked from. Products still store the brand NAME (products.brand),
+   so renaming a brand also renames it on every product that uses it. */
+const Brand = make('Brand', 'brands', {
+  id: { ...idField },
+  name: { type: String, required: true, trim: true }
+});
+
+/* ---------- motorcycle_compatibility (Manage Filters → Manage Motorcycle Compatibility) ----------
+   Motorcycle makes and their models. A product's compatibility entry is "<make> <model>" (e.g. "Yamaha NMAX")
+   or the universal marker 'Universal (All Models)'. */
+const MotorcycleCompatibility = make('MotorcycleCompatibility', 'motorcycle_compatibility', {
+  id: { ...idField },
+  name: { type: String, required: true, trim: true },
+  models: { type: [String], default: [] }
 });
 
 /* ---------- products ---------- */
@@ -253,7 +270,9 @@ const Counter = make('Counter', 'counters', {
 });
 
 module.exports = {
-  User: User.model, Category: Category.model, Supplier: Supplier.model, Product: Product.model,
+  User: User.model, Category: Category.model, Supplier: Supplier.model, Brand: Brand.model,
+  MotorcycleCompatibility: MotorcycleCompatibility.model, MotorcycleBrand: MotorcycleCompatibility.model,
+  Product: Product.model,
   Customer: Customer.model, Sale: Sale.model, SaleItem: SaleItem.model,
   InventoryTransaction: InventoryTransaction.model, Warranty: Warranty.model,
   WarrantyClaim: WarrantyClaim.model, Notification: Notification.model, Shift: Shift.model,

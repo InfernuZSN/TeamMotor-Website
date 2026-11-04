@@ -9,6 +9,8 @@ collections reference. MongoDB's own `_id` is never exposed by the API.
 |---|---|---|---|
 | `users` | Staff / owner accounts | `id`, `name`, `username`, `email`, `passwordHash` (bcrypt, never returned by the API), `role` (`Admin`\|`Staff`), `status`, `tokenVersion` | `id` unique, `username` unique |
 | `categories` | Product categories | `id` (slug), `name`, `prefix` (3 letters used in product ids) | `id` unique |
+| `brands` | Product brands (Manage Filters → Manage Brands) | `id` (`BRD-001`), `name` | `id` unique |
+| `motorcycle_compatibility` | Motorcycle makes & models (Manage Filters → Manage Motorcycle Compatibility) | `id` (`MOTO-001`), `name`, `models` (`[String]`) | `id` unique |
 | `suppliers` | Suppliers | `id`, `name`, contact fields, `status`, `lastDelivery` | `id` unique |
 | `products` | Catalogue + live stock | `id`, `name`, `category`→categories, `supplier`→suppliers, `sku`, `barcode`, `costPrice`, `sellingPrice`, `stock`, `reorderLevel`, warranty fields, **`expirationDate`** (optional `YYYY-MM-DD`), `archived` | `id` unique, `category`, `sku`, `barcode` |
 | `customers` | Customers (soft delete) | `id`, `name`, `contactNumber` (required), `email`, `status` (`Active`\|`Inactive`) | `id` unique |

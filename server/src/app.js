@@ -42,6 +42,8 @@ api.use('/bootstrap', misc.bootstrap);
 api.use('/users', require('./routes/users'));
 api.use('/categories', catalog.categories);
 api.use('/suppliers', catalog.suppliers);
+api.use('/brands', catalog.brands);
+api.use('/moto-brands', catalog.motoBrands);
 api.use('/products', catalog.products);
 api.use('/customers', require('./routes/customers'));
 api.use('/sales', require('./routes/sales'));

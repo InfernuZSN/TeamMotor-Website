@@ -2,13 +2,21 @@ const router = require('express').Router();
 const bcrypt = require('bcryptjs');
 const { User, Shift } = require('../models');
 const { adminOnly } = require('../middleware/auth');
-const { wrap, bad, notFound, forbidden } = require('../utils/errors');
+const { wrap, bad, notFound, forbidden, conflict } = require('../utils/errors');
 const { nextId } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
 
 const PW_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const checkPw = (pw) => { if (!PW_RE.test(String(pw || ''))) throw bad('Password must be at least 8 characters and include a letter and a number.'); };
 const PHOTO_RE = /^data:image\/[a-z+.-]+;base64,[A-Za-z0-9+/=]+$/;
+
+async function assertEmailFree(email, exceptId) {
+  const em = String(email || '').trim().toLowerCase();
+  if (!em) return;
+  const filter = { email: em };
+  if (exceptId) filter.id = { $ne: exceptId };
+  if (await User.findOne(filter)) throw conflict('Duplicate value: email already exists.');
+}
 
 /* Admin: list / create / update / deactivate users. */
 router.get('/', adminOnly, wrap(async (req, res) => { res.json(await User.find({}).sort({ id: 1 })); }));
@@ -18,9 +26,10 @@ router.post('/', adminOnly, wrap(async (req, res) => {
   if (!b.name || !b.username) throw bad('Name and username are required.');
   if (!['Admin', 'Staff'].includes(b.role)) throw bad('Role must be Admin or Staff.');
   checkPw(b.password);
+  await assertEmailFree(b.email);
   const user = await User.create({
     id: await nextId('USR', 3), name: String(b.name).trim(), username: String(b.username).trim().toLowerCase(),
-    email: b.email || '', role: b.role, status: 'Active', contactNumber: b.contactNumber || '', birthDate: b.birthDate || '',
+    email: String(b.email || '').trim().toLowerCase(), role: b.role, status: 'Active', contactNumber: b.contactNumber || '', birthDate: b.birthDate || '',
     dateAdded: new Date().toISOString().slice(0, 10), passwordHash: await bcrypt.hash(b.password, 10)
   });
   await audit(req, 'user.create', 'user', user.id, { username: user.username, name: user.name, role: user.role });
@@ -35,7 +44,8 @@ router.put('/:id', adminOnly, wrap(async (req, res) => {
   if (user.id === req.user.id && ((b.role && b.role !== user.role) || (b.status && b.status !== 'Active'))) {
     throw forbidden('You cannot change your own role or deactivate yourself.');
   }
-  ['name', 'email', 'contactNumber', 'birthDate'].forEach(k => { if (b[k] !== undefined) user[k] = String(b[k]).trim(); });
+  if (b.email !== undefined) await assertEmailFree(b.email, user.id);
+  ['name', 'email', 'contactNumber', 'birthDate'].forEach(k => { if (b[k] !== undefined) user[k] = k === 'email' ? String(b[k]).trim().toLowerCase() : String(b[k]).trim(); });
   if (b.username) user.username = String(b.username).trim().toLowerCase();
   if (b.role) { if (!['Admin', 'Staff'].includes(b.role)) throw bad('Invalid role.'); user.role = b.role; }
   if (b.status) { if (!['Active', 'Inactive'].includes(b.status)) throw bad('Invalid status.'); user.status = b.status; }
@@ -63,7 +73,8 @@ router.put('/me/profile', wrap(async (req, res) => {
   const user = await User.findOne({ id: req.user.id });
   const b = req.body, PF = ['name', 'email', 'contactNumber', 'birthDate'], pBefore = {}; PF.forEach(k => { pBefore[k] = user[k]; });
   const photoBefore = user.photo || '';
-  ['name', 'email', 'contactNumber', 'birthDate'].forEach(k => { if (b[k] !== undefined) user[k] = String(b[k]).trim(); });
+  if (b.email !== undefined) await assertEmailFree(b.email, user.id);
+  ['name', 'email', 'contactNumber', 'birthDate'].forEach(k => { if (b[k] !== undefined) user[k] = k === 'email' ? String(b[k]).trim().toLowerCase() : String(b[k]).trim(); });
   if (b.photo !== undefined) {
     if (b.photo && !PHOTO_RE.test(b.photo)) throw bad('Photo must be an image data URL.');
     user.photo = b.photo || '';

@@ -1,15 +1,18 @@
-/* categories + suppliers + products */
+/* categories + suppliers + brands + motorcycle brands (Manage Filters) + products */
 const express = require('express');
-const { Category, Supplier, Product, InventoryTransaction } = require('../models');
+const { Category, Supplier, Brand, MotorcycleBrand, Product, InventoryTransaction } = require('../models');
 const { adminOnly } = require('../middleware/auth');
 const { wrap, bad, notFound, conflict } = require('../utils/errors');
 const { nextId, nextSeq } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
 const { changeStock } = require('../services/inventory');
 const { refreshNotifications } = require('../services/notifications');
+const { UNIVERSAL_FIT } = require('../services/filters');
 
 const categories = express.Router();
 const suppliers = express.Router();
+const brands = express.Router();
+const motoBrands = express.Router();
 const products = express.Router();
 
 /* ---------------- categories ---------------- */
@@ -76,6 +79,106 @@ suppliers.put('/:id', adminOnly, wrap(async (req, res) => {
   await audit(req, 'supplier.update', 'supplier', s.id, { name: s.name, changes: diff(sBefore, s, Object.keys(set)) });
   res.json(s);
 }));
+suppliers.delete('/:id', adminOnly, wrap(async (req, res) => {
+  const s = await Supplier.findOne({ id: req.params.id });
+  if (!s) throw notFound('Supplier not found.');
+  const used = await Product.countDocuments({ supplier: s.id });
+  if (used) throw conflict('"' + s.name + '" is still linked to ' + used + ' product(s) (archived ones count). Change their supplier first.');
+  await s.deleteOne();
+  await audit(req, 'supplier.delete', 'supplier', s.id, { name: s.name });
+  res.json({ ok: true });
+}));
+
+/* ---------------- brands (Manage Filters → Manage Brands) ----------------
+   Products keep the brand NAME in products.brand, so a rename is applied to every product that uses it, and a brand
+   can only be deleted once no product (archived ones included) uses it. */
+const escRe = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const sameName = name => new RegExp('^' + escRe(name) + '$', 'i');
+function cleanName(v, label, max) {
+  const name = String(v || '').trim().replace(/\s+/g, ' ');
+  if (!name) throw bad(label + ' is required.');
+  if (name.length > max) throw bad(label + ' must be ' + max + ' characters or fewer.');
+  return name;
+}
+
+brands.get('/', wrap(async (req, res) => res.json(await Brand.find({}).sort({ name: 1 }))));
+brands.post('/', adminOnly, wrap(async (req, res) => {
+  const name = cleanName(req.body.name, 'Brand name', 30);
+  if (await Brand.findOne({ name: sameName(name) })) throw conflict('The brand "' + name + '" already exists.');
+  const b = await Brand.create({ id: await nextId('BRD', 3), name });
+  await audit(req, 'brand.create', 'brand', b.id, { name });
+  res.status(201).json(b);
+}));
+brands.put('/:id', adminOnly, wrap(async (req, res) => {
+  const b = await Brand.findOne({ id: req.params.id });
+  if (!b) throw notFound('Brand not found.');
+  const name = cleanName(req.body.name, 'Brand name', 30);
+  const dup = await Brand.findOne({ name: sameName(name), id: { $ne: b.id } });
+  if (dup) throw conflict('The brand "' + name + '" already exists.');
+  const oldName = b.name;
+  b.name = name;
+  await b.save();
+  const r = oldName === name ? { modifiedCount: 0 } : await Product.updateMany({ brand: oldName }, { $set: { brand: name, lastUpdated: new Date().toISOString() } });
+  await audit(req, 'brand.update', 'brand', b.id, { name, changes: { name: { from: oldName, to: name } }, productsUpdated: r.modifiedCount || 0 });
+  res.json(b);
+}));
+brands.delete('/:id', adminOnly, wrap(async (req, res) => {
+  const b = await Brand.findOne({ id: req.params.id });
+  if (!b) throw notFound('Brand not found.');
+  const used = await Product.countDocuments({ brand: b.name });
+  if (used) throw conflict('"' + b.name + '" is still used by ' + used + ' product(s) (archived ones count). Change their brand first.');
+  await b.deleteOne();
+  await audit(req, 'brand.delete', 'brand', b.id, { name: b.name });
+  res.json({ ok: true });
+}));
+
+/* ---------------- motorcycle brands + models (Manage Filters → Manage Motorcycle Compatibility) ----------------
+   A product's compatibility entry is "<make> <model>". A make or model still used by a product cannot be removed. */
+const compatUsers = entries => Product.countDocuments({ compatibility: { $in: entries } });
+
+motoBrands.get('/', wrap(async (req, res) => res.json(await MotorcycleBrand.find({}).sort({ name: 1 }))));
+motoBrands.post('/', adminOnly, wrap(async (req, res) => {
+  const name = cleanName(req.body.name, 'Motorcycle brand', 30);
+  if (await MotorcycleBrand.findOne({ name: sameName(name) })) throw conflict('The motorcycle brand "' + name + '" already exists.');
+  const models = [];
+  (Array.isArray(req.body.models) ? req.body.models : []).forEach(m => {
+    const model = cleanName(m, 'Model name', 30);
+    if (!models.some(x => x.toLowerCase() === model.toLowerCase())) models.push(model);
+  });
+  if (!models.length) throw bad('At least one initial model is required when adding a motorcycle brand.');
+  const mb = await MotorcycleBrand.create({ id: await nextId('MOTO', 3), name, models });
+  await audit(req, 'moto.create', 'motorcycle_brand', mb.id, { name, models });
+  res.status(201).json(mb);
+}));
+motoBrands.delete('/:id', adminOnly, wrap(async (req, res) => {
+  const mb = await MotorcycleBrand.findOne({ id: req.params.id });
+  if (!mb) throw notFound('Motorcycle brand not found.');
+  const used = mb.models.length ? await compatUsers(mb.models.map(m => mb.name + ' ' + m)) : 0;
+  if (used) throw conflict('"' + mb.name + '" models are still used by ' + used + ' product(s) (archived ones count). Remove them from those products first.');
+  await mb.deleteOne();
+  await audit(req, 'moto.delete', 'motorcycle_brand', mb.id, { name: mb.name, models: mb.models });
+  res.json({ ok: true });
+}));
+motoBrands.post('/:id/models', adminOnly, wrap(async (req, res) => {
+  const mb = await MotorcycleBrand.findOne({ id: req.params.id });
+  if (!mb) throw notFound('Motorcycle brand not found.');
+  const model = cleanName(req.body.model, 'Model name', 30);
+  if (mb.models.some(m => m.toLowerCase() === model.toLowerCase())) throw conflict(mb.name + ' ' + model + ' is already on the list.');
+  const updated = await MotorcycleBrand.findOneAndUpdate({ id: mb.id }, { $push: { models: model } }, { new: true });
+  await audit(req, 'moto.model_add', 'motorcycle_brand', mb.id, { name: mb.name, model });
+  res.status(201).json(updated);
+}));
+motoBrands.delete('/:id/models/:model', adminOnly, wrap(async (req, res) => {
+  const mb = await MotorcycleBrand.findOne({ id: req.params.id });
+  if (!mb) throw notFound('Motorcycle brand not found.');
+  const model = req.params.model;
+  if (!mb.models.includes(model)) throw notFound('Model not found.');
+  const used = await compatUsers([mb.name + ' ' + model]);
+  if (used) throw conflict(mb.name + ' ' + model + ' is still used by ' + used + ' product(s) (archived ones count). Remove it from those products first.');
+  const updated = await MotorcycleBrand.findOneAndUpdate({ id: mb.id }, { $pull: { models: model } }, { new: true });
+  await audit(req, 'moto.model_remove', 'motorcycle_brand', mb.id, { name: mb.name, model });
+  res.json(updated);
+}));
 
 /* ---------------- products ---------------- */
 const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'barcode', 'description',
@@ -96,6 +199,36 @@ function cleanProduct(body) {
   return out;
 }
 
+/* Brand and motorcycle compatibility must come from the Manage Filters lists. Values a product ALREADY has are
+   accepted unchanged on edit, so saving an older product never fails because of something it was created with. */
+async function checkFilterValues(data, before) {
+  if (data.brand !== undefined) {
+    data.brand = String(data.brand || '').trim();
+    if (data.brand && !(before && before.brand === data.brand)) {
+      const match = await Brand.findOne({ name: sameName(data.brand) });
+      if (!match) {
+        throw bad('Unknown brand "' + data.brand + '". Add it under Manage Filters → Manage Brands first.');
+      }
+      data.brand = match.name;
+    }
+  }
+  if (data.compatibility !== undefined) {
+    if (!Array.isArray(data.compatibility)) throw bad('Compatibility must be a list.');
+    const had = new Set((before ? before.compatibility || [] : []).map(x => x.toLowerCase()));
+    const fresh = data.compatibility.filter(c => c !== UNIVERSAL_FIT && !had.has(c.toLowerCase()));
+    if (fresh.length) {
+      const allowed = new Map();
+      (await MotorcycleBrand.find({})).forEach(mb => mb.models.forEach(m => {
+        const full = mb.name + ' ' + m;
+        allowed.set(full.toLowerCase(), full);
+      }));
+      const unknown = fresh.filter(c => !allowed.has(c.toLowerCase()));
+      if (unknown.length) throw bad('Unknown motorcycle model(s): ' + unknown.join(', ') + '. Add them under Manage Filters → Manage Motorcycle Compatibility first.');
+      data.compatibility = data.compatibility.map(c => allowed.get(c.toLowerCase()) || c);
+    }
+  }
+}
+
 products.get('/', wrap(async (req, res) => res.json(await Product.find({}).sort({ id: 1 }))));
 products.get('/lookup/:code', wrap(async (req, res) => {
   const code = req.params.code.trim();
@@ -110,6 +243,7 @@ products.post('/', wrap(async (req, res) => {
   if (data.sellingPrice === undefined) throw bad('Selling price is required.');
   const cat = await Category.findOne({ id: data.category });
   if (!cat) throw bad('Unknown category.');
+  await checkFilterValues(data, null);
   const stock = Math.max(0, parseInt(req.body.stock, 10) || 0);
   const id = cat.prefix + '-' + String(await nextSeq('PRD-' + cat.prefix)).padStart(3, '0');
   if (!data.sku) data.sku = 'TM-' + id;
@@ -130,6 +264,7 @@ products.put('/:id', adminOnly, wrap(async (req, res) => {
   const before = await Product.findOne({ id: req.params.id });
   if (!before) throw notFound('Product not found.');
   const data = cleanProduct(req.body);            // stock is NOT editable here — use stock-in/out or an adjustment
+  await checkFilterValues(data, before);
   data.lastUpdated = new Date().toISOString();
   const updated = await Product.findOneAndUpdate({ id: req.params.id }, { $set: data }, { new: true, runValidators: true });
   const changes = {};
@@ -151,4 +286,4 @@ products.post('/:id/archive', adminOnly, wrap(async (req, res) => {
   res.json(p);
 }));
 
-module.exports = { categories, suppliers, products };
+module.exports = { categories, suppliers, brands, motoBrands, products };

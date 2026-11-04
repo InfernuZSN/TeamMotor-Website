@@ -36,8 +36,9 @@ Boot.ready(function () {
      was rung on an earlier day). Net = completed minus refunds of earlier-day sales issued today. There is no cash drawer, so no drawer count. */
   function renderDaySummary() {
     const ref = Utils.demoNow(), peso = Utils.formatPHP;
-    const completed = allSales.filter(function (s) { return Utils.isCountable(s) && Analytics.isSameDay(s.date, ref); });
-    const reversed = allSales.filter(function (s) { return !Utils.isCountable(s) && s.voidInfo && s.voidInfo.at && Analytics.isSameDay(s.voidInfo.at, ref); });
+    const liveSales = Store.get('sales', []);
+    const completed = liveSales.filter(function (s) { return Utils.isCountable(s) && Analytics.isSameDay(s.date, ref); });
+    const reversed = liveSales.filter(function (s) { return !Utils.isCountable(s) && s.voidInfo && s.voidInfo.at && Analytics.isSameDay(s.voidInfo.at, ref); });
     const earlier = reversed.filter(function (s) { return !Analytics.isSameDay(s.date, ref); });
     const sum = function (l) { return Math.round(l.reduce(function (n, s) { return n + (Number(s.total) || 0); }, 0) * 100) / 100; };
     const gross = sum(completed), voided = sum(reversed), earlierAmt = sum(earlier), net = Math.round((gross - earlierAmt) * 100) / 100;
@@ -62,7 +63,7 @@ Boot.ready(function () {
 
   /* ---------- Orders (time filter + View All Items) ---------- */
   function filterSales(range, source) {
-    const src = source || allSales;
+    const src = source || Store.get('sales', []);
     const ref = Utils.demoNow();
     if (range === 'day') return Analytics.salesToday(src, ref);
     if (range === 'week') return Analytics.salesInLastDays(src, ref, 7);
@@ -103,7 +104,7 @@ Boot.ready(function () {
   }
   let openSaleId = null;
   function openSaleModal(saleId) {
-    const s = allSales.find(x => x.id === saleId);
+    const s = Store.get('sales', []).find(x => x.id === saleId);
     if (!s) return;
     openSaleId = s.id;
     const units = s.items.reduce((n, i) => n + i.qty, 0);
@@ -186,7 +187,11 @@ Boot.ready(function () {
   }
 
   function exportSalesCSV() {
-    const list = filterSales(document.getElementById('salesFilter').value);
+    const q = (document.getElementById('salesSearch') ? document.getElementById('salesSearch').value.trim().toLowerCase() : '');
+    const list = filterSales(document.getElementById('salesFilter').value).filter(function (s) {
+      return !q || [s.id, s.staff, s.paymentMethod, s.status].some(function (f) { return f && String(f).toLowerCase().indexOf(q) !== -1; }) ||
+        s.items.some(function (i) { return i.name.toLowerCase().indexOf(q) !== -1; });
+    });
     const headers = ['Order ID', 'Date & Time', 'Staff', 'Payment Method', 'Reference', 'Items Count', 'Subtotal', 'Discount', 'VATable Sales', 'VAT', 'Total Due', 'Amount Tendered', 'Change', 'Status', 'Void/Refund Reason', 'Reprints'];
     const rows = list.map(s => {
       const subtotal = s.subtotal != null ? s.subtotal : s.items.reduce((n, i) => n + i.subtotal, 0);
@@ -247,13 +252,10 @@ Boot.ready(function () {
   /* ---------- Sales trend chart ----------
      Owned by sales-trend.js (1 Week / 1 Month / 1 Year chips on #analysisRange). */
 
-  /* ---------- Top sellers / slow movers ---------- */
-  const ranked = Analytics.rankProductsBySales(products, sales);
-  const top5 = ranked.slice(0, 5);
-  const bottom5 = ranked.slice(-5).reverse();
-  const maxSold = Math.max(1, top5[0] ? top5[0].unitsSold : 1);
-
-  function hbarList(rows, slow) {
+  /* ---------- Top sellers / slow movers + product movement tables ----------
+     Re-computed from the live Store cache every time, so they stay correct after Store.refresh()
+     (fired as 'store:refreshed') and after a sale is voided — no full page reload needed. */
+  function hbarList(rows, slow, maxSold) {
     if (!rows.length) return '<div class="empty-state">' + icon('sales') + '<h3>No sales data yet</h3></div>';
     return '<div class="hbar-list" style="margin-top:12px;">' + rows.map(r => {
       const pct = Math.max(4, Math.round((r.unitsSold / maxSold) * 100));
@@ -262,15 +264,8 @@ Boot.ready(function () {
         '<div class="hbar-val">' + r.unitsSold + '</div></div>';
     }).join('') + '</div>';
   }
-  document.getElementById('topSellersList').innerHTML = hbarList(top5, false);
-  document.getElementById('slowMoversList').innerHTML = hbarList(bottom5, true);
 
-  /* ---------- Product movement tables ---------- */
-  const categories = Store.get('categories', []);
-  const fastList = ranked.slice(0, Math.min(8, Math.ceil(ranked.length / 2)));
-  const slowList = ranked.slice(-Math.min(8, Math.floor(ranked.length / 2))).reverse();
-
-  function renderMovementTable(elementId, rows) {
+  function renderMovementTable(elementId, rows, categories) {
     document.getElementById(elementId).innerHTML = rows.length
       ? rows.map(r => {
           const p = r.product;
@@ -290,8 +285,26 @@ Boot.ready(function () {
         }).join('')
       : '<tr><td colspan="7"><div class="empty-state">' + icon('sales') + '<h3>No data yet</h3></div></td></tr>';
   }
-  renderMovementTable('fastMovingTbody', fastList);
-  renderMovementTable('slowMovingTbody', slowList);
+
+  function updateMovementTables() {
+    const liveProducts = Store.get('products', []).filter(function (p) { return !p.archived; });
+    const liveSales = Store.get('sales', []).filter(Utils.isCountable);
+    const categories = Store.get('categories', []);
+    const ranked = Analytics.rankProductsBySales(liveProducts, liveSales);
+
+    const top5 = ranked.slice(0, 5);
+    const bottom5 = ranked.slice(-5).reverse();
+    const maxSold = Math.max(1, top5[0] ? top5[0].unitsSold : 1);
+    document.getElementById('topSellersList').innerHTML = hbarList(top5, false, maxSold);
+    document.getElementById('slowMoversList').innerHTML = hbarList(bottom5, true, maxSold);
+
+    const fastList = ranked.slice(0, Math.min(8, Math.ceil(ranked.length / 2)));
+    const slowList = ranked.slice(-Math.min(8, Math.floor(ranked.length / 2))).reverse();
+    renderMovementTable('fastMovingTbody', fastList, categories);
+    renderMovementTable('slowMovingTbody', slowList, categories);
+  }
+  updateMovementTables();
+  window.addEventListener('store:refreshed', updateMovementTables);
 
   /* ---------- Tabs ---------- */
   document.querySelectorAll('.tabs .tab-btn').forEach(btn => {

@@ -8,7 +8,7 @@ Boot.ready(function () {
   const esc = Utils.escapeHtml;
   let lastRows = [];
 
-  const GROUPS = ['auth', 'sale', 'stock', 'product', 'customer', 'count', 'settings', 'user', 'supplier', 'category', 'warranty', 'shift'];
+  const GROUPS = ['auth', 'sale', 'stock', 'product', 'customer', 'settings', 'user', 'supplier', 'category', 'brand', 'moto', 'warranty', 'shift'];
   GROUPS.forEach(function (g) { $('auAction').insertAdjacentHTML('beforeend', '<option value="' + g + '">' + g + '.*</option>'); });
 
   const LABELS = {
@@ -19,7 +19,9 @@ Boot.ready(function () {
     'product.create': 'Product added', 'product.update': 'Product edited', 'product.archive': 'Product archived', 'product.unarchive': 'Product restored',
     'customer.create': 'Customer added', 'customer.update': 'Customer edited', 'customer.deactivate': 'Customer deactivated', 'customer.reactivate': 'Customer reactivated',
     'category.create': 'Category added', 'category.update': 'Category edited', 'category.delete': 'Category deleted',
-    'supplier.create': 'Supplier added', 'supplier.update': 'Supplier edited',
+    'brand.create': 'Brand added', 'brand.update': 'Brand edited', 'brand.delete': 'Brand deleted',
+    'moto.create': 'Motorcycle brand added', 'moto.delete': 'Motorcycle brand deleted', 'moto.model_add': 'Motorcycle model added', 'moto.model_remove': 'Motorcycle model removed',
+    'supplier.create': 'Supplier added', 'supplier.update': 'Supplier edited', 'supplier.delete': 'Supplier deleted',
     'settings.update': 'Settings changed', 'warranty.claim': 'Warranty claim', 'shift.clock_in': 'Clocked in', 'shift.clock_out': 'Clocked out'
   };
   function label(a) {
@@ -96,9 +98,16 @@ Boot.ready(function () {
       case 'customer.update': return (d.name || a.entityId) + (ch.length ? ': ' + changeText(ch, 3) : ': saved with no field changes');
       case 'customer.deactivate': case 'customer.reactivate': return (code === 'customer.deactivate' ? 'Deactivated ' : 'Reactivated ') + (d.name || a.entityId);
       case 'category.create': return 'Added category ' + (d.name || a.entityId);
-      case 'category.update': case 'supplier.update': return (d.name || a.entityId) + (ch.length ? ': ' + changeText(ch, 3) : '');
+      case 'category.update': case 'supplier.update': case 'brand.update': return (d.name || a.entityId) + (ch.length ? ': ' + changeText(ch, 3) : '');
       case 'category.delete': return 'Deleted category ' + (d.name || a.entityId);
+      case 'brand.create': return 'Added brand ' + (d.name || a.entityId);
+      case 'brand.delete': return 'Deleted brand ' + (d.name || a.entityId);
+      case 'moto.create': return 'Added motorcycle brand ' + (d.name || a.entityId) + (Array.isArray(d.models) && d.models.length ? ' (' + d.models.join(', ') + ')' : '');
+      case 'moto.delete': return 'Deleted motorcycle brand ' + (d.name || a.entityId);
+      case 'moto.model_add': return 'Added model ' + (d.model || '') + ' to ' + (d.name || a.entityId);
+      case 'moto.model_remove': return 'Removed model ' + (d.model || '') + ' from ' + (d.name || a.entityId);
       case 'supplier.create': return 'Added supplier ' + (d.name || a.entityId);
+      case 'supplier.delete': return 'Deleted supplier ' + (d.name || a.entityId);
       case 'settings.update': return ch.length ? 'Changed ' + changeText(ch, 3) : 'Saved settings with no changes';
       case 'warranty.claim': return 'Claim ' + (d.claimId || '') + ' (' + (d.status || '') + ') on ' + (d.productName || a.entityId);
       case 'shift.clock_in': return (d.staffName || a.userName || 'Staff') + ' clocked in';

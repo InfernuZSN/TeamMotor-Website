@@ -1,6 +1,6 @@
 /* notifications, audit trail, settings, reports, bootstrap */
 const express = require('express');
-const { Notification, AuditLog, Sale, Product, Category, Supplier, Customer, InventoryTransaction, Warranty, User, Shift } = require('../models');
+const { Notification, AuditLog, Sale, Product, Category, Supplier, Brand, MotorcycleBrand, Customer, InventoryTransaction, Warranty, User, Shift } = require('../models');
 const { adminOnly } = require('../middleware/auth');
 const { wrap, bad } = require('../utils/errors');
 const { audit } = require('../utils/audit');
@@ -68,7 +68,7 @@ bootstrap.get('/', wrap(async (req, res) => {
   await refreshNotifications().catch(e => console.error('[notifications] refresh failed:', e.message));
   const isAdmin = req.user.role === 'Admin';
   const settingsDoc = await getSettings();
-  const [categories, suppliers, products, customers, sales, txns, warranties, notifs, users, expiry, shifts] = await Promise.all([
+  const [categories, suppliers, products, customers, sales, txns, warranties, notifs, users, expiry, shifts, brands, motoBrands] = await Promise.all([
     Category.find({}).sort({ name: 1 }), Supplier.find({}).sort({ id: 1 }), Product.find({}).sort({ id: 1 }),
     Customer.find({}).sort({ id: 1 }),
     Sale.find({}).sort({ date: -1 }).limit(5000),
@@ -77,7 +77,8 @@ bootstrap.get('/', wrap(async (req, res) => {
     Notification.find({}).sort({ date: -1 }),
     isAdmin ? User.find({}).sort({ id: 1 }) : User.find({ id: req.user.id }),
     expiryReport(settingsDoc),
-    isAdmin ? Shift.find({}).sort({ clockIn: -1 }).limit(1000) : Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(200)
+    isAdmin ? Shift.find({}).sort({ clockIn: -1 }).limit(1000) : Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(200),
+    Brand.find({}).sort({ name: 1 }), MotorcycleBrand.find({}).sort({ name: 1 })
   ]);
   const [salesFull, warrantiesFull] = await Promise.all([withItems(sales), withClaims(warranties)]);
   warrantiesFull.forEach(w => { w.status = warrantyStatus(w, w.claims); });
@@ -85,7 +86,7 @@ bootstrap.get('/', wrap(async (req, res) => {
   const sm = new Map(stats.map(s => [s._id, s]));
   const customersFull = customers.map(c => { const s = sm.get(c.id) || {}; return Object.assign(c.toJSON(), { totalPurchases: s.n || 0, totalSpent: s.spent || 0, lastPurchase: s.last || null }); });
   res.json({
-    me: await User.findOne({ id: req.user.id }), settings: settingsDoc, categories, suppliers, products, customers: customersFull,
+    me: await User.findOne({ id: req.user.id }), settings: settingsDoc, categories, suppliers, brands, motoBrands, products, customers: customersFull,
     sales: salesFull, inventoryTransactions: txns, warranties: warrantiesFull, notifications: notifs, users, expiry, shifts,
     serverTime: new Date().toISOString()
   });

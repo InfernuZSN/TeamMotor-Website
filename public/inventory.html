@@ -33,8 +33,7 @@
         </div>
         <div class="actions">
           <button class="btn btn-secondary" id="exportInventoryBtn" title="Export products catalog to CSV"><svg viewBox="0 0 24 24"><line x1="12" y1="3" x2="12" y2="14"/><polyline points="7,10 12,15 17,10"/><line x1="4" y1="19" x2="20" y2="19"/></svg> Export CSV</button>
-          <button class="btn btn-secondary" id="manageCategoriesBtn"><svg viewBox="0 0 24 24"><polygon points="12,2 21,2 21,11 12,20 3,11 3,2"/><circle cx="16.5" cy="6.5" r="1.4"/></svg> Manage Categories</button>
-          <button class="btn btn-secondary" id="manageSuppliersBtn" type="button"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="12" height="9" rx="1"/><path d="M14 10h4l3 3v3h-7z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/></svg> Suppliers <span class="badge badge-neutral" id="supplierCountBadge">0</span></button>
+          <button class="btn btn-secondary" id="manageFiltersBtn" type="button"><svg viewBox="0 0 24 24"><polygon points="3,4 21,4 14,12.5 14,19 10,21 10,12.5"/></svg> Manage Filters</button>
           <button class="btn btn-primary" id="addProductBtn"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Product</button>
         </div>
       </div>
@@ -86,7 +85,7 @@
 
       <div class="tab-panel" id="tab-history">
         <div class="filter-bar">
-          <div class="search-input"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="histSearch" placeholder="Search by product..."></div>
+          <div class="search-input"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="histSearch" placeholder="Search product, ID, ref, or staff..."></div>
           <select class="select-filter" id="filterHistType">
             <option value="">All Types</option>
             <option value="Stock In">Stock In</option>
@@ -149,7 +148,7 @@
           </div>
           <div class="field">
             <label for="pBrand">Brand</label>
-            <input type="text" id="pBrand" required maxlength="30" placeholder="e.g. Generic, Motul, Yamaha Genuine">
+            <select id="pBrand" required data-error-msg="Choose a brand. Add new brands in Manage Filters → Manage Brands."></select>
           </div>
           <div class="field">
             <label for="pSku">SKU (optional — auto-generated if blank)</label>
@@ -173,11 +172,11 @@
         <div class="form-grid">
           <div class="field">
             <label for="pPrice">Selling Price (₱)</label>
-            <input type="number" id="pPrice" min="0" step="1" required>
+            <input type="number" id="pPrice" min="0" step="0.01" required>
           </div>
           <div class="field">
             <label for="pCost">Cost / Acquisition Price (₱)</label>
-            <input type="number" id="pCost" min="0" step="1" required>
+            <input type="number" id="pCost" min="0" step="0.01" required>
           </div>
           <div class="field">
             <label for="pStock">Quantity</label>
@@ -399,60 +398,88 @@
   </div>
 </div>
 
-<!-- Category Management Modal -->
+<!-- Manage Filters Modal (Manage Categories, Manage Brands, Manage Suppliers, Manage Motorcycle Compatibility; Admin only) -->
 <div class="modal-overlay" id="categoryModalOverlay">
-  <div class="modal">
+  <div class="modal modal-xl">
     <div class="modal-header">
-      <h2>Manage Categories</h2>
-      <button class="modal-close" data-close="categoryModalOverlay"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
+      <h2 id="manageFiltersModalTitle">Manage Filters</h2>
+      <button class="modal-close" data-close="categoryModalOverlay" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
     </div>
     <div class="modal-body">
-      <div id="categoryList" style="margin-bottom:0.5rem;"></div>
-      <p class="hint" style="margin:0 0 1.125rem;">A category can only be deleted when it has no products (archived ones count too). To empty one, move its products to another category with Edit product.</p>
-      <h3 style="font-size:.92rem;margin-bottom:0.625rem;">Add Category</h3>
-      <div class="form-grid">
-        <div class="field">
-          <label for="newCategoryName">Category Name</label>
-          <input type="text" id="newCategoryName" maxlength="30" placeholder="e.g. Tires &amp; Wheels">
-        </div>
-        <div class="field">
-          <label>Auto Prefix</label>
-          <div class="id-preview" id="newCategoryPrefix" style="width:100%;">—</div>
-        </div>
+      <div class="tabs" id="filterTabs" style="margin-top:-0.25rem;">
+        <button type="button" class="tab-btn active" data-filter-tab="categories"><span class="tab-prefix">Manage </span>Categories</button>
+        <button type="button" class="tab-btn" data-filter-tab="brands"><span class="tab-prefix">Manage </span>Brands</button>
+        <button type="button" class="tab-btn" data-filter-tab="suppliers"><span class="tab-prefix">Manage </span>Suppliers <span class="badge badge-neutral" id="supplierCountBadge" style="margin-left:4px;">0</span></button>
+        <button type="button" class="tab-btn" data-filter-tab="compatibility"><span class="tab-prefix">Manage </span><span class="tab-full">Motorcycle Compatibility</span><span class="tab-short">Compatibility</span></button>
       </div>
-      <button class="btn btn-secondary" id="addCategoryBtn" type="button"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-primary" data-close="categoryModalOverlay">Done</button>
-    </div>
-  </div>
-</div>
 
-<!-- Manage Suppliers (merged in from the old Suppliers page; Admin only) -->
-<div class="modal-overlay" id="supplierManagerOverlay">
-  <div class="modal modal-lg sup-modal">
-    <div class="modal-header">
-      <h2>Manage Suppliers</h2>
-      <button class="modal-close" data-close="supplierManagerOverlay" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="5" y1="5" x2="19" y2="19"/><line x1="19" y1="5" x2="5" y2="19"/></svg></button>
-    </div>
-    <div class="modal-body">
-      <div class="filter-bar" style="margin-bottom:.75rem;">
-        <div class="search-input"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="supSearch" placeholder="Search suppliers..."></div>
-        <button class="btn btn-primary" id="addSupplierBtn" type="button" style="margin-left:auto;"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Supplier</button>
-      </div>
-      <div class="table-card" style="box-shadow:none;">
-        <div class="table-wrap">
-          <table>
-            <thead><tr><th>Supplier</th><th>Email</th><th>Products</th><th>Last Delivery</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody id="suppliersTbody"></tbody>
-          </table>
+      <!-- Panel 1: Manage Categories -->
+      <div class="tab-panel active" id="ftab-categories">
+        <div id="categoryList" style="margin-bottom:0.5rem;"></div>
+        <p class="hint" style="margin:0 0 1.125rem;">A category can only be deleted when it has no products (archived ones count too). To empty one, move its products to another category with Edit product.</p>
+        <h3 style="font-size:.92rem;margin-bottom:0.625rem;">Add Category</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="newCategoryName">Category Name</label>
+            <input type="text" id="newCategoryName" maxlength="30" placeholder="e.g. Tires &amp; Wheels">
+          </div>
+          <div class="field">
+            <label>Auto Prefix</label>
+            <div class="id-preview" id="newCategoryPrefix" style="width:100%;">—</div>
+          </div>
         </div>
-        <div id="supPager"></div>
+        <button class="btn btn-secondary" id="addCategoryBtn" type="button"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Category</button>
       </div>
-      <p class="hint" style="margin:.75rem 0 0;">Suppliers are linked to products in Add / Edit Product and to deliveries in Stock In.</p>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-primary" data-close="supplierManagerOverlay">Done</button>
+
+      <!-- Panel 2: Manage Brands -->
+      <div class="tab-panel" id="ftab-brands">
+        <div id="brandList" style="margin-bottom:0.5rem;"></div>
+        <p class="hint" style="margin:0 0 1.125rem;">When adding or editing a product, its Brand can only be chosen from this list. A brand can only be deleted when no products (archived ones count too) use it.</p>
+        <h3 style="font-size:.92rem;margin-bottom:0.625rem;">Add Brand</h3>
+        <div class="form-grid">
+          <div class="field span-2">
+            <label for="newBrandName">Brand Name</label>
+            <input type="text" id="newBrandName" maxlength="30" placeholder="e.g. Brembo, Racing Boy, Yamaha Genuine">
+          </div>
+        </div>
+        <button class="btn btn-secondary" id="addBrandBtn" type="button"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Brand</button>
+      </div>
+
+      <!-- Panel 3: Manage Suppliers -->
+      <div class="tab-panel sup-modal" id="ftab-suppliers">
+        <div class="filter-bar" style="margin-bottom:.75rem;">
+          <div class="search-input"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.3" y1="15.3" x2="21" y2="21"/></svg><input type="text" id="supSearch" placeholder="Search suppliers..."></div>
+          <button class="btn btn-primary" id="addSupplierBtn" type="button" style="margin-left:auto;"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Supplier</button>
+        </div>
+        <div class="table-card" style="box-shadow:none;">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Supplier</th><th>Email</th><th>Products</th><th>Last Delivery</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="suppliersTbody"></tbody>
+            </table>
+          </div>
+          <div id="supPager"></div>
+        </div>
+        <p class="hint" style="margin:.75rem 0 0;">Suppliers are linked to products in Add / Edit Product and to deliveries in Stock In.</p>
+      </div>
+
+      <!-- Panel 4: Manage Motorcycle Compatibility -->
+      <div class="tab-panel" id="ftab-compatibility">
+        <div id="motoBrandList" style="margin-bottom:0.5rem;"></div>
+        <p class="hint" style="margin:0 0 1.125rem;">Customize the motorcycle brands (makes) and models available in Add / Edit Product and the &ldquo;Fits my bike&rdquo; filter. A brand or model in use by a product cannot be deleted until removed from that product.</p>
+        <h3 style="font-size:.92rem;margin-bottom:0.625rem;">Add Motorcycle Brand</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="newMotoBrandName">Motorcycle Brand</label>
+            <input type="text" id="newMotoBrandName" required maxlength="30" placeholder="e.g. Kawasaki, Suzuki, KYMCO">
+          </div>
+          <div class="field">
+            <label for="newMotoBrandModels">Initial Models (required, comma-separated)</label>
+            <input type="text" id="newMotoBrandModels" required maxlength="120" placeholder="e.g. Ninja 400, Rouser NS200">
+          </div>
+        </div>
+        <button class="btn btn-secondary" id="addMotoBrandBtn" type="button"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add Motorcycle Brand</button>
+      </div>
     </div>
   </div>
 </div>

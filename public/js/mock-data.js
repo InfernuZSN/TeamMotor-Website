@@ -19,8 +19,11 @@
 /* ---------- Utils: small helpers shared by every page ---------- */
 const Utils = {
   formatPHP(amount) {
-    const n = Number(amount) || 0;
-    return '₱' + n.toLocaleString('en-PH', { maximumFractionDigits: 0 });
+    // Round to centavos first so float noise (e.g. 427.4999999) never shows; whole pesos stay compact (₱450),
+    // amounts with centavos keep both digits (₱427.50) — matching Receipt.peso() on printed receipts.
+    const n = Math.round(((Number(amount) || 0) + Number.EPSILON) * 100) / 100;
+    const digits = Number.isInteger(n) ? 0 : 2;
+    return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   },
   formatDate(iso) {
     const d = new Date(iso);
@@ -562,7 +565,7 @@ const WARRANTIES = [
   { id: 'WAR-002', customerId: 'CUST-002', productId: 'MOT-002', productName: 'Yamaha NMAX', purchaseDate: '2026-03-10', warrantyStart: '2026-03-10', warrantyExpiration: '2027-03-10', coverage: 'Engine, transmission, and electrical \u2014 1 year or 10,000 km, whichever comes first', status: 'Active', claims: [] },
   { id: 'WAR-003', customerId: 'CUST-003', productId: 'MOT-003', productName: 'Suzuki Raider R150', purchaseDate: '2024-06-05', warrantyStart: '2024-06-05', warrantyExpiration: '2025-06-05', coverage: 'Engine and transmission \u2014 1 year or 10,000 km, whichever comes first', status: 'Expired', claims: [] },
   { id: 'WAR-004', customerId: 'CUST-004', productId: 'MOT-001', productName: 'Honda Click 125i', purchaseDate: '2025-01-10', warrantyStart: '2025-01-10', warrantyExpiration: '2026-01-10', coverage: 'Engine and transmission \u2014 1 year or 10,000 km, whichever comes first', status: 'Claimed', claims: [
-    { date: '2025-08-02', description: 'Unusual engine noise on cold start', resolution: 'Replaced starter clutch under warranty at MotoParts Central Trading service bay.' }
+    { date: '2025-08-02', description: 'Unusual engine noise on cold start', resolution: 'Replaced starter clutch under warranty at MotoParts Central Trading service bay.', status: 'Resolved' }
   ] },
   /* Rubber items (tires): defect-only warranty, RUBBER_WARRANTY_DAYS (7) days from purchase */
   { id: 'WAR-005', customerId: 'CUST-005', productId: 'OTH-001', purchaseDate: '2026-08-12', warrantyStart: '2026-08-12', warrantyExpiration: Utils.addDaysISO('2026-08-12', RUBBER_WARRANTY_DAYS), coverage: RUBBER_WARRANTY_COVERAGE, status: 'Expired', claims: [] },

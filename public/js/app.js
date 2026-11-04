@@ -206,7 +206,7 @@ function showToast(message, type) {
     container.id = 'toastContainer';
     document.body.appendChild(container);
   }
-  const iconName = type === 'danger' ? 'xCircle' : type === 'info' ? 'infoCircle' : 'checkCircle';
+  const iconName = type === 'danger' ? 'xCircle' : (type === 'warning' || type === 'warn') ? 'alertTriangle' : type === 'info' ? 'infoCircle' : 'checkCircle';
   const el = document.createElement('div');
   el.className = 'toast toast-' + (type || 'ok');
   el.innerHTML = icon(iconName) + '<div class="msg">' + Utils.escapeHtml(message) + '</div>';
@@ -379,12 +379,32 @@ function initSidebarToggle() {
   apply();
 }
 
+/* ---------- Escape closes the top-most open .modal-overlay (every internal page) ----------
+   Closing goes through the page's own logic first — a backdrop click, which every page script already
+   handles (e.g. users.js stops its shift timer there) — and only falls back to removing .open directly.
+   The POS screen uses its own .pt-overlay stack + Escape handler, so it is not affected. */
+let escapeCloseBound = false;
+function bindEscapeToCloseModals() {
+  if (escapeCloseBound) return;
+  escapeCloseBound = true;
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || e.defaultPrevented) return;
+    const open = document.querySelectorAll('.modal-overlay.open');
+    if (!open.length) return;
+    const top = open[open.length - 1];                    // later in the DOM = drawn on top (confirm dialogs are appended last)
+    top.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));   // target === overlay -> page backdrop handler
+    if (top.isConnected && top.classList.contains('open')) top.classList.remove('open');
+    e.preventDefault();
+  });
+}
+
 function initShell(activeKey) {
   if (!requireSession()) return false;
   initSidebarToggle();
   renderSidebar(activeKey);
   renderTopbarActions();
   bindProfileAvatarSync();
+  bindEscapeToCloseModals();
   const hamburger = document.getElementById('hamburgerBtn');
   if (hamburger) hamburger.addEventListener('click', openMobileSidebar);
   const scrim = document.getElementById('sidebarScrim');

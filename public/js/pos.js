@@ -116,8 +116,8 @@ Boot.ready(function () {
     const subtotal = round2(cart.reduce(function (s, c) { return s + c.qty * c.price; }, 0));
     let discount = 0;
     if (!canDiscount()) discount = 0;
-    else if (disc.mode === 'percent') discount = Math.round(subtotal * disc.value / 100);
-    else if (disc.mode === 'amount') discount = disc.value;
+    else if (disc.mode === 'percent') discount = Math.round((subtotal * disc.value / 100) * 100) / 100;
+    else if (disc.mode === 'amount') discount = Math.round(disc.value * 100) / 100;
     discount = Math.max(0, Math.min(discount, subtotal));
     return Utils.computeTotals(subtotal, discount, settings());
   }
@@ -370,10 +370,20 @@ Boot.ready(function () {
   }
 
   /* ------------------------------------------------------------------ Fits my bike */
+  function getMotoBrandsMap() {
+    const list = Store.get('motoBrands', null);
+    if (Array.isArray(list)) {
+      const map = {};
+      list.forEach(function (mb) { if (mb && mb.name) map[mb.name] = Array.isArray(mb.models) ? mb.models : []; });
+      return map;
+    }
+    return MOTO_BRANDS;
+  }
   function renderFit() {
-    const brands = Object.keys(MOTO_BRANDS);
+    const motoMap = getMotoBrandsMap();
+    const brands = Object.keys(motoMap);
     $('fitBrands').innerHTML = brands.map(function (b) { return '<button type="button" data-brand="' + esc(b) + '" class="' + (fit.brand === b ? 'is-on' : '') + '">' + esc(b) + '</button>'; }).join('');
-    const models = fit.brand ? MOTO_BRANDS[fit.brand] || [] : [];
+    const models = fit.brand ? motoMap[fit.brand] || [] : [];
     $('fitModelTitle').hidden = !fit.brand;
     $('fitModels').innerHTML = fit.brand ? '<button type="button" data-model="" class="' + (!fit.model ? 'is-on' : '') + '">All ' + esc(fit.brand) + '</button>' +
       models.map(function (m) { return '<button type="button" data-model="' + esc(m) + '" class="' + (fit.model === m ? 'is-on' : '') + '">' + esc(m) + '</button>'; }).join('') : '';
@@ -421,9 +431,9 @@ Boot.ready(function () {
     if (no) { showToast('Sale held as #' + no + '. Open Held orders to resume it.', 'ok'); focusSearch(); }
   }
   function heldTotal(h) {
-    const sub = h.lines.reduce(function (s, l) { return s + l.qty * l.price; }, 0);
-    let d = h.disc && h.disc.mode === 'percent' ? Math.round(sub * h.disc.value / 100) : h.disc && h.disc.mode === 'amount' ? h.disc.value : 0;
-    return Math.max(0, sub - Math.min(d, sub));
+    const sub = round2(h.lines.reduce(function (s, l) { return s + l.qty * l.price; }, 0));
+    let d = h.disc && h.disc.mode === 'percent' ? Math.round((sub * h.disc.value / 100) * 100) / 100 : h.disc && h.disc.mode === 'amount' ? Math.round(h.disc.value * 100) / 100 : 0;
+    return Utils.computeTotals(sub, Math.max(0, Math.min(d, sub)), settings()).total;
   }
   function renderHeldList() {
     const list = loadHeld().slice().reverse(), box = $('heldList');
@@ -479,12 +489,13 @@ Boot.ready(function () {
   function discSubtotal() { return round2(cart.reduce(function (s, c) { return s + c.qty * c.price; }, 0)); }
   function readDiscForm() {
     const sub = discSubtotal(), value = parseFloat($('discValue').value) || 0;
-    const amount = Math.round(discType === 'percent' ? sub * value / 100 : value);
+    const amount = Math.round((discType === 'percent' ? sub * value / 100 : value) * 100) / 100;
     return { sub: sub, value: value, amount: amount };
   }
   function updateDiscPreview() {
     const d = readDiscForm(), applied = Math.max(0, Math.min(d.amount, d.sub));
-    $('discPreview').textContent = 'Discount ' + peso(applied) + ' \u2192 new total ' + peso(d.sub - applied);
+    const newTotal = Utils.computeTotals(d.sub, applied, settings()).total;
+    $('discPreview').textContent = 'Discount ' + peso(applied) + ' \u2192 new total ' + peso(newTotal);
   }
   function openDiscModal() {
     if (!canDiscount()) { showToast(DISC_DENIED, 'danger'); return; }
