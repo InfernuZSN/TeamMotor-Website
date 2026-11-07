@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Log In — TeamMotor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/responsive.css">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body data-public>
+
+<div class="login-shell">
+  <div class="login-visual">
+    <img class="login-hero" src="img/sidebar-logo.jpg" alt="Estacio Garage logo artwork">
+    <div class="pitch">
+      <h2>Run the shop without the spreadsheet</h2>
+      <p>Inventory, POS, and sales tracking in one place — built for the counter, not a corporate back office.</p>
+    </div>
+  </div>
+
+  <div class="login-form-side">
+    <div class="login-box">
+      <div class="login-brand">
+        <h1>TeamMotor</h1>
+        <p>Parts &amp; Accessories</p>
+      </div>
+
+      <form id="loginForm">
+        <div class="field">
+          <label for="username">Username</label>
+          <input type="text" id="username" autocomplete="username" required>
+        </div>
+        <div class="field">
+          <label for="password">Password</label>
+          <div class="login-password-wrap">
+            <input type="password" id="password" autocomplete="current-password" required>
+            <button type="button" class="login-eye" data-toggle-secret="password" aria-label="Show password" tabindex="-1">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <a class="login-link forgot-link" href="#">Forgot password</a>
+        <button type="submit" class="btn btn-primary btn-login">Log-in</button>
+      </form>
+
+      <div class="divider">Or continue with</div>
+      <button type="button" class="btn-google"><img src="img/google.png" alt="" width="28" height="28"> Google</button>
+
+      <div class="login-demo">
+        <div class="login-demo-note">Accounts are issued by the shop administrator. Owner/Admin and Staff/Cashier permissions are enforced by the server.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Forgot Password (6-Digit Email OTP) Modal -->
+<div class="modal-overlay" id="forgotPasswordOverlay" aria-hidden="true">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="fpModalTitle" style="max-width: 28.5rem;">
+    <div class="modal-header">
+      <h2 id="fpModalTitle">Forgot Password</h2>
+      <button type="button" class="modal-close" id="fpCloseBtn" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+
+    <div class="modal-body">
+      <div class="fp-steps" aria-label="Password reset steps">
+        <span class="fp-step-badge active" id="fpBadge1">1. Email</span>
+        <span class="fp-step-sep">&rarr;</span>
+        <span class="fp-step-badge" id="fpBadge2">2. Verify OTP</span>
+        <span class="fp-step-sep">&rarr;</span>
+        <span class="fp-step-badge" id="fpBadge3">3. New Password</span>
+      </div>
+
+      <!-- STEP 1: Enter Registered Email -->
+      <form id="fpFormEmail" novalidate>
+        <p class="fp-desc">Enter the email address associated with your account and we will send you a 6-digit verification code (OTP).</p>
+        <div class="field">
+          <label for="fpEmail">Email Address</label>
+          <input type="email" id="fpEmail" placeholder="your.email@gmail.com" autocomplete="email" required>
+        </div>
+        <div class="form-error" id="fpErrorEmail" role="alert"></div>
+        <div class="modal-footer" style="padding: 1rem 0 0; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" id="fpCancelBtn1">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="fpSendOtpBtn">Send 6-Digit Code</button>
+        </div>
+      </form>
+
+      <!-- STEP 2: Input 6-Digit OTP -->
+      <form id="fpFormOtp" novalidate hidden>
+        <p class="fp-desc">We sent a 6-digit verification code to <strong id="fpEmailDisplay"></strong>. Please enter it below to verify that you own this email.</p>
+        <div class="field">
+          <label for="fpOtp">6-Digit OTP Code</label>
+          <input type="text" id="fpOtp" class="fp-otp-input" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" placeholder="000000" autocomplete="one-time-code" required>
+          <div class="fp-subactions">
+            <span>Didn't receive the email? <button type="button" class="fp-link-btn" id="fpResendBtn">Resend code</button></span>
+            <button type="button" class="fp-link-btn" id="fpChangeEmailBtn">Change email</button>
+          </div>
+        </div>
+        <div class="form-error" id="fpErrorOtp" role="alert"></div>
+        <div class="modal-footer" style="padding: 1rem 0 0; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" id="fpBackToEmailBtn">Back</button>
+          <button type="submit" class="btn btn-primary" id="fpVerifyOtpBtn">Verify Code</button>
+        </div>
+      </form>
+
+      <!-- STEP 3: Create & Confirm New Password -->
+      <form id="fpFormReset" novalidate hidden>
+        <p class="fp-desc">Email verified for <strong id="fpVerifiedAccount"></strong>! Create your new password below and type it again to confirm.</p>
+        <div class="field">
+          <label for="fpNewPassword">New Password</label>
+          <div class="login-password-wrap">
+            <input type="password" id="fpNewPassword" placeholder="At least 8 chars (letter + number)" autocomplete="new-password" required>
+            <button type="button" class="login-eye" data-toggle-secret="fpNewPassword" aria-label="Show password" tabindex="-1">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="hint" style="margin-top: 4px; font-size: .76rem;">Must be at least 8 characters and include a letter and a number.</div>
+        </div>
+        <div class="field">
+          <label for="fpConfirmPassword">Confirm New Password (Write Again)</label>
+          <div class="login-password-wrap">
+            <input type="password" id="fpConfirmPassword" placeholder="Re-enter your new password" autocomplete="new-password" required>
+            <button type="button" class="login-eye" data-toggle-secret="fpConfirmPassword" aria-label="Show password" tabindex="-1">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          <div class="fp-match-hint" id="fpMatchHint" aria-live="polite"></div>
+        </div>
+        <div class="form-error" id="fpErrorReset" role="alert"></div>
+        <div class="modal-footer" style="padding: 1rem 0 0; margin-top: 1rem;">
+          <button type="button" class="btn btn-secondary" id="fpCancelBtn3">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="fpSavePwBtn">Reset Password</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="js/mock-data.js"></script>
+<script src="js/local-api.js"></script>
+<script src="js/store.js"></script>
+<script src="js/analytics.js"></script>
+<script src="js/app.js"></script>
+<script>
+Boot.ready(function () {
+  // Already signed in with a still-valid token? Skip the form.
+  if (Api.getToken() && getSession() && !/reason=/.test(location.search)) {
+    Api.get('/auth/me').then(function () { location.replace('index.html'); }).catch(function () { Api.clear(); });
+  }
+  Api.detect().then(function (mode) {
+    if (mode !== 'local') return;
+    const note = document.querySelector('.login-demo-note');
+    if (note) note.innerHTML = '<strong>Offline mode</strong> \u2014 everything is saved in this browser only.<br>Admin: <b>ronnie.manalo</b> / <b>Admin@12345</b><br>Staff: <b>juan.delacruz</b> / <b>Staff@12345</b>';
+  }).catch(function (e) { showToast(e.message, 'danger'); });
+  if (/reason=expired/.test(location.search)) showToast('Your session expired. Please log in again.', 'info');
+
+  document.querySelectorAll('[data-toggle-secret]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      const targetId = btn.getAttribute('data-toggle-secret');
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+      btn.innerHTML = icon(show ? 'eyeOff' : 'eye');
+    });
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+    if (!username || !password) { showToast('Enter your username and password.', 'danger'); return; }
+    const btn = this.querySelector('button[type="submit"]');
+    await Utils.withBusy(btn, async function () {
+      try {
+        const res = await Api.post('/auth/login', { username: username, password: password });
+        setSession(res.token, res.user);
+        window.location.replace('index.html');
+      } catch (err) {
+        showToast(err.message, 'danger');
+        document.getElementById('password').value = '';
+      }
+    });
+  });
+
+  /* ---- Forgot Password (6-Digit Email OTP) Flow ---- */
+  const fpOverlay = document.getElementById('forgotPasswordOverlay');
+  const fpFormEmail = document.getElementById('fpFormEmail');
+  const fpFormOtp = document.getElementById('fpFormOtp');
+  const fpFormReset = document.getElementById('fpFormReset');
+  const fpEmailInput = document.getElementById('fpEmail');
+  const fpOtpInput = document.getElementById('fpOtp');
+  const fpNewPwInput = document.getElementById('fpNewPassword');
+  const fpConfirmPwInput = document.getElementById('fpConfirmPassword');
+  const fpMatchHint = document.getElementById('fpMatchHint');
+  const fpResendBtn = document.getElementById('fpResendBtn');
+  const PW_RULE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
+
+  let fpCurrentEmail = '';
+  let fpVerifiedOtp = '';
+  let fpResendTimer = null;
+
+  function setFpStep(step) {
+    fpFormEmail.hidden = step !== 1;
+    fpFormOtp.hidden = step !== 2;
+    fpFormReset.hidden = step !== 3;
+
+    const b1 = document.getElementById('fpBadge1');
+    const b2 = document.getElementById('fpBadge2');
+    const b3 = document.getElementById('fpBadge3');
+    b1.className = 'fp-step-badge' + (step === 1 ? ' active' : ' done');
+    b2.className = 'fp-step-badge' + (step === 2 ? ' active' : (step > 2 ? ' done' : ''));
+    b3.className = 'fp-step-badge' + (step === 3 ? ' active' : '');
+
+    document.getElementById('fpErrorEmail').textContent = '';
+    document.getElementById('fpErrorOtp').textContent = '';
+    document.getElementById('fpErrorReset').textContent = '';
+
+    setTimeout(function () {
+      if (step === 1) fpEmailInput.focus();
+      else if (step === 2) fpOtpInput.focus();
+      else if (step === 3) fpNewPwInput.focus();
+    }, 60);
+  }
+
+  function startResendCooldown(seconds) {
+    if (fpResendTimer) clearInterval(fpResendTimer);
+    let left = seconds || 30;
+    fpResendBtn.disabled = true;
+    fpResendBtn.textContent = 'Resend in ' + left + 's';
+    fpResendTimer = setInterval(function () {
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(fpResendTimer);
+        fpResendTimer = null;
+        fpResendBtn.disabled = false;
+        fpResendBtn.textContent = 'Resend code';
+      } else {
+        fpResendBtn.textContent = 'Resend in ' + left + 's';
+      }
+    }, 1000);
+  }
+
+  function openForgotPasswordModal() {
+    fpCurrentEmail = '';
+    fpVerifiedOtp = '';
+    fpOtpInput.value = '';
+    fpNewPwInput.value = '';
+    fpConfirmPwInput.value = '';
+    fpMatchHint.textContent = '';
+    fpMatchHint.className = 'fp-match-hint';
+
+    const typedIdent = document.getElementById('username').value.trim();
+    if (typedIdent && typedIdent.includes('@')) {
+      fpEmailInput.value = typedIdent;
+    }
+
+    setFpStep(1);
+    fpOverlay.classList.add('open');
+    fpOverlay.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeForgotPasswordModal() {
+    if (fpResendTimer) { clearInterval(fpResendTimer); fpResendTimer = null; }
+    fpOverlay.classList.remove('open');
+    fpOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  document.querySelector('.forgot-link').addEventListener('click', function (e) {
+    e.preventDefault();
+    openForgotPasswordModal();
+  });
+
+  document.getElementById('fpCloseBtn').addEventListener('click', closeForgotPasswordModal);
+  document.getElementById('fpCancelBtn1').addEventListener('click', closeForgotPasswordModal);
+  document.getElementById('fpCancelBtn3').addEventListener('click', closeForgotPasswordModal);
+  fpOverlay.addEventListener('click', function (e) {
+    if (e.target === fpOverlay) closeForgotPasswordModal();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && fpOverlay.classList.contains('open')) closeForgotPasswordModal();
+  });
+
+  document.getElementById('fpBackToEmailBtn').addEventListener('click', function () { setFpStep(1); });
+  document.getElementById('fpChangeEmailBtn').addEventListener('click', function () { setFpStep(1); });
+
+  fpOtpInput.addEventListener('input', function () {
+    this.value = this.value.replace(/\D+/g, '').slice(0, 6);
+    document.getElementById('fpErrorOtp').textContent = '';
+  });
+
+  function updatePasswordMatchHint() {
+    const pw1 = fpNewPwInput.value;
+    const pw2 = fpConfirmPwInput.value;
+    document.getElementById('fpErrorReset').textContent = '';
+    if (!pw2) {
+      fpMatchHint.textContent = '';
+      fpMatchHint.className = 'fp-match-hint';
+      return;
+    }
+    if (pw1 === pw2) {
+      fpMatchHint.textContent = '\u2713 Passwords match';
+      fpMatchHint.className = 'fp-match-hint ok';
+    } else {
+      fpMatchHint.textContent = '\u2717 Passwords do not match yet';
+      fpMatchHint.className = 'fp-match-hint err';
+    }
+  }
+  fpNewPwInput.addEventListener('input', updatePasswordMatchHint);
+  fpConfirmPwInput.addEventListener('input', updatePasswordMatchHint);
+
+  // Step 1 Submit: Request 6-digit OTP email
+  fpFormEmail.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const email = fpEmailInput.value.trim().toLowerCase();
+    const errEl = document.getElementById('fpErrorEmail');
+    errEl.textContent = '';
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errEl.textContent = 'Please enter a valid email address.';
+      return;
+    }
+    const btn = document.getElementById('fpSendOtpBtn');
+    await Utils.withBusy(btn, async function () {
+      try {
+        await Api.post('/auth/forgot-password', { email: email });
+        fpCurrentEmail = email;
+        document.getElementById('fpEmailDisplay').textContent = email;
+        fpOtpInput.value = '';
+        showToast('6-digit OTP code sent to ' + email, 'ok');
+        startResendCooldown(30);
+        setFpStep(2);
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  });
+
+  // Resend OTP button
+  fpResendBtn.addEventListener('click', async function () {
+    if (!fpCurrentEmail || fpResendBtn.disabled) return;
+    const errEl = document.getElementById('fpErrorOtp');
+    errEl.textContent = '';
+    await Utils.withBusy(fpResendBtn, async function () {
+      try {
+        await Api.post('/auth/forgot-password', { email: fpCurrentEmail });
+        fpOtpInput.value = '';
+        showToast('A new 6-digit code has been sent to ' + fpCurrentEmail, 'ok');
+        startResendCooldown(30);
+        fpOtpInput.focus();
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  });
+
+  // Step 2 Submit: Verify 6-digit OTP
+  fpFormOtp.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const otp = fpOtpInput.value.trim();
+    const errEl = document.getElementById('fpErrorOtp');
+    errEl.textContent = '';
+    if (!/^\d{6}$/.test(otp)) {
+      errEl.textContent = 'Please enter the 6-digit verification code sent to your email.';
+      return;
+    }
+    const btn = document.getElementById('fpVerifyOtpBtn');
+    await Utils.withBusy(btn, async function () {
+      try {
+        const res = await Api.post('/auth/verify-otp', { email: fpCurrentEmail, otp: otp });
+        fpVerifiedOtp = otp;
+        document.getElementById('fpVerifiedAccount').textContent = (res.name ? res.name + ' (' + res.username + ')' : fpCurrentEmail);
+        fpNewPwInput.value = '';
+        fpConfirmPwInput.value = '';
+        fpMatchHint.textContent = '';
+        showToast('Code verified! Please set your new password.', 'ok');
+        setFpStep(3);
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  });
+
+  // Step 3 Submit: Set & Confirm New Password
+  fpFormReset.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const newPassword = fpNewPwInput.value;
+    const confirmPassword = fpConfirmPwInput.value;
+    const errEl = document.getElementById('fpErrorReset');
+    errEl.textContent = '';
+
+    if (!newPassword || !confirmPassword) {
+      errEl.textContent = 'Please fill in both password fields.';
+      return;
+    }
+    if (!PW_RULE.test(newPassword)) {
+      errEl.textContent = 'Password must be at least 8 characters and include a letter and a number.';
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      errEl.textContent = 'Passwords do not match. Please write the exact same password again.';
+      return;
+    }
+
+    const btn = document.getElementById('fpSavePwBtn');
+    await Utils.withBusy(btn, async function () {
+      try {
+        const res = await Api.post('/auth/reset-password', {
+          email: fpCurrentEmail,
+          otp: fpVerifiedOtp,
+          newPassword: newPassword,
+          confirmPassword: confirmPassword
+        });
+        closeForgotPasswordModal();
+        if (res && res.username) {
+          document.getElementById('username').value = res.username;
+        }
+        const loginPw = document.getElementById('password');
+        loginPw.value = '';
+        loginPw.focus();
+        showToast(res.message || 'Password reset successful! You can now log in with your new password.', 'ok');
+      } catch (err) {
+        errEl.textContent = err.message;
+      }
+    });
+  });
+
+  /* ---- Google Sign-In with Account Chooser ---- */
+  let googleClient = null;
+  let googleClientId = '';
+
+  async function initGoogleAuth() {
+    try {
+      const cfg = await Api.get('/auth/google/config');
+      googleClientId = (cfg && cfg.clientId) || window.GOOGLE_CLIENT_ID || '';
+    } catch (e) {
+      googleClientId = window.GOOGLE_CLIENT_ID || '';
+    }
+    if (!googleClientId) return;
+
+    function setupClient() {
+      if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
+        setTimeout(setupClient, 150);
+        return;
+      }
+      try {
+        googleClient = google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: 'openid email profile',
+          prompt: 'select_account',
+          callback: async function (resp) {
+            console.log('[Google Auth] Response received from Google:', resp);
+            if (resp.error) {
+              console.warn('[Google Auth] Auth error:', resp.error);
+              if (resp.error === 'access_denied') {
+                showToast('Google sign-in was cancelled or access denied.', 'info');
+              } else {
+                showToast('Google sign-in failed: ' + resp.error, 'danger');
+              }
+              return;
+            }
+            if (!resp.access_token) {
+              console.warn('[Google Auth] No access token in response');
+              return;
+            }
+            const googleBtn = document.querySelector('.btn-google');
+            await Utils.withBusy(googleBtn, async function () {
+              try {
+                let googleEmail = '';
+                try {
+                  const gInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: 'Bearer ' + resp.access_token }
+                  });
+                  if (gInfoRes.ok) {
+                    const gInfo = await gInfoRes.json();
+                    googleEmail = (gInfo.email || '').trim().toLowerCase();
+                  }
+                } catch (e) {
+                  console.warn('[Google Auth] Client fetch userinfo failed, backend will verify:', e);
+                }
+
+                console.log('[Google Auth] Authenticating with TeamMotor...', { email: googleEmail });
+                const res = await Api.post('/auth/google', {
+                  accessToken: resp.access_token,
+                  email: googleEmail
+                });
+                console.log('[Google Auth] Authenticated successfully:', res.user);
+                setSession(res.token, res.user);
+                showToast('Welcome, ' + (res.user.name || res.user.username) + '!', 'ok');
+                setTimeout(function () {
+                  window.location.replace('index.html');
+                }, 250);
+              } catch (err) {
+                console.error('[Google Auth] TeamMotor login failed:', err);
+                showToast(err.message, 'danger');
+              }
+            });
+          },
+          error_callback: function (err) {
+            console.warn('[Google Auth] Error callback:', err);
+            if (err && (err.type === 'popup_closed' || err.message === 'popup_closed')) {
+              showToast('Google sign-in popup was closed.', 'info');
+            } else {
+              showToast('Unable to open Google sign-in window.', 'danger');
+            }
+          }
+        });
+      } catch (err) {
+        console.warn('Google Identity initialization failed:', err);
+      }
+    }
+    setupClient();
+  }
+  initGoogleAuth();
+
+  document.querySelector('.btn-google').addEventListener('click', function (e) {
+    e.preventDefault();
+    if (!googleClientId) {
+      showToast('Google Sign-In is not configured yet. Set GOOGLE_CLIENT_ID in server/.env.', 'warning');
+      return;
+    }
+    if (!googleClient) {
+      if (typeof google === 'undefined' || !google.accounts) {
+        showToast('Google services are still loading. Please try again in a moment.', 'info');
+      } else {
+        initGoogleAuth();
+        showToast('Initializing Google Sign-In... Please try again.', 'info');
+      }
+      return;
+    }
+    try {
+      // 'select_account' forces the official Google account chooser popup
+      googleClient.requestAccessToken({ prompt: 'select_account' });
+    } catch (err) {
+      showToast('Could not launch Google Sign-In: ' + err.message, 'danger');
+    }
+  });
+});
+</script>
+</body>
+</html>
