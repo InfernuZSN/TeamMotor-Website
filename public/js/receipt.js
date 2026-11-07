@@ -1,7 +1,7 @@
 /* ==========================================================================
    receipt.js — one receipt renderer for the whole app (POS preview, POS success screen, Sales page reprint)
    ----------------------------------------------------------------------
-   Layout targets a 58 mm thermal roll (OC-58IIH, ~50 mm printable) (see "Receipt" + @media print in css/style.css).
+   Layout targets a 58 mm thermal roll (Xprinter XP-58, OC-58IIH, POS-58, ~48 mm printable) (see "Receipt" + @media print in css/style.css).
 
    Receipt.html(d)            -> markup for a receipt data object (see Receipt.fromSale / previewData in pos-receipt.js)
    Receipt.fromSale(sale, o)  -> data object built ONLY from the stored transaction (items, prices, VAT, tender, shop

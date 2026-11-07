@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Inventory — TeamMotor</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/responsive.css">
@@ -135,8 +135,9 @@
       <form id="productForm" novalidate>
         <div class="form-grid">
           <div class="field span-2">
-            <label>Product ID</label>
-            <div class="id-preview"><span class="tag">Auto</span> <span id="idPreviewValue">—</span></div>
+            <label for="pId" id="pIdLabel">Product ID (Scan QR code or leave blank to auto-generate)</label>
+            <input type="text" id="pId" maxlength="40" pattern="[A-Za-z0-9\-_]+" data-error-msg="Product ID may only contain letters, numbers, dashes (-), and underscores (_). No spaces or special characters." placeholder="Scan QR code or leave blank to auto-generate" style="font-family:var(--font-mono);" autocomplete="off" autocorrect="off" autocapitalize="characters" spellcheck="false">
+            <div class="hint" id="pIdHint">Auto-generated ID if left blank: <strong class="mono-num" id="idPreviewValue">—</strong></div>
           </div>
         </div>
 
@@ -155,10 +156,6 @@
             <input type="text" id="pSku" maxlength="40" placeholder="e.g. TM-ENG-003">
           </div>
           <div class="field">
-            <label for="pBarcode">Barcode ID (optional — auto-generated if blank)</label>
-            <input type="text" id="pBarcode" maxlength="40" placeholder="e.g. 480123456705">
-          </div>
-          <div class="field span-2">
             <label for="pCategory">Category</label>
             <select id="pCategory" required></select>
           </div>
@@ -265,6 +262,18 @@
               <span>Optional — shown in Product Details and in POS. Without a photo, the category icon is used.</span>
             </div>
             <input type="file" id="pImageFile" accept="image/*" style="display:none;">
+          </div>
+          <div id="productDeleteWrap" style="margin-top: 1.125rem; display: none;">
+            <button type="button" class="btn btn-danger" id="deleteProductModalBtn" style="display: inline-flex; align-items: center; gap: 0.5rem; background: var(--danger, #e02020); color: #fff; border: none; padding: 0.625rem 1.125rem; border-radius: var(--radius-sm, 0.5rem); font-weight: 600; font-size: .85rem; cursor: pointer;">
+              <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                <path d="M10 11v6M14 11v6"></path>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+              </svg>
+              Delete Product
+            </button>
+            <div class="hint" style="margin-top: 0.35rem;">Permanently remove this product from the inventory and POS.</div>
           </div>
         </div>
       </form>

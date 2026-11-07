@@ -43,9 +43,19 @@ const User = make('User', 'users', {
   contactNumber: { type: String, default: '' },
   photo: { type: String, default: '' },                                   // resized data URL
   tokenVersion: { type: Number, default: 0 },                             // bump to invalidate old JWTs
-  lastLoginAt: { type: Date }
+  lastLoginAt: { type: Date },
+  resetOtpHash: { type: String, default: null, select: false },
+  resetOtpExpiresAt: { type: Date, default: null, select: false },
+  resetOtpAttempts: { type: Number, default: 0, select: false },
+  resetOtpVerified: { type: Boolean, default: false, select: false }
 }, {
-  toJSON: { transform(doc, ret) { delete ret._id; delete ret.__v; delete ret.passwordHash; delete ret.tokenVersion; return ret; } }
+  toJSON: {
+    transform(doc, ret) {
+      delete ret._id; delete ret.__v; delete ret.passwordHash; delete ret.tokenVersion;
+      delete ret.resetOtpHash; delete ret.resetOtpExpiresAt; delete ret.resetOtpAttempts; delete ret.resetOtpVerified;
+      return ret;
+    }
+  }
 });
 
 /* ---------- categories / suppliers ---------- */
@@ -95,7 +105,6 @@ const Product = make('Product', 'products', {
   supplier: { type: String, default: '' },                                // suppliers.id
   supplierRef: { type: String, default: '' },
   sku: { type: String, default: '', index: true },
-  barcode: { type: String, default: '', index: true },
   description: { type: String, default: '' },
   costPrice: { type: Number, default: 0, min: 0 },
   sellingPrice: { type: Number, required: true, min: 0 },

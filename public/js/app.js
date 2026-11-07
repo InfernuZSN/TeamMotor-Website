@@ -56,7 +56,8 @@ const Icons = {
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8,11 L8,8 C8,5.8 9.8,4 12,4 C14.2,4 16,5.8 16,8 L16,11"/>',
   key: '<circle cx="8" cy="15" r="4"/><line x1="11" y1="12" x2="20" y2="3"/><line x1="16" y1="7" x2="19" y2="10"/>',
-  eyeOff: '<polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/>'
+  eyeOff: '<polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/>',
+  trash: '<polyline points="3,6 5,6 21,6"/><path d="M19,6 L18,20 C18,21.1 17.1,22 16,22 L8,22 C6.9,22 6,21.1 6,20 L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9,6 L9,4 C9,3.4 9.4,3 10,3 L14,3 C14.6,3 15,3.4 15,4 L15,6"/>'
 };
 function icon(name, cls) {
   return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24">' + (Icons[name] || '') + '</svg>';
@@ -143,7 +144,8 @@ function validateForm(formEl) {
   let firstInvalid = null;
   const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-  formEl.querySelectorAll('[required]').forEach(function (input) {
+  formEl.querySelectorAll('[required], [pattern]').forEach(function (input) {
+    if (input.disabled) return;
     const field = input.closest('.field');
     let fieldValid = true;
     const val = (input.value || '').trim();
@@ -152,7 +154,7 @@ function validateForm(formEl) {
       const group = formEl.querySelectorAll('[name="' + input.name + '"]');
       fieldValid = Array.prototype.some.call(group, function (r) { return r.checked; });
     } else if (!val) {
-      fieldValid = false;
+      fieldValid = !input.required;
     } else if (input.type === 'email' && !emailRe.test(val)) {
       fieldValid = false;
     } else if (input.type === 'number' && (isNaN(val) || (input.min !== '' && Number(val) < Number(input.min)))) {
@@ -188,10 +190,11 @@ function validateForm(formEl) {
 }
 // Clear a field's error as soon as the person starts fixing it.
 document.addEventListener('input', function (e) {
+  if (e.target && e.target.id === 'pId') return;
   const field = e.target.closest && e.target.closest('.field.has-error');
   if (!field) return;
   const val = (e.target.value || '').trim();
-  if (val) {
+  if (val || !e.target.required) {
     field.classList.remove('has-error');
     const msg = field.querySelector('.field-error-msg');
     if (msg) msg.remove();
@@ -276,6 +279,8 @@ function renderSidebar(activeKey) {
   if (scrim) {
     sidebar.querySelectorAll('.nav-item').forEach(a => a.addEventListener('click', closeMobileSidebar));
   }
+  const oldNav = document.getElementById('mobileBottomNav');
+  if (oldNav) oldNav.remove();
 }
 
 function openMobileSidebar() {
@@ -411,11 +416,338 @@ function initShell(activeKey) {
   if (scrim) scrim.addEventListener('click', closeMobileSidebar);
   if (window.Notifications) Notifications.init();
   if (Api.mode() === 'local') showOfflineBadge();
+  initMobileEnhancements();
   try {                                   // message left by an action that reloaded the page
     const flash = sessionStorage.getItem('tm:flash');
     if (flash) { sessionStorage.removeItem('tm:flash'); showToast(flash, 'ok'); }
   } catch (e) { /* ignore */ }
   return true;
+}
+
+/* ---------- Mobile Ergonomics, Table-to-Card Labels & Filter Drawers (inert on >768px) ---------- */
+let mobileEnhancementsBound = false;
+function shortMobileActionLabel(raw) {
+  if (!raw) return '';
+  if (/stock in/i.test(raw)) return 'Stock In';
+  if (/stock out/i.test(raw)) return 'Stock Out';
+  if (/adjust/i.test(raw)) return 'Adjust';
+  if (/unarchive|reactivate/i.test(raw)) return 'Restore';
+  if (/archive|inactive/i.test(raw)) return 'Archive';
+  if (/reprint/i.test(raw)) return 'Reprint';
+  if (/claim/i.test(raw)) return 'Claim';
+  if (/shift/i.test(raw)) return 'Shifts';
+  if (/delete/i.test(raw)) return 'Delete';
+  if (/edit/i.test(raw)) return 'Edit';
+  if (/view/i.test(raw)) return 'View';
+  return '';
+}
+
+function syncMobileTableLabels() {
+  document.querySelectorAll('table').forEach(function (table) {
+    if (table.classList.contains('rcpt-items') || table.classList.contains('order-table')) return;
+    const thead = table.querySelector('thead');
+    const tbody = table.querySelector('tbody');
+    if (!thead || !tbody) return;
+    const headers = Array.from(thead.querySelectorAll('th')).map(function (th) {
+      return (th.textContent || '').trim();
+    });
+    if (!headers.length) return;
+
+    const h0 = (headers[0] || '').toLowerCase();
+    const h1 = (headers[1] || '').toLowerCase();
+    const h2 = (headers[2] || '').toLowerCase();
+    let primaryIdx = 0;
+    if ((h0 === 'date' && h1 === 'product') || (h0 === 'customer id' && h1 === 'name') || (h0 === '#' && h1 === 'product')) {
+      primaryIdx = 1;
+    } else if (h0 === 'when' && h2 === 'action') {
+      primaryIdx = 2;
+    }
+
+    Array.from(tbody.children).forEach(function (tr) {
+      if (tr.tagName !== 'TR' || tr.dataset.mSynced === '1') return;
+      tr.dataset.mSynced = '1';
+      const cells = Array.from(tr.children);
+      if (cells.length === 1 && cells[0].hasAttribute('colspan')) {
+        tr.classList.add('mobile-empty-row');
+        return;
+      }
+      cells.forEach(function (td, idx) {
+        const lbl = headers[idx] || '';
+        if (lbl) td.setAttribute('data-label', lbl);
+        const lower = lbl.toLowerCase();
+        const isAction = lower === 'actions' || lower === 'view' || td.classList.contains('col-actions') ||
+          (idx === cells.length - 1 && !!td.querySelector('.icon-btn, .au-view-btn'));
+        if (isAction) {
+          td.classList.add('mobile-cell-actions');
+          td.querySelectorAll('.icon-btn').forEach(function (btn) {
+            if (!btn.hasAttribute('data-mobile-label')) {
+              const shortLbl = shortMobileActionLabel(btn.getAttribute('title') || btn.getAttribute('aria-label') || '');
+              if (shortLbl) btn.setAttribute('data-mobile-label', shortLbl);
+            }
+          });
+        } else if (idx === primaryIdx) {
+          td.classList.add('mobile-cell-primary');
+        } else if (primaryIdx > 0 && idx === 0) {
+          td.classList.add('mobile-cell-meta');
+        }
+        if (/compatibility|reference|notes|items|summary|email/i.test(lower)) {
+          td.classList.add('mobile-cell-wide');
+        }
+      });
+    });
+  });
+}
+
+function initMobileSearchAndInputs() {
+  document.querySelectorAll('.search-input').forEach(function (wrap) {
+    if (wrap.querySelector('.search-clear-btn')) return;
+    const input = wrap.querySelector('input');
+    if (!input) return;
+    if (!input.getAttribute('inputmode')) input.setAttribute('inputmode', 'search');
+    input.setAttribute('autocorrect', 'off');
+    input.setAttribute('autocapitalize', 'off');
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'search-clear-btn';
+    clearBtn.setAttribute('aria-label', 'Clear search');
+    clearBtn.hidden = !input.value;
+    clearBtn.innerHTML = icon('close');
+    wrap.appendChild(clearBtn);
+
+    const syncClear = function () { clearBtn.hidden = !input.value; };
+    input.addEventListener('input', syncClear);
+    clearBtn.addEventListener('click', function () {
+      input.value = '';
+      clearBtn.hidden = true;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+    });
+  });
+
+  document.querySelectorAll('input[type="number"]').forEach(function (inp) {
+    if (inp.getAttribute('inputmode')) return;
+    const step = inp.getAttribute('step');
+    inp.setAttribute('inputmode', step && step.indexOf('.') !== -1 ? 'decimal' : 'numeric');
+  });
+  document.querySelectorAll('input[type="tel"], #cPhone, #supPhone, #sPhone, #pfContact, #qcPhone').forEach(function (inp) {
+    if (!inp.getAttribute('inputmode')) inp.setAttribute('inputmode', 'tel');
+  });
+  document.querySelectorAll('#pId, #pSku, #sReference, #uUsername, #username').forEach(function (inp) {
+    inp.setAttribute('autocorrect', 'off');
+    inp.setAttribute('autocapitalize', 'off');
+    inp.setAttribute('spellcheck', 'false');
+  });
+}
+
+function initMobileFilterDrawers() {
+  /* 1. Inventory Products tab: collapsible filter drawer + quick status pills */
+  const tabProducts = document.getElementById('tab-products');
+  if (tabProducts && !document.getElementById('invMobileFilterBtn')) {
+    const bars = tabProducts.querySelectorAll(':scope > .filter-bar');
+    if (bars.length >= 1) {
+      bars[0].classList.add('mobile-collapsible-bar', 'mobile-bar-primary');
+      if (bars[1]) bars[1].classList.add('mobile-collapsible-bar', 'mobile-bar-secondary');
+
+      const searchWrap = bars[0].querySelector('.search-input');
+      const filterBtn = document.createElement('button');
+      filterBtn.type = 'button';
+      filterBtn.className = 'btn btn-secondary mobile-filter-btn';
+      filterBtn.id = 'invMobileFilterBtn';
+      filterBtn.setAttribute('aria-expanded', 'false');
+      if (searchWrap && searchWrap.nextSibling) bars[0].insertBefore(filterBtn, searchWrap.nextSibling);
+      else bars[0].appendChild(filterBtn);
+
+      const quickChips = document.createElement('div');
+      quickChips.className = 'mobile-quick-chips';
+      quickChips.id = 'invMobileQuickChips';
+      quickChips.setAttribute('role', 'group');
+      quickChips.setAttribute('aria-label', 'Quick stock status filters');
+      quickChips.innerHTML =
+        '<button type="button" class="chip active" data-qstatus="">All</button>' +
+        '<button type="button" class="chip" data-qstatus="In Stock">In Stock</button>' +
+        '<button type="button" class="chip" data-qstatus="Low Stock">Low Stock</button>' +
+        '<button type="button" class="chip" data-qstatus="Out of Stock">Out of Stock</button>' +
+        '<button type="button" class="chip" data-qstatus="Expiring Soon">Expiring</button>' +
+        '<button type="button" class="chip" data-qarchived="1">Archived</button>';
+      bars[0].insertAdjacentElement('afterend', quickChips);
+
+      const footerHost = bars[1] || bars[0];
+      const drawerFoot = document.createElement('div');
+      drawerFoot.className = 'mobile-filter-footer';
+      drawerFoot.innerHTML =
+        '<button type="button" class="btn btn-secondary btn-sm" id="invMobileResetFilters">Reset Filters</button>' +
+        '<button type="button" class="btn btn-primary btn-sm" id="invMobileApplyFilters">Done</button>';
+      footerHost.appendChild(drawerFoot);
+
+      const selectIds = ['filterCategory', 'filterProductBrand', 'filterSupplier', 'filterStatus', 'filterBrand', 'filterModel'];
+      const syncInvBadge = function () {
+        let count = 0;
+        selectIds.forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el && el.value) count++;
+        });
+        const sortEl = document.getElementById('sortBy');
+        if (sortEl && sortEl.value && sortEl.value !== 'name-asc') count++;
+        const archChip = document.getElementById('toggleArchivedChip');
+        const isArch = archChip && archChip.classList.contains('active');
+        if (isArch) count++;
+
+        filterBtn.innerHTML = icon('filter') + '<span>Filter &amp; Sort</span>' +
+          (count > 0 ? '<em class="mobile-filter-count">' + count + '</em>' : '');
+        filterBtn.classList.toggle('has-active-filters', count > 0);
+
+        const curStatus = (document.getElementById('filterStatus') || {}).value || '';
+        quickChips.querySelectorAll('[data-qstatus]').forEach(function (c) {
+          c.classList.toggle('active', !isArch && c.dataset.qstatus === curStatus);
+        });
+        const qArch = quickChips.querySelector('[data-qarchived]');
+        if (qArch) qArch.classList.toggle('active', !!isArch);
+      };
+
+      filterBtn.addEventListener('click', function () {
+        const open = tabProducts.classList.toggle('filters-open');
+        filterBtn.setAttribute('aria-expanded', String(open));
+      });
+      document.getElementById('invMobileApplyFilters').addEventListener('click', function () {
+        tabProducts.classList.remove('filters-open');
+        filterBtn.setAttribute('aria-expanded', 'false');
+      });
+      document.getElementById('invMobileResetFilters').addEventListener('click', function () {
+        selectIds.forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el) el.value = '';
+        });
+        const sortEl = document.getElementById('sortBy');
+        if (sortEl) sortEl.value = 'name-asc';
+        const archChip = document.getElementById('toggleArchivedChip');
+        if (archChip && archChip.classList.contains('active')) archChip.click();
+        const brandEl = document.getElementById('filterBrand');
+        if (brandEl) brandEl.dispatchEvent(new Event('change'));
+        const catEl = document.getElementById('filterCategory');
+        if (catEl) catEl.dispatchEvent(new Event('change'));
+        syncInvBadge();
+      });
+
+      quickChips.addEventListener('click', function (e) {
+        const stBtn = e.target.closest('[data-qstatus]');
+        const arBtn = e.target.closest('[data-qarchived]');
+        const statusSel = document.getElementById('filterStatus');
+        const archChip = document.getElementById('toggleArchivedChip');
+        if (stBtn && statusSel) {
+          if (archChip && archChip.classList.contains('active')) archChip.click();
+          statusSel.value = stBtn.dataset.qstatus;
+          statusSel.dispatchEvent(new Event('change'));
+          syncInvBadge();
+        } else if (arBtn && archChip) {
+          archChip.click();
+          syncInvBadge();
+        }
+      });
+
+      selectIds.concat(['sortBy']).forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', syncInvBadge);
+      });
+      const archChip = document.getElementById('toggleArchivedChip');
+      if (archChip) archChip.addEventListener('click', function () { setTimeout(syncInvBadge, 0); });
+      syncInvBadge();
+    }
+  }
+
+  /* 2. Inventory History tab: collapsible filter drawer */
+  const tabHistory = document.getElementById('tab-history');
+  if (tabHistory && !document.getElementById('histMobileFilterBtn')) {
+    const bar = tabHistory.querySelector('.filter-bar');
+    if (bar) {
+      bar.classList.add('mobile-collapsible-bar', 'mobile-bar-primary');
+      const searchWrap = bar.querySelector('.search-input');
+      const filterBtn = document.createElement('button');
+      filterBtn.type = 'button';
+      filterBtn.className = 'btn btn-secondary mobile-filter-btn';
+      filterBtn.id = 'histMobileFilterBtn';
+      filterBtn.setAttribute('aria-expanded', 'false');
+      if (searchWrap && searchWrap.nextSibling) bar.insertBefore(filterBtn, searchWrap.nextSibling);
+      else bar.appendChild(filterBtn);
+
+      const syncHistBadge = function () {
+        let count = 0;
+        ['filterHistType', 'filterHistReason'].forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el && el.value) count++;
+        });
+        filterBtn.innerHTML = icon('filter') + '<span>Filters</span>' +
+          (count > 0 ? '<em class="mobile-filter-count">' + count + '</em>' : '');
+        filterBtn.classList.toggle('has-active-filters', count > 0);
+      };
+      filterBtn.addEventListener('click', function () {
+        const open = tabHistory.classList.toggle('filters-open');
+        filterBtn.setAttribute('aria-expanded', String(open));
+      });
+      ['filterHistType', 'filterHistReason'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', syncHistBadge);
+      });
+      syncHistBadge();
+    }
+  }
+
+  /* 3. Audit Trail page: collapsible filter bar */
+  const auSearch = document.getElementById('auSearch');
+  if (auSearch && !document.getElementById('auMobileFilterBtn')) {
+    const bar = auSearch.closest('.flex');
+    const searchWrap = auSearch.closest('.search-input');
+    if (bar && searchWrap) {
+      bar.classList.add('mobile-collapsible-bar', 'mobile-bar-primary');
+      const filterBtn = document.createElement('button');
+      filterBtn.type = 'button';
+      filterBtn.className = 'btn btn-secondary mobile-filter-btn';
+      filterBtn.id = 'auMobileFilterBtn';
+      filterBtn.setAttribute('aria-expanded', 'false');
+      if (searchWrap.nextSibling) bar.insertBefore(filterBtn, searchWrap.nextSibling);
+      else bar.appendChild(filterBtn);
+
+      const syncAuBadge = function () {
+        let count = 0;
+        ['auAction', 'auFrom', 'auTo'].forEach(function (id) {
+          const el = document.getElementById(id);
+          if (el && el.value) count++;
+        });
+        const sens = document.getElementById('auSensitive');
+        if (sens && sens.checked) count++;
+        filterBtn.innerHTML = icon('filter') + '<span>Filters</span>' +
+          (count > 0 ? '<em class="mobile-filter-count">' + count + '</em>' : '');
+        filterBtn.classList.toggle('has-active-filters', count > 0);
+      };
+      filterBtn.addEventListener('click', function () {
+        const open = bar.classList.toggle('filters-open');
+        filterBtn.setAttribute('aria-expanded', String(open));
+      });
+      ['auAction', 'auFrom', 'auTo', 'auSensitive'].forEach(function (id) {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', syncAuBadge);
+      });
+      syncAuBadge();
+    }
+  }
+}
+
+function initMobileEnhancements() {
+  if (mobileEnhancementsBound) return;
+  mobileEnhancementsBound = true;
+  const runAll = function () {
+    initMobileSearchAndInputs();
+    initMobileFilterDrawers();
+    syncMobileTableLabels();
+  };
+  if (window.Boot && typeof Boot.dom === 'function') {
+    Boot.dom(runAll);
+  } else {
+    setTimeout(runAll, 0);
+  }
+  const obs = new MutationObserver(function () {
+    syncMobileTableLabels();
+  });
+  obs.observe(document.body, { childList: true, subtree: true });
 }
 
 /* ---------- Shared confirm dialog (pages without their own confirm modal) ---------- */

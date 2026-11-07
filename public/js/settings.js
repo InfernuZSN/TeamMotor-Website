@@ -6,14 +6,17 @@ Boot.ready(function () {
   const lines = function (v) { return v.split('\n').map(function (x) { return x.trim(); }).filter(Boolean); };
 
   function fill(s) {
-    $('sShopName').value = s.shopName || ''; $('sTagline').value = s.tagline || ''; $('sAddress').value = (s.addressLines || []).join('\n');
+    if ($('sShopName')) $('sShopName').value = s.shopName || '';
+    $('sTagline').value = s.tagline || ''; $('sAddress').value = (s.addressLines || []).join('\n');
     $('sPhone').value = s.phone || ''; $('sTin').value = s.tin || ''; $('sFooter').value = (s.receiptFooter || []).join('\n');
     $('sVatEnabled').checked = !!s.vatEnabled; $('sVatRate').value = Math.round((s.vatRate || 0) * 10000) / 100; $('sVatMode').value = s.vatMode || 'inclusive';
     $('sExpiry').value = s.expiryWarningMonths || 3;
   }
   function read() {
+    const prev = Store.get('settings', {});
+    const shopName = $('sShopName') ? $('sShopName').value.trim() : (prev.shopName || 'TeamMotor');
     return {
-      shopName: $('sShopName').value.trim(), tagline: $('sTagline').value.trim(), addressLines: lines($('sAddress').value), phone: $('sPhone').value.trim(),
+      shopName: shopName, tagline: $('sTagline').value.trim(), addressLines: lines($('sAddress').value), phone: $('sPhone').value.trim(),
       tin: $('sTin').value.trim(), receiptFooter: lines($('sFooter').value), vatEnabled: $('sVatEnabled').checked,
       vatRate: (parseFloat($('sVatRate').value) || 0) / 100, vatMode: $('sVatMode').value, expiryWarningMonths: parseInt($('sExpiry').value, 10) || 3
     };

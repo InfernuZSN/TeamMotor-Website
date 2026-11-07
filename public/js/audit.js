@@ -16,7 +16,7 @@ Boot.ready(function () {
     'user.password_change': 'Password changed', 'user.profile_update': 'Profile updated', 'user.update': 'User updated', 'user.create': 'User created', 'user.delete': 'User deleted',
     'sale.create': 'Sale completed', 'sale.void': 'Sale voided', 'sale.voided': 'Sale voided', 'sale.cancelled': 'Sale cancelled', 'sale.refunded': 'Sale refunded', 'sale.reprint': 'Receipt reprinted',
     'stock.in': 'Stock received', 'stock.out': 'Stock removed', 'stock.adjust': 'Stock adjusted',
-    'product.create': 'Product added', 'product.update': 'Product edited', 'product.archive': 'Product archived', 'product.unarchive': 'Product restored',
+    'product.create': 'Product added', 'product.update': 'Product edited', 'product.archive': 'Product archived', 'product.unarchive': 'Product restored', 'product.delete': 'Product deleted',
     'customer.create': 'Customer added', 'customer.update': 'Customer edited', 'customer.deactivate': 'Customer deactivated', 'customer.reactivate': 'Customer reactivated',
     'category.create': 'Category added', 'category.update': 'Category edited', 'category.delete': 'Category deleted',
     'brand.create': 'Brand added', 'brand.update': 'Brand edited', 'brand.delete': 'Brand deleted',
@@ -94,6 +94,7 @@ Boot.ready(function () {
       case 'product.create': return 'Added ' + (d.name || prod) + ' \u00b7 stock ' + (d.initialStock != null ? d.initialStock : 0) + (d.sellingPrice != null ? ' \u00b7 ' + php(d.sellingPrice) : '');
       case 'product.update': return (d.name || prod) + (ch.length ? ': ' + changeText(ch, 3) : ': saved with no field changes');
       case 'product.archive': case 'product.unarchive': return (code === 'product.archive' ? 'Archived ' : 'Restored ') + (d.name || a.entityId);
+      case 'product.delete': return 'Deleted ' + (d.name || prod);
       case 'customer.create': return 'Added customer ' + (d.name || a.entityId) + (d.source ? ' (' + d.source + ')' : '');
       case 'customer.update': return (d.name || a.entityId) + (ch.length ? ': ' + changeText(ch, 3) : ': saved with no field changes');
       case 'customer.deactivate': case 'customer.reactivate': return (code === 'customer.deactivate' ? 'Deactivated ' : 'Reactivated ') + (d.name || a.entityId);
@@ -145,7 +146,7 @@ Boot.ready(function () {
       }).join('') : '<tr><td colspan="7"><div class="empty-state">' + icon('history') + '<h3>No matching entries</h3></div></td></tr>';
     } catch (err) { showToast(err.message, 'danger'); }
   }
-  const SENS = ['user.password_change', 'auth.login_failed', 'auth.login_blocked', 'sale.void', 'sale.voided', 'sale.cancelled', 'sale.refunded', 'sale.refund', 'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'customer.deactivate', 'settings.update'];
+  const SENS = ['user.password_change', 'auth.login_failed', 'auth.login_blocked', 'sale.void', 'sale.voided', 'sale.cancelled', 'sale.refunded', 'sale.refund', 'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'product.delete', 'customer.deactivate', 'settings.update'];
   const isSensitive = function (a) { return SENS.indexOf(a) !== -1; };
 
   /* ---------- View modal ---------- */

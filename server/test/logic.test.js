@@ -373,7 +373,7 @@ test('POS Payment Methods: only Cash and GCash are accepted for new sales; legac
   const eng003 = ctx.PRODUCTS.find(p => p.id === 'ENG-003');
   assert.ok(eng003, 'ENG-003 must exist in PRODUCTS');
   assert.strictEqual(eng003.sku, 'TM-ENG-003');
-  assert.strictEqual(eng003.barcode, '480123456705');
+  assert.strictEqual(eng003.barcode, undefined, 'barcode field must be removed from products');
 });
 
 test('POS Order Summary Removal: resets Total Paid and Change to 0 when all items are removed', () => {
@@ -399,10 +399,10 @@ test('POS Order Summary Removal: resets Total Paid and Change to 0 when all item
   assert.strictEqual(empty.change, 0);
 });
 
-test('Inventory & Users: Add Product visible to Staff/Admin, SKU/Barcode in Overview, and Staff Deletion', () => {
+test('Inventory & Users: Add Product visible to Staff/Admin, SKU/Product ID in Overview, and Staff Deletion', () => {
   const invCode = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
   assert.ok(invCode.includes("viewField('SKU'"), 'Inventory Overview must display SKU');
-  assert.ok(invCode.includes("viewField('Barcode'"), 'Inventory Overview must display Barcode');
+  assert.ok(invCode.includes("viewField('Product ID'"), 'Inventory Overview must display Product ID');
   assert.ok(!invCode.includes("['addProductBtn', 'manageCategoriesBtn']"), 'addProductBtn must not be hidden for Staff');
 
   const usersCode = fs.readFileSync(resolveRoot('public/js/users.js'), 'utf8');
@@ -435,5 +435,196 @@ test('Manage Filters: unifies Manage Categories, Manage Brands, Manage Suppliers
   assert.ok(invJs.includes('deleteSupplier('), 'Supplier deletion function must be implemented');
   assert.ok(invJs.includes('!models.length'), 'Motorcycle compatibility creation must validate both brand and models');
 });
+
+test('Forgot Password OTP & Settings Cleanup: 6-digit OTP endpoints, password confirmation constraint, and Settings Shop Name removal', () => {
+  const loginHtml = fs.readFileSync(resolveRoot('public/login.html'), 'utf8');
+  assert.ok(loginHtml.includes('id="forgotPasswordOverlay"'), 'Login page must have Forgot Password OTP modal');
+  assert.ok(loginHtml.includes('id="fpFormEmail"') && loginHtml.includes('id="fpFormOtp"') && loginHtml.includes('id="fpFormReset"'), 'Forgot Password modal must have 3-step forms (Email, 6-digit OTP, New & Confirm Password)');
+  assert.ok(loginHtml.includes("Api.post('/auth/forgot-password'"), 'Login page must request OTP via /auth/forgot-password');
+  assert.ok(loginHtml.includes("Api.post('/auth/verify-otp'"), 'Login page must verify 6-digit code via /auth/verify-otp');
+  assert.ok(loginHtml.includes("Api.post('/auth/reset-password'"), 'Login page must submit new password & confirmation via /auth/reset-password');
+
+  const authCode = fs.readFileSync(resolveRoot('server/src/routes/auth.js'), 'utf8');
+  assert.ok(authCode.includes("router.post('/forgot-password'"), 'Auth routes must define POST /forgot-password');
+  assert.ok(authCode.includes("router.post('/verify-otp'"), 'Auth routes must define POST /verify-otp');
+  assert.ok(authCode.includes("router.post('/reset-password'"), 'Auth routes must define POST /reset-password');
+  assert.ok(authCode.includes('newPassword !== confirmPassword'), 'Server must enforce matching newPassword and confirmPassword constraint');
+
+  const settingsHtml = fs.readFileSync(resolveRoot('public/settings.html'), 'utf8');
+  assert.ok(!settingsHtml.includes('id="sShopName"'), 'Shop name input field must be removed from settings.html');
+});
+
+test('Motorcycle Compatibility: supports adding multiple models without single-model overwrite bug', () => {
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(!invJs.includes('syncSingleCompatSelection'), 'syncSingleCompatSelection must be removed so dropdown changes do not overwrite existing chips');
+  assert.ok(invJs.includes("document.getElementById('addCompatBtn').addEventListener('click'"), 'Add button must have click listener');
+  assert.ok(invJs.includes('compatSelections.push(combo)'), 'Add button must push new model into compatSelections');
+  assert.ok(invJs.includes('renderCompatChips()'), 'renderCompatChips must update the compatibility chip UI');
+});
+
+test('Mobile UX/UI Optimization & Desktop Preservation: scopes mobile enhancements to <= 768px and preserves desktop layout', () => {
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  const responsiveCss = fs.readFileSync(resolveRoot('public/css/responsive.css'), 'utf8');
+  const posCss = fs.readFileSync(resolveRoot('public/css/pos.css'), 'utf8');
+  const appJs = fs.readFileSync(resolveRoot('public/js/app.js'), 'utf8');
+  const posJs = fs.readFileSync(resolveRoot('public/js/pos.js'), 'utf8');
+
+  // Safe area CSS variables & desktop-hidden defaults
+  assert.ok(styleCss.includes('--safe-bottom: env(safe-area-inset-bottom'), 'style.css must define safe-area-inset-bottom variable');
+  assert.ok(styleCss.includes('.mobile-filter-btn') && styleCss.includes('display: none;'), 'Mobile helpers must be hidden on desktop by default');
+
+  // Strict @media (max-width: 768px) scoping & table-to-card transformation in responsive.css
+  assert.ok(responsiveCss.includes('@media (max-width: 768px)'), 'responsive.css must scope mobile rules inside @media (max-width: 768px)');
+  assert.ok(responsiveCss.includes('table:not(.rcpt-items):not(.order-table) tbody tr'), 'responsive.css must transform data table rows into mobile cards');
+  assert.ok(responsiveCss.includes('#tab-products td:nth-child(2)') && responsiveCss.includes('#tab-products td:nth-child(9)'), 'responsive.css must re-enable all previously hidden product columns on mobile');
+  assert.ok(responsiveCss.includes('border-radius: 1.25rem 1.25rem 0 0'), 'responsive.css must style modals as bottom-anchored sheets on mobile');
+
+  // Non-destructive DOM enhancements in app.js
+  assert.ok(appJs.includes('function syncMobileTableLabels'), 'app.js must populate data-label attributes on table cells for mobile cards');
+  assert.ok(appJs.includes('function initMobileFilterDrawers'), 'app.js must initialize collapsible mobile filter drawers and quick filter chips');
+
+  // POS mobile streamlining in pos.css and pos.js
+  assert.ok(posCss.includes('@media (max-width: 768px)'), 'pos.css must scope mobile POS rules inside @media (max-width: 768px)');
+  assert.ok(posCss.includes('display: flex !important;') && posCss.includes('.pt-done-right'), 'pos.css must keep receipt preview visible on mobile checkout completion');
+  assert.ok(posJs.includes('View Cart'), 'pos.js must display rich item count and total summary in the floating cart bar');
+  assert.ok(posJs.includes('ptMobileSwitch'), 'pos.js must provide fast-switching Catalog/Scan and Current Cart tabs on mobile');
+});
+
+test('Product Deletion: Delete button positioned below product image, API route and LocalApi support', () => {
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('id="deleteProductModalBtn"'), 'Delete button must exist in Add/Edit Product modal');
+  assert.ok(invHtml.indexOf('id="imageDropZone"') < invHtml.indexOf('id="deleteProductModalBtn"'), 'Delete button must be positioned below the product image dropzone');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('function deleteProduct('), 'inventory.js must define deleteProduct function');
+  assert.ok(invJs.includes("Api.del('/products/'"), 'inventory.js must invoke DELETE /products/:id');
+
+  const catalogJs = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogJs.includes("products.delete('/:id'"), 'catalog.js must implement DELETE /products/:id endpoint');
+
+  const localApiJs = fs.readFileSync(resolveRoot('public/js/local-api.js'), 'utf8');
+  assert.ok(localApiJs.includes("R('DELETE', '/products/([^/]+)'"), 'local-api.js must implement DELETE /products/:id route');
+});
+
+test('Hybrid Product ID: removes barcode variable from product collection, enforces duplicate Product ID constraint, and supports custom/auto IDs + POS checkout', () => {
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('id="pId"'), 'Add/Edit Product modal must include #pId input field');
+  assert.ok(invHtml.includes('Product ID (Scan QR code or leave blank to auto-generate)'), 'Label must instruct user to scan QR code or leave blank to auto-generate');
+  assert.ok(!invHtml.includes('id="autoGenIdBtn"'), 'Add Product modal must not include redundant Auto-generate button');
+  assert.ok(!invHtml.includes('id="pBarcode"'), 'Separate Barcode ID field (#pBarcode) must be removed');
+  assert.ok(invHtml.includes('pattern="[A-Za-z0-9\\-_]+"'), 'Product ID input must enforce alphanumeric + dash/underscore pattern');
+
+  const modelsJs = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(!modelsJs.includes('barcode:'), 'barcode field must be deleted from Product schema in models/index.js');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('pIdEl.disabled = true') && invJs.includes('pIdEl.readOnly = true'), 'Edit Product modal must disable/readOnly Product ID');
+  assert.ok(invJs.includes('function checkProductIdField('), 'inventory.js must define checkProductIdField to block duplicate Product IDs');
+  assert.ok(invJs.includes('if (!editingProductId && customId) payload.id = customId'), 'saveProduct must pass customId in payload when provided');
+
+  const catalogJs = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogJs.includes('PRODUCT_ID_RE = /^[A-Za-z0-9\\-_]+$/'), 'Backend must validate Product ID format against regex');
+  assert.ok(catalogJs.includes("is already in use. Please use a unique ID or update existing stock."), 'Backend must return clear duplicate ID error message');
+  assert.ok(!catalogJs.includes('barcode'), 'Backend catalog routes must not reference barcode');
+
+  // Execute end-to-end against LocalApi sandbox
+  const sandbox = {
+    window: {},
+    localStorage: {
+      _s: {},
+      getItem(k) { return this._s[k] || null; },
+      setItem(k, v) { this._s[k] = String(v); },
+      removeItem(k) { delete this._s[k]; }
+    },
+    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp, Error, parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(resolveRoot('public/js/mock-data.js'), 'utf8'), sandbox);
+  vm.runInContext(fs.readFileSync(resolveRoot('public/js/local-api.js'), 'utf8') + '\n;this.LocalApi = LocalApi;', sandbox);
+
+  const LocalApi = sandbox.LocalApi;
+  const auth = LocalApi.handle('POST', '/auth/login', { username: 'ronnie.manalo', password: 'Admin@12345' });
+  const token = auth.token;
+
+  // 1. Create product with scanned/custom QR code ID (e.g. NGK-CPR8EA9)
+  const customProd = LocalApi.handle('POST', '/products', {
+    id: 'ngk-cpr8ea9',
+    name: 'NGK Spark Plug CPR8EA-9',
+    brand: 'Bosch',
+    category: 'engine-parts',
+    sellingPrice: 180,
+    costPrice: 110,
+    stock: 15,
+    reorderLevel: 5,
+    compatibility: ['Universal (All Models)']
+  }, token);
+  assert.strictEqual(customProd.id, 'NGK-CPR8EA9', 'Custom ID must be uppercased and saved as product.id');
+  assert.strictEqual(customProd.sku, 'TM-NGK-CPR8EA9', 'Default SKU must use custom ID');
+  assert.strictEqual(customProd.barcode, undefined, 'barcode variable must not exist on product');
+
+  // 2. Create product with blank ID -> auto-generates cleanly (e.g. ENG-005)
+  const autoProd = LocalApi.handle('POST', '/products', {
+    id: '',
+    name: 'Generic Drain Bolt Washer',
+    brand: 'Generic',
+    category: 'engine-parts',
+    sellingPrice: 25,
+    costPrice: 10,
+    stock: 50,
+    reorderLevel: 10,
+    compatibility: ['Universal (All Models)']
+  }, token);
+  assert.match(autoProd.id, /^ENG-\d{3,}$/, 'Blank ID must auto-generate using category prefix');
+  assert.strictEqual(autoProd.barcode, undefined, 'barcode variable must not exist on auto-generated product');
+
+  // 3. Reject duplicate Product ID (case-insensitive)
+  assert.throws(() => {
+    LocalApi.handle('POST', '/products', {
+      id: 'NGK-cpr8ea9',
+      name: 'Duplicate Spark Plug',
+      brand: 'Bosch',
+      category: 'engine-parts',
+      sellingPrice: 180,
+      costPrice: 110,
+      stock: 5,
+      compatibility: ['Universal (All Models)']
+    }, token);
+  }, /Product ID 'NGK-CPR8EA9' is already in use\. Please use a unique ID or update existing stock\./);
+
+  // 4. Reject invalid characters (slashes, spaces, question marks, etc.)
+  assert.throws(() => {
+    LocalApi.handle('POST', '/products', {
+      id: 'BAD/ID?123',
+      name: 'Invalid ID Part',
+      brand: 'Bosch',
+      category: 'engine-parts',
+      sellingPrice: 100,
+      costPrice: 50,
+      stock: 5,
+      compatibility: ['Universal (All Models)']
+    }, token);
+  }, /Product ID may only contain letters, numbers, dashes \(-\), and underscores \(_\)/);
+
+  // 5. POS lookup & sale checkout for both custom-ID and auto-ID products
+  const lookedUpCustom = LocalApi.handle('GET', '/products/lookup/' + encodeURIComponent('NGK-CPR8EA9'), null, token);
+  assert.strictEqual(lookedUpCustom.id, 'NGK-CPR8EA9');
+  const lookedUpAuto = LocalApi.handle('GET', '/products/lookup/' + encodeURIComponent(autoProd.id), null, token);
+  assert.strictEqual(lookedUpAuto.id, autoProd.id);
+
+  const saleRes = LocalApi.handle('POST', '/sales', {
+    items: [
+      { productId: customProd.id, qty: 2 },
+      { productId: autoProd.id, qty: 3 }
+    ],
+    paymentMethod: 'Cash',
+    amountReceived: 500
+  }, token);
+  assert.strictEqual(saleRes.sale.status, 'Completed');
+  assert.strictEqual(saleRes.sale.items.length, 2);
+});
+
+
+
+
 
 

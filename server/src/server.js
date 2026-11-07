@@ -1,6 +1,7 @@
 const config = require('./config');
 const { connect } = require('./db');
 const app = require('./app');
+const { Product } = require('./models');
 const { getSettings } = require('./services/settings');
 const { ensureDefaultCategories } = require('./services/categories');
 const { ensureDefaultFilters } = require('./services/filters');
@@ -8,6 +9,8 @@ const { ensureDefaultFilters } = require('./services/filters');
 (async () => {
   try {
     await connect();
+    await Product.collection.updateMany({ barcode: { $exists: true } }, { $unset: { barcode: '' } }).catch(() => {});
+    await Product.collection.dropIndex('barcode_1').catch(() => {});
     await getSettings();                                        // creates the default settings document on first run
     await ensureDefaultCategories();                            // adds the shop's standard categories to an existing database
     await ensureDefaultFilters();                               // fills the Manage Brands / Motorcycle Compatibility lists

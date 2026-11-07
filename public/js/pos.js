@@ -98,7 +98,7 @@ Boot.ready(function () {
     return compat.some(function (c) { return c.indexOf(fit.brand + ' ') === 0; });
   }
   function matchesQuery(p, q) {
-    return [p.name, p.id, p.brand, p.sku, p.barcode].some(function (f) { return f && String(f).toLowerCase().indexOf(q) !== -1; });
+    return [p.name, p.id, p.brand, p.sku].some(function (f) { return f && String(f).toLowerCase().indexOf(q) !== -1; });
   }
   function searchText() { return $('ptSearch').value.trim().toLowerCase(); }
   /* Typing in the search box looks across every category; otherwise the active tab decides. */
@@ -272,7 +272,15 @@ Boot.ready(function () {
     if (!cart.length) disarmClear();
     $('cartBarCount').textContent = cartQty();
     $('cartBarTotal').textContent = peso(t.total);
+    const barLabel = document.querySelector('#cartBar .pt-cartbar-label');
+    if (barLabel) {
+      const q = cartQty();
+      barLabel.textContent = q + (q === 1 ? ' item' : ' items') + ' \u2022 ' + peso(t.total) + ' \u2014 View Cart \u2192';
+    }
+    $('cartBar').classList.toggle('has-items', cart.length > 0);
     $('cartBar').style.display = '';
+    const mobBadge = $('ptMobileCartBadge');
+    if (mobBadge) mobBadge.textContent = cartQty() + ' \u2022 ' + peso(t.total);
     renderDiscChips();
     renderInvoice();
   }
@@ -318,12 +326,22 @@ Boot.ready(function () {
   }
   function removeLine(i) { cart.splice(i, 1); checkoutRequestId = null; renderCart(); renderGrid(); }
 
+  function setMobileCartOpen(open) {
+    document.body.classList.toggle('cart-open', !!open);
+    document.querySelectorAll('[data-pos-view]').forEach(function (btn) {
+      const isCart = btn.dataset.posView === 'cart';
+      const active = isCart ? !!open : !open;
+      btn.classList.toggle('is-on', active);
+      btn.setAttribute('aria-selected', String(active));
+    });
+  }
+
   /* Back to a clean terminal (cart, discount, customer, filters, search). */
   function resetSale() {
     cart = []; disc = { mode: 'none', value: 0 }; customerId = ''; method = 'Cash'; tendered = '';
     checkoutRequestId = null; fit = { brand: '', model: '' }; activeCat = '';
     $('ptSearch').value = ''; $('ptSearchClear').hidden = true; renderCustomers();
-    document.body.classList.remove('cart-open');
+    setMobileCartOpen(false);
     renderFit(); renderTabs(); renderGrid(); renderCart();
   }
   function focusSearch() { if (isDesktopPointer()) $('ptSearch').focus(); }
@@ -357,8 +375,8 @@ Boot.ready(function () {
   function onSearchEnter() {
     const raw = $('ptSearch').value.trim(); if (!raw) return;
     const q = raw.toLowerCase(), all = allProducts();
-    const eq = function (v) { return v && String(v).toLowerCase() === q; };
-    let match = all.find(function (p) { return eq(p.barcode) || eq(p.sku) || eq(p.id); }) || all.find(function (p) { return eq(p.name); });
+    const eq = function (v) { return v && String(v).trim().toLowerCase() === q; };
+    let match = all.find(function (p) { return eq(p.id) || eq(p.sku); }) || all.find(function (p) { return eq(p.name); });
     if (!match) {
       const vis = visibleProducts();
       if (vis.length === 1) match = vis[0];
@@ -794,7 +812,7 @@ Boot.ready(function () {
       /* Some scanners send no Enter. If the box holds exactly a known barcode / SKU and typing then stops, add it. */
       clearTimeout(autoScanTimer);
       const v = this.value.trim().toLowerCase();
-      if (v.length >= 8 && allProducts().some(function (p) { return (p.barcode && String(p.barcode).toLowerCase() === v) || (p.sku && String(p.sku).toLowerCase() === v); })) {
+      if (v.length >= 6 && allProducts().some(function (p) { return (p.id && String(p.id).toLowerCase() === v) || (p.sku && String(p.sku).toLowerCase() === v); })) {
         autoScanTimer = setTimeout(onSearchEnter, 180);
       }
     });
@@ -835,8 +853,41 @@ Boot.ready(function () {
     $('holdBtn').addEventListener('click', onHold);
     $('clearBtn').addEventListener('click', onClear);
     $('payBtn').addEventListener('click', openPay);
-    $('cartBar').addEventListener('click', function () { document.body.classList.add('cart-open'); });
-    $('cartBackBtn').addEventListener('click', function () { document.body.classList.remove('cart-open'); });
+    $('cartBar').addEventListener('click', function () { setMobileCartOpen(true); });
+    $('cartBackBtn').addEventListener('click', function () { setMobileCartOpen(false); });
+
+    // Mobile fast-switching tab bar (Catalog/Scanning <-> Current Cart) + cart backdrop scrim
+    const ptMain = document.querySelector('.pt-main');
+    if (ptMain && !$('ptMobileSwitch')) {
+      const switchBar = document.createElement('div');
+      switchBar.id = 'ptMobileSwitch';
+      switchBar.className = 'pt-mobile-switch';
+      switchBar.setAttribute('role', 'tablist');
+      switchBar.setAttribute('aria-label', 'POS mobile view');
+      switchBar.innerHTML =
+        '<button type="button" class="pt-ms-tab is-on" role="tab" aria-selected="true" data-pos-view="catalog">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="7" height="7" rx="1.5"/><rect x="14" y="4" width="7" height="7" rx="1.5"/><rect x="3" y="13" width="7" height="7" rx="1.5"/><rect x="14" y="13" width="7" height="7" rx="1.5"/></svg>' +
+          '<span>Catalog / Scan</span>' +
+        '</button>' +
+        '<button type="button" class="pt-ms-tab" role="tab" aria-selected="false" data-pos-view="cart">' +
+          '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="20" r="1.5"/><circle cx="17" cy="20" r="1.5"/><path d="M3 4h2l2.4 11.2a1.5 1.5 0 0 0 1.5 1.2h8.7a1.5 1.5 0 0 0 1.5-1.1L21 7H6"/></svg>' +
+          '<span>Current Cart</span>' +
+          '<span class="pt-ms-badge" id="ptMobileCartBadge">0 \u2022 \u20B10.00</span>' +
+        '</button>';
+      ptMain.parentNode.insertBefore(switchBar, ptMain);
+      switchBar.addEventListener('click', function (e) {
+        const btn = e.target.closest('[data-pos-view]');
+        if (!btn) return;
+        setMobileCartOpen(btn.dataset.posView === 'cart');
+      });
+
+      const cartScrim = document.createElement('div');
+      cartScrim.id = 'ptCartScrim';
+      cartScrim.className = 'pt-cart-scrim';
+      ptMain.appendChild(cartScrim);
+      cartScrim.addEventListener('click', function () { setMobileCartOpen(false); });
+    }
+    renderCart();
 
     // header
     $('heldBtn').addEventListener('click', function () { renderHeldList(); openModal('heldOverlay'); });

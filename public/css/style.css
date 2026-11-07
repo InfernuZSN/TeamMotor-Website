@@ -52,6 +52,8 @@
   --sidebar-w: 15.5rem;
   --sidebar-w-collapsed: 4.25rem;
   --topbar-h: 4rem;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 * { box-sizing: border-box; }
@@ -1026,37 +1028,45 @@ input::placeholder, textarea::placeholder { color: var(--steel-light); }
 .rcpt-sums .rcpt-total { font-weight: 700; font-size: .78rem; border-top: 1px solid #000; margin-top: 0.2rem; padding-top: 0.2rem; }
 .rcpt-foot { margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px dashed #000; text-align: center; font-size: .62rem; line-height: 1.5; }
 
-/* Printing: only the receipt is printed, sized for the OC-58IIH 58 mm thermal printer (about 48-54 mm printable).
+/* Printing: only the receipt is printed, sized for 58 mm thermal printers (Xprinter XP-58, OC-58IIH, POS-58, ~48 mm printable width).
    Uses the browser/OS print dialog (window.print()); there is no cash-drawer kick. Item rows are re-flowed so a long product
-   name wraps on its own line and "qty x price ... amount" sits underneath, which keeps every line inside 50 mm. */
+   name wraps on its own line and "qty x price ... amount" sits underneath, keeping every line safely inside 44-48 mm. */
 #receiptPrintArea { display: none; }
 @media print {
-  @page { size: 58mm auto; margin: 2mm; }
+  @page { margin: 0; }
   html { font-size: 11px; }
   html, body { background: #fff !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
   body > *:not(#receiptPrintArea) { display: none !important; }
-  #receiptPrintArea { display: block !important; margin: 0 !important; padding: 0 !important; }
-  #receiptPrintArea .rcpt { width: 50mm; max-width: 50mm; margin: 0 auto; padding: 0; font-size: 7.5pt; line-height: 1.25; color: #000 !important; overflow-wrap: anywhere; page-break-inside: avoid; break-inside: avoid; }
-  #receiptPrintArea .rcpt-logo { width: 32mm; max-width: 100%; margin: 0 auto 1mm; }
-  #receiptPrintArea .rcpt-shop { font-size: 6.5pt; line-height: 1.25; padding-bottom: 1mm; }
-  #receiptPrintArea .rcpt-head { font-size: 8.5pt; font-weight: 700; margin-top: 1mm; gap: 2mm; }
-  #receiptPrintArea .rcpt-meta { font-size: 6.5pt; grid-template-columns: auto 1fr; gap: 0 1.5mm; margin: 1mm 0; }
-  #receiptPrintArea .rcpt-items { display: block; width: 100%; font-size: 7pt; border-top: 1px solid #000; }
+  #receiptPrintArea { display: block !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }
+  #receiptPrintArea .rcpt { width: 100% !important; max-width: 44mm !important; margin: 0 auto !important; padding: 0 1mm !important; box-sizing: border-box !important; font-size: 7pt; line-height: 1.25; color: #000 !important; overflow-wrap: break-word; word-break: break-word; page-break-inside: avoid; break-inside: avoid; }
+  #receiptPrintArea .rcpt-logo { width: 28mm; max-width: 70%; margin: 0 auto 1.5mm; display: block; }
+  #receiptPrintArea .rcpt-shop { font-size: 6pt; line-height: 1.25; padding-bottom: 1mm; text-align: center; overflow-wrap: break-word; word-break: break-word; }
+  #receiptPrintArea .rcpt-banner { font-size: 6.8pt; font-weight: 700; padding: 0.8mm 1mm; margin: 0 0 1.2mm; border: 1px solid #000; color: #000 !important; background: #fff !important; box-sizing: border-box; width: 100%; text-align: center; overflow-wrap: break-word; word-break: break-word; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  #receiptPrintArea .rcpt-banner-preview { border-style: dashed; }
+  #receiptPrintArea .rcpt-banner-reprint { border: 1.5px solid #000; }
+  #receiptPrintArea .rcpt-banner-void { background: #000 !important; color: #fff !important; }
+  #receiptPrintArea .rcpt-head { display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; font-size: 7.2pt; font-weight: 700; margin-top: 1mm; gap: 0.5mm 1mm; }
+  #receiptPrintArea .rcpt-head strong { font-size: 7.8pt; font-weight: 700; }
+  #receiptPrintArea .rcpt-head span { font-size: 6.8pt; font-weight: 600; }
+  #receiptPrintArea .rcpt-meta { font-size: 6.2pt; line-height: 1.3; display: grid; grid-template-columns: auto 1fr; gap: 0.2mm 1.5mm; margin: 1mm 0; }
+  #receiptPrintArea .rcpt-items { display: block; width: 100%; font-size: 6.8pt; line-height: 1.25; border-top: 1px solid #000; box-sizing: border-box; }
   #receiptPrintArea .rcpt-items thead { display: none; }
-  #receiptPrintArea .rcpt-items tbody { display: block; }
-  #receiptPrintArea .rcpt-items tr { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "nm nm nm" "qty pr am"; column-gap: 1.5mm; padding: .8mm 0; border-bottom: 1px dotted #777; break-inside: avoid; }
+  #receiptPrintArea .rcpt-items tbody { display: block; width: 100%; }
+  #receiptPrintArea .rcpt-items tr { display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "nm nm nm" "qty pr am"; column-gap: 1.5mm; row-gap: 0.2mm; padding: 0.8mm 0; border-bottom: 1px dotted #000; break-inside: avoid; width: 100%; box-sizing: border-box; }
   #receiptPrintArea .rcpt-items td { display: block; width: auto !important; padding: 0; min-width: 0; }
-  #receiptPrintArea .rcpt-items td:nth-child(1) { grid-area: qty; }
+  #receiptPrintArea .rcpt-items td:nth-child(1) { grid-area: qty; font-size: 6.5pt; }
   #receiptPrintArea .rcpt-items td:nth-child(1)::after { content: " \00d7"; }
-  #receiptPrintArea .rcpt-items td:nth-child(2) { grid-area: nm; font-weight: 600; overflow-wrap: anywhere; word-break: break-word; }
-  #receiptPrintArea .rcpt-items td:nth-child(3) { grid-area: pr; text-align: left; }
-  #receiptPrintArea .rcpt-items td:nth-child(4) { grid-area: am; text-align: right; font-weight: 600; }
-  #receiptPrintArea .rcpt-items td.rcpt-none { grid-column: 1 / -1; grid-area: auto; }
-  #receiptPrintArea .rcpt-sums { font-size: 7pt; }
-  #receiptPrintArea .rcpt-sums div { display: flex; justify-content: space-between; gap: 2mm; overflow-wrap: anywhere; }
-  #receiptPrintArea .rcpt-sums div span:last-child { text-align: right; flex: 0 0 auto; max-width: 28mm; }
-  #receiptPrintArea .rcpt-sums .rcpt-total { font-size: 9pt; font-weight: 700; }
-  #receiptPrintArea .rcpt-foot { font-size: 6.5pt; margin-top: 2mm; padding-top: 1mm; }
+  #receiptPrintArea .rcpt-items td:nth-child(2) { grid-area: nm; font-weight: 600; overflow-wrap: break-word; word-break: break-word; }
+  #receiptPrintArea .rcpt-items td:nth-child(3) { grid-area: pr; text-align: left; font-size: 6.5pt; }
+  #receiptPrintArea .rcpt-items td:nth-child(4) { grid-area: am; text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #receiptPrintArea .rcpt-items td.rcpt-none { grid-column: 1 / -1; grid-area: auto; text-align: center; padding: 1mm 0; }
+  #receiptPrintArea .rcpt-sums { font-size: 6.8pt; line-height: 1.35; margin-top: 0.8mm; padding-top: 0.6mm; border-top: 1px dashed #000; box-sizing: border-box; width: 100%; }
+  #receiptPrintArea .rcpt-sums div { display: flex; justify-content: space-between; align-items: baseline; gap: 1.5mm; padding: 0.15mm 0; }
+  #receiptPrintArea .rcpt-sums div span:first-child { flex: 1 1 auto; min-width: 0; overflow-wrap: break-word; word-break: break-word; }
+  #receiptPrintArea .rcpt-sums div span:last-child { text-align: right; flex: 0 0 auto; max-width: 22mm; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  #receiptPrintArea .rcpt-sums .rcpt-total { font-size: 8.5pt; font-weight: 700; border-top: 1px solid #000; margin-top: 0.8mm; padding-top: 0.8mm; }
+  #receiptPrintArea .rcpt-foot { font-size: 6pt; line-height: 1.3; margin-top: 1.5mm; padding-top: 1mm; border-top: 1px dashed #000; text-align: center; overflow-wrap: break-word; word-break: break-word; }
+  #receiptPrintArea .rcpt-reprint { font-size: 6pt; line-height: 1.3; margin-top: 1mm; padding-top: 1mm; border-top: 1px dashed #000; text-align: center; overflow-wrap: break-word; word-break: break-word; }
 }
 
 /* ==========================================================================
@@ -1352,11 +1362,6 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .rcpt-banner-reprint { background: #fff; color: #000; border: 2px solid #000; font-size: .8rem; }
 .rcpt-banner-void { background: #000; color: #fff; border-color: #000; }
 .rcpt-reprint { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #000; text-align: center; font-size: .72rem; line-height: 1.4; }
-@media print {
-  #receiptPrintArea .rcpt-banner { font-size: 7pt; padding: 1mm; border-color: #000; color: #000 !important; background: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  #receiptPrintArea .rcpt-banner-void { background: #000 !important; color: #fff !important; }
-  #receiptPrintArea .rcpt-reprint { font-size: 6.5pt; }
-}
 .sale-voided-row td { opacity: .6; }
 .sale-voided-row td:first-child { text-decoration: line-through; }
 .form-error { color: var(--danger, #b3261e); font-size: .8rem; margin-top: 4px; }
@@ -1592,3 +1597,49 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 #viewModalOverlay .vt-table th, #viewModalOverlay .vt-table td { padding: .3rem .5rem; }
 #viewModalOverlay .pg-bar { padding: .5rem 0 0; position: static; }
 .sup-modal th:nth-child(2) { width: 22%; }
+
+/* Forgot Password OTP Modal */
+.fp-steps {
+  display: flex; align-items: center; gap: .5rem; margin-bottom: 1.125rem;
+  font-size: .78rem; font-weight: 600; color: var(--steel);
+}
+.fp-step-badge {
+  display: inline-flex; align-items: center; gap: .35rem; padding: .28rem .65rem;
+  border-radius: 999px; background: var(--paper); color: var(--steel); transition: all .15s ease;
+}
+.fp-step-badge.active { background: var(--accent); color: #fff; }
+.fp-step-badge.done { background: #dcfce7; color: #15803d; }
+.fp-step-sep { color: #cbd5e1; font-size: .75rem; }
+.fp-desc { font-size: .9rem; color: #4b5563; line-height: 1.5; margin: 0 0 1rem; }
+.fp-otp-input {
+  width: 100%; height: 3.5rem !important; text-align: center;
+  font-family: 'Courier New', Courier, monospace !important;
+  font-size: 1.75rem !important; font-weight: 700; letter-spacing: .55rem;
+  border: 2px solid #cbd5e1 !important; border-radius: .625rem !important;
+  background: #f8fafc; color: #11141a;
+}
+.fp-otp-input:focus {
+  border-color: var(--accent) !important; background: #fff;
+  outline: 3px solid rgba(255, 40, 40, .15);
+}
+.fp-subactions {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: .5rem; font-size: .82rem; color: #6b7280;
+}
+.fp-link-btn {
+  background: none; border: none; padding: 0; color: var(--link);
+  font-size: .82rem; font-weight: 600; cursor: pointer; text-decoration: underline;
+}
+.fp-link-btn:hover { color: #1388d6; }
+.fp-link-btn:disabled { color: #9ca3af; cursor: not-allowed; text-decoration: none; }
+.fp-match-hint { font-size: .78rem; margin-top: .35rem; font-weight: 500; }
+.fp-match-hint.ok { color: #15803d; }
+.fp-match-hint.err { color: #b91c1c; }
+
+/* Mobile-only UI helpers: hidden by default on desktop (> 768px), activated only inside @media (max-width: 768px) in responsive.css */
+.mobile-filter-btn,
+.mobile-quick-chips,
+.mobile-filter-footer,
+.search-clear-btn {
+  display: none;
+}

@@ -181,7 +181,7 @@ motoBrands.delete('/:id/models/:model', adminOnly, wrap(async (req, res) => {
 }));
 
 /* ---------------- products ---------------- */
-const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'barcode', 'description',
+const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'description',
   'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'expirationDate', 'image', 'storageLocation'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -229,10 +229,13 @@ async function checkFilterValues(data, before) {
   }
 }
 
+const PRODUCT_ID_RE = /^[A-Za-z0-9\-_]+$/;
+
 products.get('/', wrap(async (req, res) => res.json(await Product.find({}).sort({ id: 1 }))));
 products.get('/lookup/:code', wrap(async (req, res) => {
   const code = req.params.code.trim();
-  const p = await Product.findOne({ archived: { $ne: true }, $or: [{ barcode: code }, { sku: code }, { id: code.toUpperCase() }] });
+  const re = sameName(code);
+  const p = await Product.findOne({ archived: { $ne: true }, $or: [{ id: re }, { sku: re }] });
   if (!p) throw notFound('No product matches "' + code + '".');
   res.json(p);
 }));
@@ -245,12 +248,23 @@ products.post('/', wrap(async (req, res) => {
   if (!cat) throw bad('Unknown category.');
   await checkFilterValues(data, null);
   const stock = Math.max(0, parseInt(req.body.stock, 10) || 0);
-  const id = cat.prefix + '-' + String(await nextSeq('PRD-' + cat.prefix)).padStart(3, '0');
-  if (!data.sku) data.sku = 'TM-' + id;
-  if (!data.barcode) {
-    const count = await Product.countDocuments({});
-    data.barcode = '4801234567' + String(count + 1).padStart(2, '0');
+  const customId = req.body.id !== undefined && req.body.id !== null ? String(req.body.id).trim().toUpperCase() : '';
+  let id;
+  if (customId) {
+    if (customId.length > 40 || !PRODUCT_ID_RE.test(customId)) {
+      throw bad('Product ID may only contain letters, numbers, dashes (-), and underscores (_) (max 40 characters).');
+    }
+    const existing = await Product.findOne({ id: sameName(customId) });
+    if (existing) {
+      throw conflict("Product ID '" + customId + "' is already in use. Please use a unique ID or update existing stock.");
+    }
+    id = customId;
+  } else {
+    do {
+      id = cat.prefix + '-' + String(await nextSeq('PRD-' + cat.prefix)).padStart(3, '0');
+    } while (await Product.findOne({ id: sameName(id) }));
   }
+  if (!data.sku) data.sku = 'TM-' + id;
   const product = await Product.create(Object.assign({}, data, { id, stock: 0, archived: false, lastUpdated: new Date().toISOString() }));
   if (stock > 0) {
     await changeStock({ productId: id, delta: stock, type: 'Stock In', user: req.user.name, supplierId: product.supplier, reference: 'Initial stock', notes: 'Initial stock on product creation' });
@@ -284,6 +298,15 @@ products.post('/:id/archive', adminOnly, wrap(async (req, res) => {
   await audit(req, archived ? 'product.archive' : 'product.unarchive', 'product', p.id, { name: p.name });
   refreshNotifications().catch(() => {});
   res.json(p);
+}));
+
+products.delete('/:id', adminOnly, wrap(async (req, res) => {
+  const p = await Product.findOne({ id: req.params.id });
+  if (!p) throw notFound('Product not found.');
+  await p.deleteOne();
+  await audit(req, 'product.delete', 'product', p.id, { name: p.name, category: p.category });
+  refreshNotifications().catch(() => {});
+  res.json({ ok: true });
 }));
 
 module.exports = { categories, suppliers, brands, motoBrands, products };

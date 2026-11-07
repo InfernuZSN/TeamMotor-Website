@@ -16,7 +16,7 @@ notifications.post('/read-all', wrap(async (req, res) => { await Notification.up
 notifications.post('/:id/read', wrap(async (req, res) => { await Notification.updateOne({ id: req.params.id }, { $set: { read: true } }); res.json({ ok: true }); }));
 
 const SENSITIVE_ACTIONS = ['user.password_change', 'auth.login_failed', 'auth.login_blocked', 'sale.void', 'sale.voided', 'sale.cancelled', 'sale.refunded', 'sale.refund',
-  'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'customer.deactivate', 'settings.update'];
+  'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'product.delete', 'customer.deactivate', 'settings.update'];
 
 const auditRouter = express.Router();
 auditRouter.get('/', adminOnly, wrap(async (req, res) => {

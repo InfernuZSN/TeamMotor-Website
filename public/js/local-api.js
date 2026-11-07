@@ -122,9 +122,9 @@ const LocalApi = (function () {
     ensureDefaultFilters();
     fixPlaceholderEmails();
     if (db && Array.isArray(db.products)) {
-      db.products.forEach(function (p, idx) {
+      db.products.forEach(function (p) {
         if (!p.sku) p.sku = 'TM-' + p.id;
-        if (!p.barcode) p.barcode = '4801234567' + pad(idx + 1, 2);
+        delete p.barcode;
       });
     }
   }
@@ -150,7 +150,7 @@ const LocalApi = (function () {
       users: clone(USERS).map(function (u) { u.passwordHash = hashPw(u.role === 'Admin' ? 'Admin@12345' : 'Staff@12345'); return u; }),
       categories: clone(CATEGORIES).filter(function (c) { return c.id !== 'motorcycles'; }),
       suppliers: clone(SUPPLIERS),
-      products: clone(PRODUCTS).filter(function (p) { return p.category !== 'motorcycles'; }).map(function (p) { p.expirationDate = null; return p; }),
+      products: clone(PRODUCTS).filter(function (p) { return p.category !== 'motorcycles'; }).map(function (p) { p.expirationDate = null; delete p.barcode; return p; }),
       customers: clone(CUSTOMERS), inventoryTransactions: clone(INVENTORY_TRANSACTIONS).filter(function (x) { return x.productId.indexOf('MOT-') !== 0; }),
       warranties: clone(WARRANTIES).map(function (w) { w.claims = (w.claims || []).map(function (c, i) { return Object.assign({ id: 'CLM-' + w.id.slice(4) + (i + 1), warrantyId: w.id, status: 'Resolved', staff: c.staff || 'Juan Dela Cruz' }, c); }); return w; }),
       shifts: clone(SHIFTS)
@@ -158,8 +158,8 @@ const LocalApi = (function () {
     const oil = d.products.find(function (p) { return p.id === 'ENG-001'; });
     if (oil) oil.expirationDate = Utils.calculateWarrantyExpiry(t, 14, 'months');
     const extras = [
-      { id: 'OTH-002', sku: 'TM-OTH-002', barcode: '480123456716', name: 'Brake Fluid DOT 4 (250ml)', brand: 'Bosch', category: 'other-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-002', supplierRef: 'YGP-BF-250', description: 'DOT 4 brake fluid, 250 ml bottle. Shelf-life limited.', costPrice: 120, sellingPrice: 190, stock: 8, reorderLevel: 4, expirationDate: Utils.calculateWarrantyExpiry(t, 52, 'days') },
-      { id: 'ENG-004', sku: 'TM-ENG-004', barcode: '480123456717', name: 'Engine Degreaser Spray (400ml)', brand: 'Generic', category: 'engine-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-001', supplierRef: 'ABC-DG-400', description: 'Aerosol degreaser. Past its best-before date \u2014 pull from sale.', costPrice: 95, sellingPrice: 150, stock: 5, reorderLevel: 3, expirationDate: Utils.calculateWarrantyExpiry(t, -20, 'days') }
+      { id: 'OTH-002', sku: 'TM-OTH-002', name: 'Brake Fluid DOT 4 (250ml)', brand: 'Bosch', category: 'other-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-002', supplierRef: 'YGP-BF-250', description: 'DOT 4 brake fluid, 250 ml bottle. Shelf-life limited.', costPrice: 120, sellingPrice: 190, stock: 8, reorderLevel: 4, expirationDate: Utils.calculateWarrantyExpiry(t, 52, 'days') },
+      { id: 'ENG-004', sku: 'TM-ENG-004', name: 'Engine Degreaser Spray (400ml)', brand: 'Generic', category: 'engine-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-001', supplierRef: 'ABC-DG-400', description: 'Aerosol degreaser. Past its best-before date \u2014 pull from sale.', costPrice: 95, sellingPrice: 150, stock: 5, reorderLevel: 3, expirationDate: Utils.calculateWarrantyExpiry(t, -20, 'days') }
     ];
     let trx = maxSuffix(d.inventoryTransactions.map(function (x) { return x.id; }), /^TRX-(\d+)$/);
     extras.forEach(function (e) {
@@ -198,11 +198,14 @@ const LocalApi = (function () {
     return out;
   }
   const SENSITIVE_ACTIONS = ['user.password_change', 'auth.login_failed', 'auth.login_blocked', 'sale.void', 'sale.voided', 'sale.cancelled', 'sale.refunded', 'sale.refund',
-    'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'customer.deactivate', 'settings.update'];
+    'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'product.delete', 'customer.deactivate', 'settings.update'];
   const splitDiff = function (ch) { const b = {}, a = {}; Object.keys(ch).forEach(function (k) { b[k] = ch[k].from; a[k] = ch[k].to; }); return { before: b, after: a }; };
   const pubUser = function (u) { const c = clone(u); delete c.passwordHash; return c; };
   const needAdmin = function (ctx) { if (ctx.user.role !== 'Admin') throw E(403, 'This action requires Admin access.'); };
-  const findProduct = function (id) { return db.products.find(function (p) { return p.id === id; }); };
+  const findProduct = function (id) {
+    const dId = decodeURIComponent(String(id || ''));
+    return db.products.find(function (p) { return p.id === dId || p.id === id; });
+  };
   const findSale = function (id) { return db.sales.find(function (s) { return s.id === id; }); };
 
   function changeStock(o) {
@@ -392,7 +395,7 @@ const LocalApi = (function () {
     return { sale: clone(sale), restocked: restocked, restockSkipped: restockSkipped };
   }
 
-  const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'barcode', 'description', 'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'expirationDate', 'image', 'storageLocation'];
+  const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'description', 'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'expirationDate', 'image', 'storageLocation'];
   function cleanProduct(b) {
     const o = {}; PRODUCT_FIELDS.forEach(function (k) { if (b[k] !== undefined) o[k] = b[k]; });
     if (o.expirationDate !== undefined) { if (!o.expirationDate) o.expirationDate = null; else if (!/^\d{4}-\d{2}-\d{2}$/.test(o.expirationDate)) throw bad('Expiration date must be YYYY-MM-DD.'); }
@@ -481,6 +484,62 @@ const LocalApi = (function () {
   });
   R('GET', '/auth/me', function (c) { return { user: pubUser(c.full) }; });
   R('POST', '/auth/logout', function (c) { audit(c.user, 'auth.logout', 'user', c.user.id, { username: c.user.username }); return { ok: true }; });
+  R('POST', '/auth/forgot-password', function (c) {
+    const email = String(c.body.email || '').trim().toLowerCase();
+    if (!email) throw bad('Email address is required.');
+    const u = db.users.find(function (x) { return (x.email || '').toLowerCase() === email; });
+    if (!u) {
+      throw E(404, 'No TeamMotor account is registered with "' + email + '". (Check your email or start the server via start-server.bat)');
+    }
+    if (u.status !== 'Active') throw E(403, 'This account is inactive. Please contact an administrator.');
+    const otp = String(Math.floor(100000 + Math.random() * 900000));
+    db._resetOtp = { email: email, otp: otp, expiresAt: Date.now() + 10 * 60 * 1000, verified: false, attempts: 0 };
+    save();
+    setTimeout(function () {
+      if (typeof showToast === 'function') {
+        showToast('Offline Mode: Your 6-digit code is ' + otp + ' (Start server for real Gmail delivery)', 'info');
+      }
+    }, 200);
+    return { ok: true, message: 'A 6-digit verification code has been generated.' };
+  });
+  R('POST', '/auth/verify-otp', function (c) {
+    const email = String(c.body.email || '').trim().toLowerCase();
+    const otp = String(c.body.otp || '').trim();
+    if (!/^\d{6}$/.test(otp)) throw bad('Please enter a valid 6-digit verification code.');
+    const sess = db._resetOtp;
+    if (!sess || sess.email !== email || Date.now() > sess.expiresAt) {
+      throw bad('Your verification code has expired. Please request a new code.');
+    }
+    if (sess.otp !== otp) {
+      sess.attempts = (sess.attempts || 0) + 1;
+      save();
+      throw bad('Incorrect 6-digit code. Please try again.');
+    }
+    sess.verified = true;
+    save();
+    const u = db.users.find(function (x) { return (x.email || '').toLowerCase() === email; });
+    return { ok: true, verified: true, username: u ? u.username : '', name: u ? u.name : '' };
+  });
+  R('POST', '/auth/reset-password', function (c) {
+    const email = String(c.body.email || '').trim().toLowerCase();
+    const otp = String(c.body.otp || '').trim();
+    const newPassword = String(c.body.newPassword || '');
+    const confirmPassword = String(c.body.confirmPassword || '');
+    if (!newPassword || !confirmPassword) throw bad('Please enter and confirm your new password.');
+    if (newPassword !== confirmPassword) throw bad('Passwords do not match. Please re-enter the exact same password.');
+    checkPw(newPassword);
+    const sess = db._resetOtp;
+    if (!sess || sess.email !== email || !sess.verified || sess.otp !== otp) {
+      throw bad('Verification session expired or invalid. Please request a new code.');
+    }
+    const u = db.users.find(function (x) { return (x.email || '').toLowerCase() === email; });
+    if (!u) throw E(404, 'User not found.');
+    u.passwordHash = hashPw(newPassword);
+    delete db._resetOtp;
+    audit(u, 'user.password_change', 'user', u.id, { changedBy: 'forgot_password_otp' });
+    save();
+    return { ok: true, username: u.username, message: 'Password reset successful! You can now log in.' };
+  });
 
   R('GET', '/bootstrap', function (c) {
     refreshNotifications();
@@ -500,7 +559,7 @@ const LocalApi = (function () {
   });
   R('GET', '/products/lookup/([^/]+)', function (c) {
     const code = decodeURIComponent(c.m[1]).trim();
-    const p = db.products.find(function (x) { return !x.archived && (x.barcode === code || x.sku === code || x.id === code.toUpperCase()); });
+    const p = db.products.find(function (x) { return !x.archived && (sameName(x.id, code) || sameName(x.sku, code)); });
     if (!p) throw nf('No product matches "' + code + '".');
     return clone(p);
   });
@@ -511,12 +570,26 @@ const LocalApi = (function () {
     const cat = db.categories.find(function (x) { return x.id === d.category; }); if (!cat) throw bad('Unknown category.');
     checkFilterValues(d, null);
     const stock = Math.max(0, parseInt(c.body.stock, 10) || 0);
-    const existingMax = maxSuffix(db.products.filter(function (p) { return p.id && p.id.indexOf(cat.prefix + '-') === 0; }).map(function (p) { return p.id; }), /-(\d+)$/);
-    db.counters['PRD-' + cat.prefix] = Math.max(db.counters['PRD-' + cat.prefix] || 0, existingMax) + 1;
-    const id = cat.prefix + '-' + pad(db.counters['PRD-' + cat.prefix], 3);
+    const customId = c.body.id !== undefined && c.body.id !== null ? String(c.body.id).trim().toUpperCase() : '';
+    let id;
+    if (customId) {
+      if (customId.length > 40 || !/^[A-Za-z0-9\-_]+$/.test(customId)) {
+        throw bad('Product ID may only contain letters, numbers, dashes (-), and underscores (_) (max 40 characters).');
+      }
+      if (db.products.some(function (x) { return sameName(x.id, customId); })) {
+        throw conflict("Product ID '" + customId + "' is already in use. Please use a unique ID or update existing stock.");
+      }
+      id = customId;
+    } else {
+      const existingMax = maxSuffix(db.products.filter(function (p) { return p.id && p.id.indexOf(cat.prefix + '-') === 0; }).map(function (p) { return p.id; }), /-(\d+)$/);
+      db.counters['PRD-' + cat.prefix] = Math.max(db.counters['PRD-' + cat.prefix] || 0, existingMax);
+      do {
+        db.counters['PRD-' + cat.prefix] += 1;
+        id = cat.prefix + '-' + pad(db.counters['PRD-' + cat.prefix], 3);
+      } while (db.products.some(function (x) { return sameName(x.id, id); }));
+    }
     if (!d.sku) d.sku = 'TM-' + id;
-    if (!d.barcode) d.barcode = '4801234567' + pad(db.products.length + 1, 2);
-    const p = Object.assign({ brand: '', compatibility: [], compatYears: 'All Years', supplier: '', supplierRef: '', sku: d.sku, barcode: d.barcode, description: '', costPrice: 0, reorderLevel: 0, warrantyDuration: null, warrantyUnit: null, warrantyType: null, warrantyDays: null, rubber: false, expirationDate: null, image: cat.id }, d, { id: id, stock: 0, archived: false, lastUpdated: nowISO() });
+    const p = Object.assign({ brand: '', compatibility: [], compatYears: 'All Years', supplier: '', supplierRef: '', sku: d.sku, description: '', costPrice: 0, reorderLevel: 0, warrantyDuration: null, warrantyUnit: null, warrantyType: null, warrantyDays: null, rubber: false, expirationDate: null, image: cat.id }, d, { id: id, stock: 0, archived: false, lastUpdated: nowISO() });
     db.products.push(p);
     if (stock > 0) changeStock({ productId: id, delta: stock, type: 'Stock In', user: c.user.name, supplierId: p.supplier, reference: 'Initial stock', notes: 'Initial stock on product creation' });
     audit(c.user, 'product.create', 'product', id, { name: p.name, category: p.category, initialStock: stock, sellingPrice: p.sellingPrice, costPrice: p.costPrice }); refreshNotifications();
@@ -536,6 +609,15 @@ const LocalApi = (function () {
     p.archived = c.body.archived !== false; p.lastUpdated = nowISO();
     audit(c.user, p.archived ? 'product.archive' : 'product.unarchive', 'product', p.id, { name: p.name }); refreshNotifications();
     return clone(p);
+  });
+  R('DELETE', '/products/([^/]+)', function (c) {
+    needAdmin(c);
+    const dId = decodeURIComponent(c.m[1]);
+    const idx = db.products.findIndex(function (x) { return x.id === dId || x.id === c.m[1]; });
+    if (idx === -1) throw nf('Product not found.');
+    const p = db.products.splice(idx, 1)[0];
+    audit(c.user, 'product.delete', 'product', p.id, { name: p.name, category: p.category }); refreshNotifications();
+    return { ok: true };
   });
   R('POST', '/categories', function (c) {
     needAdmin(c); const name = String(c.body.name || '').trim(); if (!name) throw bad('Category name is required.');
@@ -886,7 +968,8 @@ const LocalApi = (function () {
     const qi = fullPath.indexOf('?'), path = qi === -1 ? fullPath : fullPath.slice(0, qi), query = {};
     if (qi !== -1) new URLSearchParams(fullPath.slice(qi + 1)).forEach(function (v, k) { query[k] = v; });
     let user = null, full = null;
-    const isPublicAuth = path === '/auth/login' || path === '/auth/google' || path === '/auth/google/config';
+    const isPublicAuth = path === '/auth/login' || path === '/auth/google' || path === '/auth/google/config' ||
+      path === '/auth/forgot-password' || path === '/auth/verify-otp' || path === '/auth/reset-password';
     if (!isPublicAuth) {
       const uid = String(token || '').indexOf('local:') === 0 ? String(token).slice(6) : null;
       full = db.users.find(function (u) { return u.id === uid; });

@@ -148,7 +148,7 @@ Boot.ready(function () {
 
     let rows = products.filter(p => {
       if (!!p.archived !== showArchived) return false;
-      if (q && p.name.toLowerCase().indexOf(q) === -1 && p.id.toLowerCase().indexOf(q) === -1 && (p.brand || '').toLowerCase().indexOf(q) === -1 && (p.sku || '').toLowerCase().indexOf(q) === -1 && (p.barcode || '').toLowerCase().indexOf(q) === -1) return false;
+      if (q && p.name.toLowerCase().indexOf(q) === -1 && p.id.toLowerCase().indexOf(q) === -1 && (p.brand || '').toLowerCase().indexOf(q) === -1 && (p.sku || '').toLowerCase().indexOf(q) === -1) return false;
       if (cat && p.category !== cat) return false;
       if (status === 'Expiring Soon' || status === 'Expired') { if (Utils.expiryStatus(p, expiryMonths()) !== status) return false; }
       else if (status && Utils.getStockStatus(p.stock, p.reorderLevel) !== status) return false;
@@ -211,6 +211,7 @@ Boot.ready(function () {
               '<button class="icon-btn" title="Stock Out" data-stockout="' + p.id + '">' + icon('stockOut') + '</button>' +
               (isAdmin ? '<button class="icon-btn" title="Adjust stock (set counted quantity)" data-adjust="' + p.id + '">' + icon('checkCircle') + '</button>' +
               '<button class="icon-btn" title="Archive" data-archive="' + p.id + '">' + icon('archive') + '</button>' : '')) +
+          (isAdmin ? '<button class="icon-btn" title="Delete product" data-delete-prod="' + p.id + '" style="color:var(--danger);">' + icon('trash') + '</button>' : '') +
         '</div></td>' +
       '</tr>';
     }).join('');
@@ -313,7 +314,13 @@ Boot.ready(function () {
     const categories = Store.get('categories', []);
     const cat = categories.find(c => c.id === document.getElementById('pCategory').value);
     const products = Store.get('products', []);
-    document.getElementById('idPreviewValue').textContent = cat ? Utils.nextId(cat.prefix, products.map(p => p.id), 3) : '\u2014';
+    const nextAuto = cat ? Utils.nextId(cat.prefix, products.map(p => p.id), 3) : '\u2014';
+    const previewEl = document.getElementById('idPreviewValue');
+    if (previewEl) previewEl.textContent = nextAuto;
+    const pIdEl = document.getElementById('pId');
+    if (pIdEl && !editingProductId) {
+      pIdEl.placeholder = cat ? 'Scan QR code or leave blank (Auto: ' + nextAuto + ')' : 'Scan QR code or leave blank to auto-generate';
+    }
   }
 
   /* Warranty (optional): the checkbox reveals the period + coverage fields. They stay disabled
@@ -359,7 +366,6 @@ Boot.ready(function () {
       }
       pBrandEl.value = product.brand || '';
       if (document.getElementById('pSku')) document.getElementById('pSku').value = product.sku || ('TM-' + product.id);
-      if (document.getElementById('pBarcode')) document.getElementById('pBarcode').value = product.barcode || '';
       const pCatEl = document.getElementById('pCategory');
       if (product.category && !Array.from(pCatEl.options).some(o => o.value === product.category)) {
         const curCat = Store.get('categories', []).find(c => c.id === product.category);
@@ -390,7 +396,18 @@ Boot.ready(function () {
         document.getElementById('pWarrantyUnit').value = product.warrantyDuration ? (product.warrantyUnit || 'months') : 'days';
         document.getElementById('pWarrantyCoverage').value = product.warrantyType || '';
       }
-      document.getElementById('idPreviewValue').textContent = product.id;
+      const pIdEl = document.getElementById('pId');
+      const pIdHint = document.getElementById('pIdHint');
+      if (pIdEl) {
+        pIdEl.value = product.id;
+        pIdEl.disabled = true;
+        pIdEl.readOnly = true;
+      }
+      if (pIdHint) {
+        pIdHint.innerHTML = 'Product ID is read-only after creation (<strong class="mono-num" id="idPreviewValue">' + Utils.escapeHtml(product.id) + '</strong>).';
+      } else if (document.getElementById('idPreviewValue')) {
+        document.getElementById('idPreviewValue').textContent = product.id;
+      }
       if (product.compatibility.includes(UNIVERSAL_FIT)) {
         document.getElementById('pUniversal').checked = true;
       } else {
@@ -402,8 +419,17 @@ Boot.ready(function () {
       stockInput.value = 0;
       stockHint.style.display = 'none';
       document.getElementById('pStorageLocation').value = '';
+      const pIdEl = document.getElementById('pId');
+      const pIdHint = document.getElementById('pIdHint');
+      if (pIdEl) {
+        pIdEl.value = '';
+        pIdEl.disabled = false;
+        pIdEl.readOnly = false;
+      }
+      if (pIdHint) {
+        pIdHint.innerHTML = 'Auto-generated ID if left blank: <strong class="mono-num" id="idPreviewValue">\u2014</strong>';
+      }
       if (document.getElementById('pSku')) document.getElementById('pSku').value = '';
-      if (document.getElementById('pBarcode')) document.getElementById('pBarcode').value = '';
       document.getElementById('pUniversal').checked = true;   // most parts are universal; untick to pick specific models
       document.getElementById('pCompatYears').value = 'All Years';
       updateIdPreview();
@@ -412,12 +438,65 @@ Boot.ready(function () {
     syncWarrantyFields();
     renderCompatChips();
     updateImagePreviewFallback();
+    const deleteWrap = document.getElementById('productDeleteWrap');
+    if (deleteWrap) deleteWrap.style.display = (mode === 'edit' && isAdmin) ? 'block' : 'none';
     openModal('productModalOverlay');
+  }
+
+  function checkProductIdField(showToastOnDup) {
+    const pIdEl = document.getElementById('pId');
+    if (editingProductId || !pIdEl || pIdEl.disabled) return true;
+    const customId = pIdEl.value.trim().toUpperCase();
+    const field = pIdEl.closest('.field');
+    const setErr = function (text) {
+      if (field) {
+        field.classList.add('has-error');
+        let msg = field.querySelector('.field-error-msg');
+        if (!msg) { msg = document.createElement('div'); msg.className = 'field-error-msg'; field.appendChild(msg); }
+        msg.innerHTML = icon('alertTriangle') + '<span>' + Utils.escapeHtml(text) + '</span>';
+      }
+    };
+    const clearErr = function () {
+      if (field) {
+        field.classList.remove('has-error');
+        const msg = field.querySelector('.field-error-msg');
+        if (msg) msg.remove();
+      }
+    };
+    if (!customId) {
+      clearErr();
+      return true;
+    }
+    if (!/^[A-Za-z0-9\-_]+$/.test(customId)) {
+      setErr('Product ID may only contain letters, numbers, dashes (-), and underscores (_). No spaces or special characters.');
+      return false;
+    }
+    const existingProd = Store.get('products', []).find(function (p) { return String(p.id).toUpperCase() === customId; });
+    if (existingProd) {
+      const dupMsg = "Product ID '" + customId + "' is already in use. Please use a unique ID or update existing stock.";
+      setErr(dupMsg);
+      if (showToastOnDup) showToast(dupMsg, 'danger');
+      return false;
+    }
+    clearErr();
+    return true;
   }
 
   async function saveProduct() {
     const form = document.getElementById('productForm');
-    if (!validateForm(form)) return;
+    const pIdEl = document.getElementById('pId');
+    let customId = '';
+    if (!editingProductId && pIdEl) {
+      customId = pIdEl.value.trim().toUpperCase();
+      pIdEl.value = customId;
+    }
+    const formOk = validateForm(form);
+    const idOk = checkProductIdField(true);
+    if (!idOk) {
+      if (pIdEl) pIdEl.focus();
+      return;
+    }
+    if (!formOk) return;
     const isUniversal = document.getElementById('pUniversal').checked;
     let compatibility;
     if (isUniversal) {
@@ -438,7 +517,6 @@ Boot.ready(function () {
       name: document.getElementById('pName').value.trim(),
       brand: document.getElementById('pBrand').value.trim(),
       sku: document.getElementById('pSku') ? document.getElementById('pSku').value.trim() : '',
-      barcode: document.getElementById('pBarcode') ? document.getElementById('pBarcode').value.trim() : '',
       category: categoryId,
       supplier: document.getElementById('pSupplier').value,
       supplierRef: document.getElementById('pSupplierRef').value.trim(),
@@ -457,6 +535,7 @@ Boot.ready(function () {
       compatYears: document.getElementById('pCompatYears').value.trim() || 'All Years',
       image: pendingImage || Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) || categoryId
     };
+    if (!editingProductId && customId) payload.id = customId;
     await Utils.withBusy(document.getElementById('saveProductBtn'), async function () {
       try {
         if (editingProductId) {
@@ -533,16 +612,14 @@ Boot.ready(function () {
         (p.archived ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</div>' +
       '</div>';
 
-    const pIdx = products.findIndex(x => x.id === p.id);
     const skuDisplay = p.sku || ('TM-' + p.id);
-    const barcodeDisplay = p.barcode || ('4801234567' + String(pIdx >= 0 ? pIdx + 1 : 1).padStart(2, '0'));
     document.getElementById('vtab-overview').innerHTML =
       '<p style="color:var(--steel);font-size:.88rem;">' + Utils.escapeHtml(p.description || 'No description yet.') + '</p>' +
       '<div class="form-grid" style="margin-top:6px;">' +
         viewField('Selling Price', Utils.formatPHP(p.sellingPrice)) +
         viewField('Cost Price', Utils.formatPHP(p.costPrice)) +
+        viewField('Product ID', Utils.escapeHtml(p.id)) +
         viewField('SKU', Utils.escapeHtml(skuDisplay)) +
-        viewField('Barcode', Utils.escapeHtml(barcodeDisplay)) +
         viewField('Compatibility', compat) +
         viewField('Model Year', Utils.escapeHtml(p.compatYears || 'All Years')) +
         viewField('Warranty', Utils.escapeHtml(warrantyLabel(p))) +
@@ -717,7 +794,21 @@ Boot.ready(function () {
     showToast('Inventory list exported to CSV.', 'ok');
   }
 
-  /* ---------- Archive / Unarchive ---------- */
+  /* ---------- Delete / Archive / Unarchive ---------- */
+  function deleteProduct(productId) {
+    const product = Store.get('products', []).find(p => p.id === productId);
+    if (!product) return;
+    showConfirm('Delete "' + product.name + '"?', 'Are you sure you want to permanently delete this product from the inventory? This cannot be undone.', async function () {
+      try {
+        await Api.del('/products/' + encodeURIComponent(productId));
+        closeModal('productModalOverlay');
+        await afterChange();
+        showToast('Deleted ' + product.name + '.', 'ok');
+      } catch (err) {
+        showToast(err.message, 'danger');
+      }
+    });
+  }
   function archiveProduct(productId) {
     const product = Store.get('products', []).find(p => p.id === productId);
     if (!product) return;
@@ -1097,33 +1188,58 @@ Boot.ready(function () {
     if (!isAdmin) { ['manageFiltersBtn', 'manageCategoriesBtn', 'manageSuppliersBtn'].forEach(function (id) { const el = document.getElementById(id); if (el) el.style.display = 'none'; }); }
     document.getElementById('adjSaveBtn').addEventListener('click', saveAdjustment);
 
-    function syncSingleCompatSelection() {
-      if (document.getElementById('pUniversal').checked) return;
-      if (compatSelections.length <= 1) {
-        const brand = document.getElementById('pCompatBrand').value;
-        const model = document.getElementById('pCompatModel').value;
-        if (brand && model) {
-          compatSelections = [brand + ' ' + model];
-          renderCompatChips();
-        }
-      }
-    }
-
     document.getElementById('pCompatBrand').addEventListener('change', function () {
       updateCompatModelOptions();
-      syncSingleCompatSelection();
     });
-    document.getElementById('pCompatModel').addEventListener('change', syncSingleCompatSelection);
     document.getElementById('pCategory').addEventListener('change', function () {
       if (!editingProductId) updateIdPreview();
       updateImagePreviewFallback();
     });
+    document.getElementById('productForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+    });
+    const pIdInput = document.getElementById('pId');
+    if (pIdInput) {
+      pIdInput.addEventListener('input', function () {
+        const pos = this.selectionStart;
+        const up = this.value.toUpperCase();
+        if (this.value !== up) {
+          this.value = up;
+          try { if (typeof pos === 'number') this.setSelectionRange(pos, pos); } catch (e) { /* ignore */ }
+        }
+        checkProductIdField(false);
+      });
+      pIdInput.addEventListener('blur', function () {
+        this.value = this.value.trim().toUpperCase();
+        checkProductIdField(false);
+      });
+      pIdInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.value = this.value.trim().toUpperCase();
+          if (checkProductIdField(true)) {
+            const nameEl = document.getElementById('pName');
+            if (nameEl && !nameEl.value) nameEl.focus();
+          }
+        }
+      });
+    }
+    const pSkuEl = document.getElementById('pSku');
+    if (pSkuEl) {
+      pSkuEl.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter') e.preventDefault();
+      });
+    }
     document.getElementById('addCompatBtn').addEventListener('click', function () {
       const brand = document.getElementById('pCompatBrand').value;
       const model = document.getElementById('pCompatModel').value;
       if (!brand || !model) { showToast('Select a motorcycle brand and model first (or add one in Manage Filters).', 'danger'); return; }
       const combo = brand + ' ' + model;
-      if (compatSelections.indexOf(combo) === -1) compatSelections.push(combo);
+      if (compatSelections.indexOf(combo) !== -1) {
+        showToast(combo + ' is already added.', 'warning');
+        return;
+      }
+      compatSelections.push(combo);
       renderCompatChips();
     });
     document.getElementById('compatChips').addEventListener('click', function (e) {
@@ -1138,14 +1254,6 @@ Boot.ready(function () {
       document.getElementById('pCompatModel').disabled = disabled;
       document.getElementById('addCompatBtn').disabled = disabled;
       document.getElementById('compatChips').style.opacity = disabled ? '.4' : '1';
-      if (!disabled && compatSelections.length === 0) {
-        const brand = document.getElementById('pCompatBrand').value;
-        const model = document.getElementById('pCompatModel').value;
-        if (brand && model) {
-          compatSelections.push(brand + ' ' + model);
-          renderCompatChips();
-        }
-      }
     });
 
     document.getElementById('imageDropZone').addEventListener('click', function () { document.getElementById('pImageFile').click(); });
@@ -1162,6 +1270,12 @@ Boot.ready(function () {
     if (exportBtn) exportBtn.addEventListener('click', exportInventoryCSV);
     document.getElementById('addProductBtn').addEventListener('click', function () { openProductModal('add'); });
     document.getElementById('saveProductBtn').addEventListener('click', saveProduct);
+    const deleteProductModalBtn = document.getElementById('deleteProductModalBtn');
+    if (deleteProductModalBtn) {
+      deleteProductModalBtn.addEventListener('click', function () {
+        if (editingProductId) deleteProduct(editingProductId);
+      });
+    }
     document.getElementById('saveStockBtn').addEventListener('click', saveStock);
     document.getElementById('viewToEditBtn').addEventListener('click', function () {
       const id = document.getElementById('viewToEditBtn').dataset.productId;
@@ -1316,6 +1430,7 @@ Boot.ready(function () {
       const adjustBtn = e.target.closest('[data-adjust]');
       const archiveBtn = e.target.closest('[data-archive]');
       const unarchiveBtn = e.target.closest('[data-unarchive]');
+      const delProdBtn = e.target.closest('[data-delete-prod]');
       if (viewBtn) openViewModal(viewBtn.dataset.view);
       else if (editBtn) openProductModal('edit', editBtn.dataset.edit);
       else if (inBtn) openStockModal('in', inBtn.dataset.stockin);
@@ -1323,6 +1438,7 @@ Boot.ready(function () {
       else if (adjustBtn) openAdjustModal(adjustBtn.dataset.adjust);
       else if (archiveBtn) archiveProduct(archiveBtn.dataset.archive);
       else if (unarchiveBtn) unarchiveProduct(unarchiveBtn.dataset.unarchive);
+      else if (delProdBtn) deleteProduct(delProdBtn.dataset.deleteProd);
     });
 
     document.getElementById('toggleArchivedChip').addEventListener('click', function () {

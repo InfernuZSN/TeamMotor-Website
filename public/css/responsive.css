@@ -1,7 +1,10 @@
 /* ==========================================================================
    TeamMotor — responsive.css
-   Breakpoints: 860px (tablet), 720px (mobile). Above 860px the UI scales fluidly through the
-   root font size set in style.css; at 860px and below the root is fixed (15px tablet, 16px phone).
+   Breakpoints:
+   - 860px (tablet)
+   - 768px (mobile: one-hand ergonomics, table-to-card transformation, bottom nav, bottom sheets)
+   - 480px (small phones)
+   Desktop (> 768px) layout, dark navy sidebar, and full-column tables remain 100% untouched.
    ========================================================================== */
 
 /* ---------- Tablet ---------- */
@@ -24,118 +27,766 @@
   .pos-payment { grid-template-columns: 1fr; gap: 1.5rem; }
 }
 
-/* ---------- Mobile ---------- */
-@media (max-width: 720px) {
-  html { font-size: 16px; }
-  :root { --topbar-h: 3.625rem; }
+/* ==========================================================================
+   Mobile (<= 768px) — Strict Media Query Scoping
+   1. Easy to Use (44-48px touch targets, bottom thumb dock, bottom sheets, form ergonomics)
+   2. "Can View All" (Zero horizontal scrolling, full table-to-card transformation, filter drawers)
+   3. Efficiency & High-Speed Workflows (quick filter chips, instant search clear, compact KPIs)
+   ========================================================================== */
+@media (max-width: 768px) {
+  html {
+    font-size: 16px;
+    overflow-x: hidden;
+  }
+  body {
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+  :root {
+    --topbar-h: 3.625rem;
+  }
 
-  /* Sidebar becomes an off-canvas drawer */
-  .app-shell { grid-template-columns: 1fr; }
+  /* ------------------------------------------------------------------
+     1. App Shell, Off-Canvas Sidebar & Sticky Bottom Thumb Navigation
+     ------------------------------------------------------------------ */
+  .app-shell {
+    grid-template-columns: 1fr;
+    min-height: 100vh;
+    min-height: 100dvh;
+    width: 100%;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+  .main {
+    min-width: 0;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
   .sidebar {
-    position: fixed; left: 0; top: 0; z-index: 90; width: 15.625rem;
-    transform: translateX(-100%); transition: transform .18s ease; box-shadow: var(--shadow-modal);
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 95;
+    width: min(17.5rem, 84vw);
+    transform: translateX(-100%);
+    transition: transform .22s cubic-bezier(.22, 1, .36, 1);
+    box-shadow: var(--shadow-modal);
   }
-  .sidebar.open { transform: translateX(0); }
+  .sidebar.open {
+    transform: translateX(0);
+  }
   .sidebar-scrim {
-    display: none; position: fixed; inset: 0; background: rgba(20,23,31,.45); z-index: 80;
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 20, 28, .48);
+    z-index: 90;
   }
-  .sidebar-scrim.open { display: block; }
+  .sidebar-scrim.open {
+    display: block;
+  }
+  .sidebar-toggle {
+    display: none;
+  }
+
+  /* Topbar & >= 44x44px touch targets */
+  .topbar {
+    padding: 0 .875rem;
+    gap: .625rem;
+  }
   .hamburger-btn {
-    display: flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem;
-    border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.75rem;
+    height: 2.75rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    cursor: pointer;
+    touch-action: manipulation;
+    flex-shrink: 0;
   }
-  .hamburger-btn svg { width: 1.1875rem; height: 1.1875rem; stroke: var(--ink); stroke-width: 2; }
+  .hamburger-btn svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    stroke: var(--ink);
+    stroke-width: 2;
+  }
+  .topbar-title h1 {
+    font-size: 1.05rem;
+  }
+  .topbar-title p {
+    display: none;
+  }
+  .topbar-right .icon-btn,
+  .notif-btn > .icon-btn {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+  .notif-panel {
+    position: fixed;
+    top: var(--topbar-h);
+    right: .5rem;
+    left: .5rem;
+    width: auto;
+    max-height: 75dvh;
+  }
 
-  .topbar { padding: 0 0.875rem; }
-  .topbar-title h1 { font-size: 1.02rem; }
-  .topbar-title p { display: none; }
-  .pf-grid { grid-template-columns: 1fr; }
-  .profile-card-head { flex-wrap: wrap; }
-  .profile-actions .btn { flex: 1 1 auto; justify-content: center; }
-  .page { padding: 1rem; }
+  /* ------------------------------------------------------------------
+     2. Touch Targets (44-48px) & Mobile Form Ergonomics
+     ------------------------------------------------------------------ */
+  button,
+  .btn,
+  .btn-sm,
+  .icon-btn,
+  .tab-btn,
+  .chip,
+  .pg-btn,
+  input,
+  select,
+  textarea,
+  label.au-sens {
+    touch-action: manipulation;
+  }
 
-  .stat-grid { grid-template-columns: 1fr 1fr; gap: 0.625rem; }
-  .stat-card { padding: 0.8125rem 0.875rem; }
-  .stat-card .stat-value { font-size: 1.3rem; }
-  .stat-card .stat-icon { width: 1.75rem; height: 1.75rem; top: 0.625rem; right: 0.625rem; }
+  .btn,
+  .btn-sm {
+    min-height: 2.75rem;
+    padding: .55rem .95rem;
+    font-size: .88rem;
+  }
+  .icon-btn {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+  .input,
+  .select,
+  .textarea,
+  .au-date-input {
+    min-height: 2.75rem;
+    font-size: 1rem !important; /* 16px prevents iOS Safari auto-zoom */
+  }
+  .search-input {
+    min-width: 0 !important;
+    width: 100%;
+    position: relative;
+  }
+  .search-input .input {
+    padding-right: 2.5rem;
+  }
+  .search-clear-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    right: .25rem;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2.25rem;
+    height: 2.25rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--steel);
+    cursor: pointer;
+  }
+  .search-clear-btn[hidden] {
+    display: none !important;
+  }
+  .search-clear-btn svg {
+    width: 1rem;
+    height: 1rem;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2.2;
+    stroke-linecap: round;
+  }
 
-  /* Sales page on mobile: 2-up cards with comfortable padding; 5th card spans full width */
-  .page-sales { padding: 1rem; }
-  .page-sales .stat-grid, .page-sales .stat-grid-5 { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-  .page-sales .stat-grid-5 .stat-card,
-  .page-sales .stat-grid-5 .stat-card:nth-child(n+4) { grid-column: auto; }
-  .page-sales .stat-grid-5 .stat-card:last-child { grid-column: 1 / -1; }
-  .page-sales .stat-card { padding: 1rem; min-height: 7rem; }
-  .page-sales .stat-card .stat-label { font-size: .8rem; padding-right: 1.875rem; }
-  .page-sales .stat-card .stat-value { font-size: 1.4rem; }
-  .page-sales .stat-card .stat-sub { font-size: .76rem; }
-  .page-sales .stat-card .stat-icon { width: 1.75rem; height: 1.75rem; top: 0.75rem; right: 0.75rem; }
-  .page-sales .card { padding: 1rem; }
-  .page-sales .bar-chart { height: 13.75rem; }
-  .page-sales .hbar-row { grid-template-columns: 6.875rem 1fr 2.5rem; gap: 0.625rem; }
+  /* Page layout & headers */
+  .page,
+  .page-sales,
+  .page-inventory {
+    padding: .875rem;
+  }
+  .page-inventory {
+    height: auto !important;
+    overflow: visible !important;
+    display: block !important;
+  }
+  .page-inventory > .tab-panel.active {
+    display: block !important;
+  }
+  .page-inventory .table-card > .table-wrap,
+  .page-sales #tab-overview .table-wrap.is-scroll {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .page-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .625rem;
+    margin-bottom: .875rem;
+  }
+  .page-header .actions {
+    width: 100%;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+  }
+  .page-header .actions .btn {
+    flex: 1 1 calc(50% - .25rem);
+    justify-content: center;
+  }
 
-  /* Dashboard trend: chip row wraps under the title, chart tightens */
-  .card-title-row { flex-wrap: wrap; gap: 0.625rem; }
-  .bar-chart { gap: 0.5rem; height: 13.75rem; }
-  .bar-chart.is-dense { gap: 2px; }
-  .bar-chart.is-dense .bar-label small { display: none; }
-  .bar-chart.is-dense .bar-col:nth-child(even) .bar-label { visibility: hidden; }
-  .bar-chart.is-dense .bar-label { font-size: .54rem; }
-  .bar-chart.is-yearly { gap: 0.25rem; }
-  .bar-chart.is-yearly .bar-value { display: none; }
-
-  .page-header { flex-direction: column; align-items: stretch; }
-  .page-header .actions { width: 100%; }
-  .page-header .actions .btn { flex: 1; }
-
-  .filter-bar { flex-direction: column; align-items: stretch; }
-  .search-input { min-width: 0; }
-
-  .modal-overlay { padding: 0.625rem 0.5rem; }
-  .modal { max-height: 94vh; max-height: 94dvh; border-radius: var(--radius-md); }
-  .modal-body { padding: 0.875rem 1rem; }
-  .modal-header, .modal-footer { padding: 0.875rem 1rem; }
-  .modal-footer { flex-direction: column-reverse; }
-  .modal-footer .btn { width: 100%; }
-
-  /* Modal tabs (Manage Filters, Product View, etc.) */
-  .tab-prefix { display: none; }
-  .tab-full { display: none; }
-  .tab-short { display: inline; }
-
-  #filterTabs, .modal .tabs {
+  /* Swipeable horizontal page tabs */
+  .tabs,
+  #filterTabs,
+  .modal .tabs {
+    display: flex;
     flex-wrap: nowrap;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: var(--border-strong) transparent;
-    padding-bottom: 4px;
-    gap: 0.25rem;
+    scrollbar-width: none;
+    gap: .35rem;
+    padding-bottom: .25rem;
   }
+  .tabs::-webkit-scrollbar,
   #filterTabs::-webkit-scrollbar,
   .modal .tabs::-webkit-scrollbar {
-    height: 3px;
-    display: block;
+    display: none;
   }
-  #filterTabs::-webkit-scrollbar-thumb,
-  .modal .tabs::-webkit-scrollbar-thumb {
-    background: var(--border-strong);
-    border-radius: 3px;
-  }
+  .tabs .tab-btn,
   #filterTabs .tab-btn,
   .modal .tabs .tab-btn {
-    padding: 0.5rem 0.625rem;
-    font-size: 0.82rem;
+    min-height: 2.75rem;
+    padding: .5rem .85rem;
+    font-size: .85rem;
     white-space: nowrap;
     flex-shrink: 0;
   }
+  .tab-prefix,
+  .tab-full {
+    display: none;
+  }
+  .tab-short {
+    display: inline;
+  }
 
-  /* Filter items in Manage Filters modal */
+  /* ------------------------------------------------------------------
+     3. Filter & Sort Drawers + Horizontal Quick Filter Pill Carousel
+     ------------------------------------------------------------------ */
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: .5rem;
+    padding: .75rem;
+  }
+  .mobile-filter-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .45rem;
+    width: 100%;
+    min-height: 2.75rem;
+    padding: .5rem .875rem;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--ink);
+    font: 600 .88rem var(--font-body);
+    cursor: pointer;
+  }
+  .mobile-filter-btn svg {
+    width: 1.05rem;
+    height: 1.05rem;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+  }
+  .mobile-filter-btn.has-active,
+  .mobile-filter-btn[aria-expanded="true"] {
+    border-color: var(--ink);
+    background: var(--paper);
+  }
+  .mobile-filter-count {
+    min-width: 1.35rem;
+    height: 1.35rem;
+    padding: 0 .38rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: .74rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mobile-filter-count[hidden] {
+    display: none !important;
+  }
+
+  /* Horizontal scrolling quick-filter pill carousel */
+  .mobile-quick-chips {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: .375rem;
+    padding: .125rem 0;
+  }
+  .mobile-quick-chips::-webkit-scrollbar {
+    display: none;
+  }
+  .mobile-quick-chip {
+    min-height: 2.35rem;
+    padding: .35rem .75rem;
+    border-radius: 999px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--steel);
+    font: 600 .78rem var(--font-body);
+    white-space: nowrap;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+  .mobile-quick-chip.active {
+    background: var(--ink);
+    color: #fff;
+    border-color: var(--ink);
+  }
+
+  /* Collapsible secondary selects inside .mobile-collapsible-bar */
+  .filter-bar.mobile-collapsible-bar > select,
+  .filter-bar.mobile-collapsible-bar > .au-date-group,
+  .filter-bar.mobile-collapsible-bar > .au-sens,
+  .filter-bar.mobile-collapsible-bar > #invResetBtn,
+  .filter-bar.mobile-collapsible-bar > #auClear,
+  .filter-bar.mobile-collapsible-bar > .mobile-filter-footer {
+    display: none !important;
+  }
+  .filter-bar.mobile-collapsible-bar.filters-open > select,
+  .filter-bar.mobile-collapsible-bar.filters-open > .au-date-group,
+  .filter-bar.mobile-collapsible-bar.filters-open > .au-sens,
+  .filter-bar.mobile-collapsible-bar.filters-open > #auClear {
+    display: flex !important;
+    width: 100%;
+  }
+  .filter-bar.mobile-collapsible-bar.filters-open > .au-date-group {
+    justify-content: space-between;
+    height: auto;
+  }
+  .filter-bar.mobile-collapsible-bar.filters-open > .au-date-group .au-date-input {
+    flex: 1;
+  }
+  .filter-bar.mobile-collapsible-bar.filters-open > .mobile-filter-footer {
+    display: flex !important;
+    gap: .5rem;
+    padding-top: .25rem;
+  }
+  .filter-bar.mobile-collapsible-bar.filters-open > .mobile-filter-footer .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  /* ------------------------------------------------------------------
+     4. "Can View All": Responsive Table-to-Card Transformation
+        Zero horizontal scrolling; all columns (including Brand, Supplier,
+        Compatibility, Previous Stock, Last Updated) are visible.
+     ------------------------------------------------------------------ */
+  .table-card {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  .table-wrap {
+    overflow-x: hidden !important;
+    width: 100%;
+  }
+
+  /* Re-enable all columns that desktop narrow breakpoints hid */
+  #tab-products td:nth-child(2),
+  #tab-products td:nth-child(5),
+  #tab-products td:nth-child(9),
+  #tab-history td:nth-child(5) {
+    display: flex !important;
+  }
+
+  /* Transform data tables (excluding thermal receipt & compact order preview) into mobile card lists */
+  table:not(.rcpt-items):not(.order-table) {
+    display: block;
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: auto !important;
+  }
+  table:not(.rcpt-items):not(.order-table) thead {
+    display: none !important;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody {
+    display: flex;
+    flex-direction: column;
+    gap: .65rem;
+    width: 100%;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .45rem .75rem;
+    padding: .875rem;
+    background: var(--surface);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+    width: 100%;
+    box-sizing: border-box;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.stock-flag.flag-danger {
+    border-left: 4px solid var(--danger);
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.stock-flag.flag-warn {
+    border-left: 4px solid var(--warn-dot);
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.stock-flag.flag-ok {
+    border-left: 4px solid var(--ok);
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.mobile-empty-row {
+    display: block;
+    padding: 1.5rem 1rem;
+    text-align: center;
+  }
+
+  table:not(.rcpt-items):not(.order-table) tbody td {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: .15rem;
+    padding: 0 !important;
+    border: none !important;
+    min-width: 0 !important;
+    width: auto !important;
+    text-align: left !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    white-space: normal !important;
+    font-size: .86rem;
+    line-height: 1.35;
+  }
+
+  /* Field label above each secondary attribute */
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label]::before {
+    content: attr(data-label);
+    font: 700 .66rem/1.1 var(--font-label);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--steel);
+  }
+
+  /* Primary header cell (Product / Transaction ID / Customer / User) spans full card top */
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-primary {
+    grid-column: 1 / -1;
+    order: -3;
+    padding-bottom: .5rem !important;
+    margin-bottom: .15rem;
+    border-bottom: 1px solid var(--border) !important;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-primary::before {
+    display: none;
+  }
+
+  /* Status badge cell sits right below primary header or prominent top area */
+  table:not(.rcpt-items):not(.order-table) tbody td.col-status {
+    grid-column: 1 / -1;
+    order: -2;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.col-status::before {
+    display: none;
+  }
+
+  /* Wide detail cells (Compatibility, Supplier, Summary, Reason/Notes) span full card width so nothing is clipped */
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-wide {
+    grid-column: 1 / -1;
+    background: var(--paper);
+    padding: .45rem .625rem !important;
+    border-radius: .45rem;
+  }
+
+  /* Un-truncate all text inside mobile cards so 100% of information is readable */
+  table:not(.rcpt-items):not(.order-table) .cell-trunc,
+  table:not(.rcpt-items):not(.order-table) .cell-clamp,
+  table:not(.rcpt-items):not(.order-table) .au-sum,
+  table:not(.rcpt-items):not(.order-table) .cell-product .name,
+  table:not(.rcpt-items):not(.order-table) .cell-product .sub {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    -webkit-line-clamp: unset !important;
+    display: block !important;
+    word-break: break-word;
+  }
+
+  /* Action bar at the bottom of each card with thumb-friendly labeled buttons */
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions {
+    grid-column: 1 / -1;
+    order: 10;
+    padding-top: .55rem !important;
+    margin-top: .2rem;
+    border-top: 1px solid var(--border) !important;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions::before {
+    display: none;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions > .flex,
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: .4rem !important;
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions .icon-btn,
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions .btn-sm,
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions .au-view-btn {
+    flex: 1 1 auto;
+    min-height: 2.75rem !important;
+    min-width: 2.75rem !important;
+    width: auto !important;
+    height: auto !important;
+    padding: .45rem .65rem !important;
+    border-radius: .5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: .35rem;
+    font: 600 .78rem/1 var(--font-body);
+  }
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions .icon-btn[data-mobile-label]::after {
+    content: attr(data-mobile-label);
+    font-size: .76rem;
+    font-weight: 600;
+  }
+
+  /* Pagination bar ergonomics */
+  .pg-bar {
+    margin-top: .65rem;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    padding: .625rem .75rem;
+    justify-content: center;
+  }
+  .pg-btn {
+    min-width: 2.6rem;
+    height: 2.6rem;
+  }
+  .pg-size select {
+    min-height: 2.4rem;
+    font-size: .9rem !important;
+  }
+
+  /* ------------------------------------------------------------------
+     5. Dashboard & Sales Metric Cards (Compact 2-Column Grid)
+     ------------------------------------------------------------------ */
+  .stat-grid,
+  .dash-cards,
+  .page-sales .stat-grid,
+  .page-sales .stat-grid-5,
+  .eod-grid,
+  .eod-pay {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .625rem !important;
+  }
+  .page-sales .stat-grid-5 .stat-card,
+  .page-sales .stat-grid-5 .stat-card:nth-child(n+4) {
+    grid-column: auto;
+  }
+  .page-sales .stat-grid-5 .stat-card:last-child {
+    grid-column: 1 / -1;
+  }
+  .stat-card,
+  .page-dashboard .stat-card,
+  .page-sales .stat-card {
+    padding: .75rem .85rem;
+    min-height: 6.25rem;
+  }
+  .stat-card .stat-value,
+  .page-dashboard .stat-card .stat-value,
+  .page-sales .stat-card .stat-value {
+    font-size: 1.28rem;
+  }
+  .stat-card .stat-icon,
+  .page-sales .stat-card .stat-icon {
+    width: 1.65rem;
+    height: 1.65rem;
+    top: .625rem;
+    right: .625rem;
+  }
+
+  /* Dashboard filterable panel: natural height & swipeable view pills */
+  .dash-panel {
+    height: auto !important;
+    min-height: 0;
+    padding: .875rem;
+  }
+  .dash-body {
+    overflow: visible !important;
+  }
+  .dash-views {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    gap: .375rem;
+    padding-bottom: .25rem;
+  }
+  .dash-views::-webkit-scrollbar {
+    display: none;
+  }
+  .dash-views .chip {
+    flex-shrink: 0;
+    min-height: 2.6rem;
+    padding: .4rem .75rem;
+    white-space: nowrap;
+  }
+
+  /* Charts & horizontal bars */
+  .card-title-row,
+  .orders-card .card-title-row {
+    flex-wrap: wrap;
+    gap: .625rem;
+  }
+  .orders-card .card-title-row .flex {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch !important;
+  }
+  .orders-card .card-title-row .flex select {
+    width: 100% !important;
+  }
+  .bar-chart {
+    gap: .4rem;
+    height: 13rem;
+  }
+  .bar-chart.is-dense {
+    gap: 2px;
+  }
+  .bar-chart.is-dense .bar-label small {
+    display: none;
+  }
+  .bar-chart.is-dense .bar-col:nth-child(even) .bar-label {
+    visibility: hidden;
+  }
+  .bar-chart.is-dense .bar-label {
+    font-size: .54rem;
+  }
+  .bar-chart.is-yearly {
+    gap: .25rem;
+  }
+  .bar-chart.is-yearly .bar-value {
+    display: none;
+  }
+  .hbar-row,
+  .page-sales .hbar-row {
+    grid-template-columns: 6.25rem 1fr 2.5rem;
+    gap: .5rem;
+  }
+
+  /* ------------------------------------------------------------------
+     6. Mobile Bottom Sheets for Dialog Modals & Sticky Primary Actions
+     ------------------------------------------------------------------ */
+  .modal-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal,
+  .sup-modal .modal {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: 92vh !important;
+    max-height: 92dvh !important;
+    margin: 0 !important;
+    border-radius: 1.25rem 1.25rem 0 0 !important;
+    border-bottom: none !important;
+    display: flex;
+    flex-direction: column;
+    animation: mobileSheetUp .22s cubic-bezier(.22, 1, .36, 1);
+  }
+  @keyframes mobileSheetUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .modal-header {
+    position: relative;
+    padding: 1.1rem 1rem .75rem;
+    flex-shrink: 0;
+  }
+  .modal-header::before {
+    content: "";
+    position: absolute;
+    top: .4rem;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2.5rem;
+    height: .28rem;
+    border-radius: 999px;
+    background: #cbd5e1;
+  }
+  .modal-close {
+    width: 2.75rem;
+    height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-body,
+  .sup-modal .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: .875rem 1rem;
+  }
+  #viewModalOverlay .vt-scroll,
+  #viewModalOverlay #vtab-activity .vt-scroll,
+  .sup-modal .table-card > .table-wrap {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  .modal-footer,
+  .sup-modal .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: row;
+    gap: .5rem;
+    padding: .75rem 1rem calc(.75rem + var(--safe-bottom, 0px));
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+  }
+  .modal-footer .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+    min-height: 2.9rem;
+  }
+
+  /* Manage Filters modal items */
   .manage-filter-row {
     flex-wrap: wrap;
     align-items: flex-start;
-    padding: 8px 0;
-    gap: 0.375rem;
+    padding: .5rem 0;
+    gap: .375rem;
   }
   .manage-filter-info {
     flex: 1 1 100%;
@@ -144,84 +795,98 @@
     width: 100%;
     justify-content: flex-end;
   }
-  .manage-filter-actions .btn-sm {
-    padding: 0.35rem 0.625rem;
-    font-size: 0.8rem;
-  }
-
-  /* Suppliers tab inside Manage Filters */
-  .sup-modal .table-wrap {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-  }
-  .sup-modal table {
-    min-width: 32rem !important;
-    table-layout: auto !important;
-  }
-  .sup-modal .filter-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.5rem;
-  }
-  .sup-modal .filter-bar #addSupplierBtn {
+  .sup-modal .filter-bar #addSupplierBtn,
+  #addCategoryBtn,
+  #addBrandBtn,
+  #addMotoBrandBtn {
     margin-left: 0 !important;
     width: 100%;
     justify-content: center;
   }
 
-  /* Add buttons inside Manage Filters panels */
-  #addCategoryBtn, #addBrandBtn, #addMotoBrandBtn {
-    width: 100%;
+  /* Profile, Settings & Login pages */
+  .pf-grid {
+    grid-template-columns: 1fr;
+  }
+  .profile-card-head {
+    flex-wrap: wrap;
+  }
+  .profile-actions {
+    position: sticky;
+    bottom: calc(4.1rem + var(--safe-bottom, 0px));
+    z-index: 10;
+    background: rgba(255, 255, 255, .95);
+    backdrop-filter: blur(6px);
+    padding: .625rem .75rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-md);
+  }
+  .profile-actions .btn {
+    flex: 1 1 auto;
     justify-content: center;
   }
 
-  table { min-width: 35rem; }
-
-  .notif-panel { position: fixed; top: var(--topbar-h); right: 0.5rem; left: 0.5rem; width: auto; }
-
-  /* Sidebar is a drawer here, so the desktop collapse arrow doesn't apply */
-  .sidebar-toggle { display: none; }
-
-  /* POS: the sale screen and the payment screen each stack into one column */
-  .page-pos { padding: 0.875rem; }
-  .pos-meta-bar { gap: 0.875rem 1.5rem; padding: 0.5625rem 0.875rem; }
-  .pos-sale, .pos-payment { grid-template-columns: 1fr; gap: 1.25rem; }
-  .product-tile-grid { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
-  .pos-col-body, .pos-cart .pos-col-body { max-height: none; }
-  .pay-panel { padding: 1rem; }
-  .pay-side { padding: 0; }
-  .pay-method-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .quick-row { grid-template-columns: repeat(2, 1fr); }
-  .pay-due-amount { font-size: 1.5rem; }
-  .pay-head { flex-wrap: wrap; }
-
-  /* Login */
-  .login-shell { grid-template-columns: 1fr; }
-  .login-visual { display: none; }
-  .login-form-side { padding: 1.75rem 1.125rem; }
-  .btn-login, .btn-google, .signup-card .btn-google { width: 100%; }
-  .login-alt { margin-top: 2rem; }
-  .signup-card { padding: 2rem 1.25rem 1.75rem; border-radius: 1.5rem; }
-  .signup-fields { grid-template-columns: 1fr; gap: 0.875rem; }
-  .btn-register { width: 100%; margin-top: 2rem; }
+  .login-shell {
+    grid-template-columns: 1fr;
+  }
+  .login-visual {
+    display: none;
+  }
+  .login-form-side {
+    padding: 1.75rem 1.125rem;
+  }
+  .btn-login,
+  .btn-google,
+  .signup-card .btn-google {
+    width: 100%;
+  }
+  .login-alt {
+    margin-top: 2rem;
+  }
+  .signup-card {
+    padding: 2rem 1.25rem 1.75rem;
+    border-radius: 1.5rem;
+  }
+  .signup-fields {
+    grid-template-columns: 1fr;
+    gap: .875rem;
+  }
+  .btn-register {
+    width: 100%;
+    margin-top: 2rem;
+  }
 }
 
+/* ---------- Small Phones (<= 480px) ---------- */
 @media (max-width: 480px) {
-  .modal-overlay { padding: 0.5rem 0.375rem; }
-  .modal-body { padding: 0.75rem 0.625rem; }
-  .modal-header, .modal-footer { padding: 0.75rem 0.75rem; }
-  #filterTabs .tab-btn,
-  .modal .tabs .tab-btn {
-    padding: 0.45rem 0.5rem;
-    font-size: 0.8rem;
+  .page,
+  .page-sales,
+  .page-inventory {
+    padding: .65rem;
   }
-  .stat-grid { grid-template-columns: 1fr 1fr; }
-  .hbar-row { grid-template-columns: 5.25rem 1fr 2.375rem; }
-  .page-sales .stat-card .stat-value { font-size: 1.2rem; }
-  .page-sales .hbar-row { grid-template-columns: 5.25rem 1fr 2.375rem; }
+  .page-header .actions .btn {
+    flex: 1 1 100%;
+  }
+  .stat-card .stat-value,
+  .page-dashboard .stat-card .stat-value,
+  .page-sales .stat-card .stat-value {
+    font-size: 1.15rem;
+  }
+  .hbar-row,
+  .page-sales .hbar-row {
+    grid-template-columns: 5.25rem 1fr 2.375rem;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr {
+    padding: .75rem;
+    gap: .4rem .6rem;
+  }
 }
 
 /* Respect reduced-motion preference */
 @media (prefers-reduced-motion: reduce) {
-  * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
+  * {
+    animation-duration: .001ms !important;
+    transition-duration: .001ms !important;
+  }
 }

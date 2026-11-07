@@ -59,11 +59,11 @@ const maxSuffix = (ids, re) => ids.reduce((m, id) => { const x = String(id).matc
 
   /* products — plus two demo items so Expiration Monitoring has something to show */
   const t = today();
-  const products = fx.PRODUCTS.filter(p => p.category !== 'motorcycles').map(p => Object.assign({}, p, { expirationDate: null }));
+  const products = fx.PRODUCTS.filter(p => p.category !== 'motorcycles').map(p => { const c = Object.assign({}, p, { expirationDate: null }); delete c.barcode; return c; });
   const oil = products.find(p => p.id === 'ENG-001'); if (oil) oil.expirationDate = addMonths(t, 14);
   const extras = [
-    { id: 'OTH-002', sku: 'TM-OTH-002', barcode: '480123456716', name: 'Brake Fluid DOT 4 (250ml)', brand: 'Bosch', category: 'other-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-002', supplierRef: 'YGP-BF-250', description: 'DOT 4 brake fluid, 250 ml bottle. Shelf-life limited.', costPrice: 120, sellingPrice: 190, stock: 8, reorderLevel: 4, expirationDate: addDays(t, 52) },
-    { id: 'ENG-004', sku: 'TM-ENG-004', barcode: '480123456717', name: 'Engine Degreaser Spray (400ml)', brand: 'Generic', category: 'engine-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-001', supplierRef: 'ABC-DG-400', description: 'Aerosol degreaser. Past its best-before date — pull from sale.', costPrice: 95, sellingPrice: 150, stock: 5, reorderLevel: 3, expirationDate: addDays(t, -20) }
+    { id: 'OTH-002', sku: 'TM-OTH-002', name: 'Brake Fluid DOT 4 (250ml)', brand: 'Bosch', category: 'other-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-002', supplierRef: 'YGP-BF-250', description: 'DOT 4 brake fluid, 250 ml bottle. Shelf-life limited.', costPrice: 120, sellingPrice: 190, stock: 8, reorderLevel: 4, expirationDate: addDays(t, 52) },
+    { id: 'ENG-004', sku: 'TM-ENG-004', name: 'Engine Degreaser Spray (400ml)', brand: 'Generic', category: 'engine-parts', compatibility: ['Universal (All Models)'], compatYears: 'All Years', supplier: 'SUP-001', supplierRef: 'ABC-DG-400', description: 'Aerosol degreaser. Past its best-before date — pull from sale.', costPrice: 95, sellingPrice: 150, stock: 5, reorderLevel: 3, expirationDate: addDays(t, -20) }
   ];
   extras.forEach(e => products.push(Object.assign({ image: e.category, archived: false, lastUpdated: new Date().toISOString() }, e)));
   await M.Product.insertMany(products);

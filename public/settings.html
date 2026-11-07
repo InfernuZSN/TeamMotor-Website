@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Settings — TeamMotor</title>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/responsive.css">
@@ -29,7 +29,6 @@
       <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.25rem;align-items:start;">
         <form class="card" id="settingsForm" onsubmit="return false;" novalidate style="padding:1.25rem;">
           <h3 style="margin-top:0;">Shop details (printed on receipts)</h3>
-          <div class="field"><label for="sShopName">Shop name *</label><input type="text" id="sShopName" required maxlength="80"></div>
           <div class="field"><label for="sTagline">Tagline</label><input type="text" id="sTagline" maxlength="80"></div>
           <div class="field"><label for="sAddress">Address (one line per row)</label><textarea id="sAddress" rows="3" maxlength="300"></textarea></div>
           <div class="field"><label for="sPhone">Phone</label><input type="text" id="sPhone" maxlength="40"></div>
