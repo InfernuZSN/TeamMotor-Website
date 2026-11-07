@@ -181,12 +181,76 @@ function sendRawSmtp({ host, port, user, pass, from, to, subject, text, html }) 
 }
 
 /**
+ * Send email via Resend HTTPS REST API (Port 443).
+ * Render's Free tier blocks raw SMTP ports (25, 465, 587), so HTTPS APIs like Resend
+ * are the standard way to send transactional emails without getting blocked by Render's firewall.
+ */
+async function sendViaResend({ apiKey, from, to, subject, text, html }) {
+  const sender = from || 'TeamMotor <onboarding@resend.dev>';
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: sender,
+      to: [to],
+      subject,
+      text,
+      html
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(`Resend API error (${res.status}): ${data.message || res.statusText || 'Unknown error'}`);
+  }
+  return { ok: true, id: data.id };
+}
+
+/**
+ * Send email via Brevo HTTPS REST API (Port 443).
+ * Brevo allows sending transactional emails to ANY recipient email address on its free tier (300 emails/day),
+ * using standard HTTPS port 443 which is never blocked by Render.
+ */
+async function sendViaBrevo({ apiKey, senderEmail, senderName, to, name, subject, text, html }) {
+  const fromEmail = senderEmail || 'no-reply@teammotor.com';
+  const fromName = senderName || 'TeamMotor';
+
+  const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+    method: 'POST',
+    headers: {
+      'api-key': apiKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    },
+    body: JSON.stringify({
+      sender: { name: fromName, email: fromEmail },
+      to: [{ email: to, name: name || to }],
+      subject,
+      textContent: text,
+      htmlContent: html
+    })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data.message || (data.errors && JSON.stringify(data.errors)) || res.statusText || 'Unknown error';
+    throw new Error(`Brevo API error (${res.status}): ${msg}`);
+  }
+  return { ok: true, messageId: data.messageId };
+}
+
+/**
  * Sends a 6-digit password reset OTP email to the user.
  */
 async function sendPasswordResetOtpEmail({ to, name, username, otp }) {
   const smtp = config.smtp || {};
-  if (!smtp.user || !smtp.pass) {
-    throw new HttpError(500, 'Email service is not configured on the server (missing SMTP_USER / SMTP_PASS in .env).');
+  const resendApiKey = config.resendApiKey;
+  const brevoApiKey = config.brevoApiKey;
+
+  if (!brevoApiKey && !resendApiKey && (!smtp.user || !smtp.pass)) {
+    throw new HttpError(500, 'Email service is not configured on the server (missing BREVO_API_KEY, RESEND_API_KEY, or SMTP credentials in environment variables).');
   }
 
   const displayName = name || username || 'User';
@@ -254,6 +318,30 @@ async function sendPasswordResetOtpEmail({ to, name, username, otp }) {
 </html>`;
 
   try {
+    if (brevoApiKey) {
+      return await sendViaBrevo({
+        apiKey: brevoApiKey,
+        senderEmail: config.brevoSenderEmail,
+        senderName: config.brevoSenderName,
+        to,
+        name: displayName,
+        subject,
+        text,
+        html
+      });
+    }
+
+    if (resendApiKey) {
+      return await sendViaResend({
+        apiKey: resendApiKey,
+        from: smtp.from || 'TeamMotor <onboarding@resend.dev>',
+        to,
+        subject,
+        text,
+        html
+      });
+    }
+
     return await sendRawSmtp({
       host: smtp.host || 'smtp.gmail.com',
       port: Number(smtp.port) || 465,
@@ -267,7 +355,7 @@ async function sendPasswordResetOtpEmail({ to, name, username, otp }) {
     });
   } catch (err) {
     console.error('[mailer] Failed to send OTP email:', err.message);
-    throw new HttpError(502, 'Could not send verification email. Please check the server email configuration or internet connection.');
+    throw new HttpError(502, `Could not send verification email: ${err.message}. (Note: Render Free tier blocks outbound SMTP ports 465/587; set BREVO_API_KEY to send via HTTPS).`);
   }
 }
 

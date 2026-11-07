@@ -11,6 +11,10 @@ const config = {
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
   corsOrigins: (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean),
   googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+  resendApiKey: (process.env.RESEND_API_KEY || '').trim(),
+  brevoApiKey: (process.env.BREVO_API_KEY || '').trim(),
+  brevoSenderEmail: (process.env.BREVO_SENDER_EMAIL || process.env.SMTP_USER || '').trim(),
+  brevoSenderName: (process.env.BREVO_SENDER_NAME || 'TeamMotor').trim(),
   smtp: {
     host: (process.env.SMTP_HOST || 'smtp.gmail.com').trim(),
     port: parseInt(process.env.SMTP_PORT, 10) || 465,
