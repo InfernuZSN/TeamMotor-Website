@@ -14,8 +14,8 @@ const { ensureDefaultFilters } = require('./services/filters');
     await getSettings();                                        // creates the default settings document on first run
     await ensureDefaultCategories();                            // adds the shop's standard categories to an existing database
     await ensureDefaultFilters();                               // fills the Manage Brands / Motorcycle Compatibility lists
-    app.listen(config.port, () => {
-      console.log('TeamMotor running on http://localhost:' + config.port + '  (' + config.env + ')');
+    app.listen(config.port, '0.0.0.0', () => {
+      console.log('TeamMotor running on http://0.0.0.0:' + config.port + '  (' + config.env + ')');
       console.log('MongoDB connected: ' + config.mongoUri.replace(/\/\/([^:]+):([^@]+)@/, '//$1:***@'));
     });
   } catch (err) {

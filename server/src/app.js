@@ -57,7 +57,12 @@ app.use('/api', api);
 app.use('/api', notFoundHandler);
 
 // ---- static frontend ----
-app.use(express.static(path.join(__dirname, '..', '..', 'public'), { extensions: ['html'], index: 'login.html' }));
+const publicPath = path.join(__dirname, '..', '..', 'public');
+app.use(express.static(publicPath, { extensions: ['html'], index: 'login.html' }));
+
+app.use((req, res) => {
+  res.status(404).send('Not Found');
+});
 
 app.use(errorHandler);
 module.exports = app;
