@@ -5,11 +5,26 @@ const cors = require('cors');
 const config = require('./config');
 const { authenticate } = require('./middleware/auth');
 const { notFoundHandler, errorHandler } = require('./middleware/error');
+const { connect, mongoose } = require('./db');
 const catalog = require('./routes/catalog');
 const misc = require('./routes/misc');
 
 const app = express();
 app.set('trust proxy', 1);
+
+// Ensure MongoDB is connected before handling requests (essential for serverless/Vercel)
+app.use(async (req, res, next) => {
+  if (req.path === '/api/health') return next();
+  if (mongoose.connection.readyState !== 1) {
+    try {
+      await connect();
+    } catch (err) {
+      console.error('[MongoDB Connection Error]', err.message);
+      return res.status(500).json({ error: 'Database connection failed: ' + err.message });
+    }
+  }
+  next();
+});
 
 // The existing frontend uses inline <script>/style attributes, so 'unsafe-inline' is allowed; everything else is same-origin only.
 app.use(helmet({
