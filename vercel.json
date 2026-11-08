@@ -8,11 +8,7 @@
     },
     {
       "source": "/",
-      "destination": "/public/login.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/public/$1"
+      "destination": "/login.html"
     }
   ]
 }
