@@ -51,13 +51,7 @@ const Api = (function () {
     detecting = (async function () {
       if (window.TEAMMOTOR_MODE === 'server' || window.TEAMMOTOR_MODE === 'local') mode = window.TEAMMOTOR_MODE;
       else if (location.protocol === 'file:') mode = 'local';
-      else {
-        try {
-          const ctl = new AbortController(); const t = setTimeout(function () { ctl.abort(); }, 2500);
-          const r = await fetch(base + '/health', { cache: 'no-store', signal: ctl.signal }); clearTimeout(t);
-          mode = r.ok && /json/.test(r.headers.get('content-type') || '') ? 'server' : 'local';
-        } catch (e) { mode = 'local'; }
-      }
+      else mode = 'server'; // Instant: on http/https we are always running with the server backend
       if (mode === 'local' && typeof LocalApi === 'undefined') throw new Error('Offline mode files are missing (js/local-api.js).');
       return mode;
     })();
@@ -102,11 +96,34 @@ const Api = (function () {
 const Store = (function () {
   let data = {};
   let loaded = false;
+  const CACHE_KEY = 'teammotor:bootstrap';
+  const CACHE_TIME_KEY = 'teammotor:bootstrap_time';
+  const CACHE_MAX_AGE = 60 * 1000; // 60s cache between menu switches for instant navigation
 
-  async function hydrate() {
+  async function hydrate(forceFresh = false) {
+    if (!forceFresh) {
+      try {
+        const cachedStr = window.sessionStorage.getItem(CACHE_KEY);
+        const cachedTime = parseInt(window.sessionStorage.getItem(CACHE_TIME_KEY) || '0', 10);
+        if (cachedStr && cachedTime && (Date.now() - cachedTime < CACHE_MAX_AGE)) {
+          const d = JSON.parse(cachedStr);
+          data = d;
+          loaded = true;
+          if (d.me) Api.setUser(d.me);
+          // Background sync to ensure data stays 100% up to date without blocking the page
+          setTimeout(function () { hydrate(true).catch(function () {}); }, 50);
+          return d;
+        }
+      } catch (e) {}
+    }
+
     const d = await Api.get('/bootstrap');
     data = d;
     loaded = true;
+    try {
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(d));
+      window.sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+    } catch (e) {}
     if (d.me) Api.setUser(d.me);
     // Let pages re-draw anything derived from the cache (e.g. Sales page product-movement tables).
     try { window.dispatchEvent(new CustomEvent('store:refreshed')); } catch (e) { /* very old browser */ }
@@ -117,8 +134,15 @@ const Store = (function () {
     return v === undefined || v === null ? fallback : v;
   }
   /* Local cache only (never persisted). Page code uses it to reflect an API response immediately. */
-  function set(key, value) { data[key] = value; return value; }
-  return { get: get, set: set, hydrate: hydrate, refresh: hydrate, isLoaded: function () { return loaded; } };
+  function set(key, value) {
+    data[key] = value;
+    try {
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      window.sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
+    } catch (e) {}
+    return value;
+  }
+  return { get: get, set: set, hydrate: hydrate, refresh: function () { return hydrate(true); }, isLoaded: function () { return loaded; } };
 })();
 
 const Boot = (function () {
