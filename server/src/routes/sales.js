@@ -12,12 +12,12 @@ router.get('/', wrap(async (req, res) => {
   if (req.query.status) filter.status = req.query.status;
   if (req.query.customerId) filter.customerId = req.query.customerId;
   if (req.query.from || req.query.to) { filter.date = {}; if (req.query.from) filter.date.$gte = req.query.from; if (req.query.to) filter.date.$lte = req.query.to; }
-  const sales = await Sale.find(filter).sort({ date: -1 }).limit(Math.min(parseInt(req.query.limit, 10) || 5000, 10000));
+  const sales = await Sale.find(filter).sort({ date: -1 }).limit(Math.min(parseInt(req.query.limit, 10) || 5000, 10000)).lean();
   res.json(await withItems(sales));
 }));
 
 router.get('/:id', wrap(async (req, res) => {
-  const sale = await Sale.findOne({ id: req.params.id });
+  const sale = await Sale.findOne({ id: req.params.id }).lean();
   if (!sale) throw notFound('Sale not found.');
   res.json(await withItems(sale));
 }));

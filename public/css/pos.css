@@ -36,6 +36,12 @@
   -webkit-user-select: none; user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+@view-transition {
+  navigation: auto;
+}
+.pos-terminal > .sidebar {
+  view-transition-name: none;
+}
 html:has(body.pos-terminal) { font-size: 16px; }   /* style.css shrinks the root on small screens; a touch terminal must not */
 .pos-terminal * { touch-action: manipulation; }
 .pos-terminal input, .pos-terminal select { -webkit-user-select: text; user-select: text; }

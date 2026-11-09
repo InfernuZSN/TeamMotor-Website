@@ -6,7 +6,27 @@
    Inter body text, and traffic-light status colors for stock.
    ========================================================================== */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Space+Mono:wght@700&display=swap');
+/* Smooth cross-document menu transitions (View Transitions API) */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 120ms;
+  animation-timing-function: ease-out;
+}
+.app-shell > .sidebar {
+  view-transition-name: sidebar;
+}
+.app-shell > .sidebar-toggle {
+  view-transition-name: sidebar-toggle;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+}
 
 :root {
   /* ---- Brand ---- */

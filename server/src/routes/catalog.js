@@ -16,7 +16,7 @@ const motoBrands = express.Router();
 const products = express.Router();
 
 /* ---------------- categories ---------------- */
-categories.get('/', wrap(async (req, res) => res.json(await Category.find({}).sort({ name: 1 }))));
+categories.get('/', wrap(async (req, res) => res.json(await Category.find({}).sort({ name: 1 }).lean())));
 categories.post('/', adminOnly, wrap(async (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) throw bad('Category name is required.');
@@ -63,7 +63,7 @@ categories.delete('/:id', adminOnly, wrap(async (req, res) => {
 }));
 
 /* ---------------- suppliers ---------------- */
-suppliers.get('/', wrap(async (req, res) => res.json(await Supplier.find({}).sort({ id: 1 }))));
+suppliers.get('/', wrap(async (req, res) => res.json(await Supplier.find({}).sort({ id: 1 }).lean())));
 suppliers.post('/', adminOnly, wrap(async (req, res) => {
   if (!req.body.name) throw bad('Supplier name is required.');
   const s = await Supplier.create(Object.assign({}, req.body, { id: await nextId('SUP', 3), status: req.body.status || 'Active' }));
@@ -101,7 +101,7 @@ function cleanName(v, label, max) {
   return name;
 }
 
-brands.get('/', wrap(async (req, res) => res.json(await Brand.find({}).sort({ name: 1 }))));
+brands.get('/', wrap(async (req, res) => res.json(await Brand.find({}).sort({ name: 1 }).lean())));
 brands.post('/', adminOnly, wrap(async (req, res) => {
   const name = cleanName(req.body.name, 'Brand name', 30);
   if (await Brand.findOne({ name: sameName(name) })) throw conflict('The brand "' + name + '" already exists.');
@@ -136,7 +136,7 @@ brands.delete('/:id', adminOnly, wrap(async (req, res) => {
    A product's compatibility entry is "<make> <model>". A make or model still used by a product cannot be removed. */
 const compatUsers = entries => Product.countDocuments({ compatibility: { $in: entries } });
 
-motoBrands.get('/', wrap(async (req, res) => res.json(await MotorcycleBrand.find({}).sort({ name: 1 }))));
+motoBrands.get('/', wrap(async (req, res) => res.json(await MotorcycleBrand.find({}).sort({ name: 1 }).lean())));
 motoBrands.post('/', adminOnly, wrap(async (req, res) => {
   const name = cleanName(req.body.name, 'Motorcycle brand', 30);
   if (await MotorcycleBrand.findOne({ name: sameName(name) })) throw conflict('The motorcycle brand "' + name + '" already exists.');
@@ -231,11 +231,11 @@ async function checkFilterValues(data, before) {
 
 const PRODUCT_ID_RE = /^[A-Za-z0-9\-_]+$/;
 
-products.get('/', wrap(async (req, res) => res.json(await Product.find({}).sort({ id: 1 }))));
+products.get('/', wrap(async (req, res) => res.json(await Product.find({}).sort({ id: 1 }).lean())));
 products.get('/lookup/:code', wrap(async (req, res) => {
   const code = req.params.code.trim();
   const re = sameName(code);
-  const p = await Product.findOne({ archived: { $ne: true }, $or: [{ id: re }, { sku: re }] });
+  const p = await Product.findOne({ archived: { $ne: true }, $or: [{ id: re }, { sku: re }] }).lean();
   if (!p) throw notFound('No product matches "' + code + '".');
   res.json(p);
 }));

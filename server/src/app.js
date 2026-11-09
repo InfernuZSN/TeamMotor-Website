@@ -12,9 +12,9 @@ const misc = require('./routes/misc');
 const app = express();
 app.set('trust proxy', 1);
 
-// Ensure MongoDB is connected before handling requests (essential for serverless/Vercel)
+// Ensure MongoDB is connected before handling API requests (essential for serverless/Vercel)
 app.use(async (req, res, next) => {
-  if (req.path === '/api/health') return next();
+  if (!req.path.startsWith('/api') || req.path === '/api/health') return next();
   if (mongoose.connection.readyState !== 1) {
     try {
       await connect();
@@ -34,7 +34,8 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/client'],
-      styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style'],
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://accounts.google.com/gsi/style', 'https://fonts.googleapis.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'],
       frameSrc: ["'self'", 'https://accounts.google.com/gsi/'],
       connectSrc: ["'self'", 'https://accounts.google.com/gsi/', 'https://www.googleapis.com'],
       imgSrc: ["'self'", 'data:', 'blob:', 'https://*.googleusercontent.com', 'https://accounts.google.com'],

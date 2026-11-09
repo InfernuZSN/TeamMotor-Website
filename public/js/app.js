@@ -281,6 +281,60 @@ function renderSidebar(activeKey) {
   }
   const oldNav = document.getElementById('mobileBottomNav');
   if (oldNav) oldNav.remove();
+
+  // Restore & persist sidebar scroll position across menu switches
+  try {
+    const savedScroll = parseInt(sessionStorage.getItem('teammotor:sidebar_scroll') || '0', 10);
+    if (savedScroll > 0) sidebar.scrollTop = savedScroll;
+    sidebar.addEventListener('scroll', function () {
+      try { sessionStorage.setItem('teammotor:sidebar_scroll', String(sidebar.scrollTop)); } catch (e) {}
+    }, { passive: true });
+  } catch (e) {}
+
+  initInstantNavPrefetch(sidebar);
+}
+
+/* ---------- Instant Navigation Prefetching on Sidebar Hover / Touch ---------- */
+const prefetchedUrls = new Set();
+const PAGE_SCRIPTS = {
+  'index.html': ['js/dashboard.js'],
+  'inventory.html': ['js/inventory.js'],
+  'pos.html': ['js/receipt.js', 'js/pos.js'],
+  'sales.html': ['js/receipt.js', 'js/sales.js', 'js/sales-trend.js'],
+  'customers.html': ['js/receipt.js', 'js/customers.js'],
+  'warranty.html': ['js/warranty.js'],
+  'users.html': ['js/shifts.js', 'js/users.js'],
+  'audit.html': ['js/audit.js'],
+  'settings.html': ['js/settings.js'],
+  'profile.html': ['js/shifts.js', 'js/profile.js']
+};
+
+function prefetchResource(url, asType) {
+  if (!url || prefetchedUrls.has(url)) return;
+  prefetchedUrls.add(url);
+  try {
+    const link = document.createElement('link');
+    link.rel = 'prefetch';
+    link.href = url;
+    if (asType) link.as = asType;
+    document.head.appendChild(link);
+  } catch (e) {}
+}
+
+function initInstantNavPrefetch(container) {
+  if (!container) return;
+  container.querySelectorAll('a[href]').forEach(function (a) {
+    const href = a.getAttribute('href');
+    if (!href || href.indexOf('#') === 0 || a.classList.contains('active')) return;
+    const trigger = function () {
+      prefetchResource(href, 'document');
+      (PAGE_SCRIPTS[href] || []).forEach(function (src) {
+        prefetchResource(src, 'script');
+      });
+    };
+    a.addEventListener('mouseenter', trigger, { once: true, passive: true });
+    a.addEventListener('touchstart', trigger, { once: true, passive: true });
+  });
 }
 
 function openMobileSidebar() {
@@ -358,6 +412,16 @@ function requireRole(role) {
    deliberately does not go through Store, which is reserved for shop data. */
 const SIDEBAR_COLLAPSED_KEY = 'motoshop:sidebarCollapsed';
 
+// Apply saved sidebar collapse state synchronously before first paint to prevent layout shift
+(function applyImmediateSidebarState() {
+  try {
+    const shell = document.querySelector('.app-shell');
+    if (shell && localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
+      shell.classList.add('is-collapsed');
+    }
+  } catch (e) {}
+})();
+
 function initSidebarToggle() {
   const shell = document.querySelector('.app-shell');
   if (!shell || document.getElementById('sidebarToggle')) return;
@@ -415,7 +479,6 @@ function initShell(activeKey) {
   const scrim = document.getElementById('sidebarScrim');
   if (scrim) scrim.addEventListener('click', closeMobileSidebar);
   if (window.Notifications) Notifications.init();
-  if (Api.mode() === 'local') showOfflineBadge();
   initMobileEnhancements();
   try {                                   // message left by an action that reloaded the page
     const flash = sessionStorage.getItem('tm:flash');
@@ -744,8 +807,14 @@ function initMobileEnhancements() {
   } else {
     setTimeout(runAll, 0);
   }
+  let rafPending = false;
   const obs = new MutationObserver(function () {
-    syncMobileTableLabels();
+    if (rafPending) return;
+    rafPending = true;
+    requestAnimationFrame(function () {
+      rafPending = false;
+      if (window.innerWidth <= 900) syncMobileTableLabels();
+    });
   });
   obs.observe(document.body, { childList: true, subtree: true });
 }
@@ -772,22 +841,6 @@ function confirmDialog(title, message, onConfirm, okLabel) {
     }
   });
   document.body.appendChild(overlay);
-}
-
-/* ---------- Offline-mode badge (data is kept in this browser; see js/local-api.js) ---------- */
-function showOfflineBadge() {
-  if (document.getElementById('offlineBadge')) return;
-  const b = document.createElement('button');
-  b.id = 'offlineBadge'; b.type = 'button';
-  b.title = 'Offline mode: data is saved only in this browser. Click for options.';
-  b.style.cssText = 'position:fixed;left:12px;bottom:12px;z-index:900;background:#1b1f27;color:#fff;border:1px solid #444;border-radius:999px;padding:6px 12px;font:600 12px system-ui,sans-serif;cursor:pointer;opacity:.9;';
-  b.textContent = '\u25CF Offline mode \u2014 saved in this browser';
-  b.addEventListener('click', function () {
-    confirmDialog('Reset offline demo data?', 'This erases everything saved in this browser (sales, stock changes, customers, users you added) and restores the original demo data. You will be logged out.', function () {
-      LocalApi.reset(); Api.clear(); window.location.href = 'login.html';
-    }, 'Reset');
-  });
-  document.body.appendChild(b);
 }
 
 /* ---------- Shared pagination bar ----------

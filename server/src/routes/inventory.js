@@ -12,7 +12,7 @@ router.get('/transactions', wrap(async (req, res) => {
   const filter = {};
   if (req.query.productId) filter.productId = req.query.productId;
   if (req.query.type) filter.type = req.query.type;
-  res.json(await InventoryTransaction.find(filter).sort({ date: -1, id: -1 }).limit(Math.min(parseInt(req.query.limit, 10) || 3000, 5000)));
+  res.json(await InventoryTransaction.find(filter).sort({ date: -1, id: -1 }).limit(Math.min(parseInt(req.query.limit, 10) || 3000, 5000)).lean());
 }));
 
 function parseQty(v) {

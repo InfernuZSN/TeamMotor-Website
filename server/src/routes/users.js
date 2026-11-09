@@ -19,7 +19,7 @@ async function assertEmailFree(email, exceptId) {
 }
 
 /* Admin: list / create / update / deactivate users. */
-router.get('/', adminOnly, wrap(async (req, res) => { res.json(await User.find({}).sort({ id: 1 })); }));
+router.get('/', adminOnly, wrap(async (req, res) => { res.json(await User.find({}).sort({ id: 1 }).lean()); }));
 
 router.post('/', adminOnly, wrap(async (req, res) => {
   const b = req.body;
@@ -101,8 +101,8 @@ router.put('/me/password', wrap(async (req, res) => {
 }));
 
 /* ---- Shifts (clock in/out) ---- */
-router.get('/shifts/all', adminOnly, wrap(async (req, res) => { res.json(await Shift.find({}).sort({ clockIn: -1 }).limit(1000)); }));
-router.get('/shifts/mine', wrap(async (req, res) => { res.json(await Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(200)); }));
+router.get('/shifts/all', adminOnly, wrap(async (req, res) => { res.json(await Shift.find({}).sort({ clockIn: -1 }).limit(1000).lean()); }));
+router.get('/shifts/mine', wrap(async (req, res) => { res.json(await Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(200).lean()); }));
 router.post('/shifts/clock-in', wrap(async (req, res) => {
   const open = await Shift.findOne({ username: req.user.username, clockOut: null });
   if (open) return res.json(open);

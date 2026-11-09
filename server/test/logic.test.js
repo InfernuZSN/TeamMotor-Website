@@ -361,10 +361,11 @@ test('warranty status: active / expiring soon / expired / claimed / voided', () 
    13. UI & SCOPE REFINEMENTS (PAYMENT METHODS, SKU/BARCODE, USER DELETION)
    ------------------------------------------------------------------------------ */
 test('POS Payment Methods: only Cash and GCash are accepted for new sales; legacy methods stay valid in the Sale model', () => {
-  const mockDataCode = fs.readFileSync(resolveRoot('public/js/mock-data.js'), 'utf8');
-  const ctx = { console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp };
-  vm.runInNewContext(mockDataCode + '; this.PAYMENT_METHODS = PAYMENT_METHODS; this.PRODUCTS = PRODUCTS;', ctx);
-  assert.deepStrictEqual(Array.from(ctx.PAYMENT_METHODS), ['Cash', 'GCash']);
+  const storeCode = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  const fixturesCode = fs.readFileSync(resolveRoot('server/scripts/fixtures.js'), 'utf8');
+  const ctx = { window: {}, console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp };
+  vm.runInNewContext(fixturesCode + '; this.PRODUCTS = PRODUCTS;', ctx);
+  assert.ok(storeCode.includes("const PAYMENT_METHODS = ['Cash', 'GCash'];"), 'store.js must define PAYMENT_METHODS');
   const svc = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
   assert.ok(svc.includes("const PAYMENT_METHODS = ['Cash', 'GCash'];"), 'server allowlist must match the frontend list');
   const model = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
@@ -490,7 +491,7 @@ test('Mobile UX/UI Optimization & Desktop Preservation: scopes mobile enhancemen
   assert.ok(posJs.includes('ptMobileSwitch'), 'pos.js must provide fast-switching Catalog/Scan and Current Cart tabs on mobile');
 });
 
-test('Product Deletion: Delete button positioned below product image, API route and LocalApi support', () => {
+test('Product Deletion: Delete button positioned below product image and API route support', () => {
   const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
   assert.ok(invHtml.includes('id="deleteProductModalBtn"'), 'Delete button must exist in Add/Edit Product modal');
   assert.ok(invHtml.indexOf('id="imageDropZone"') < invHtml.indexOf('id="deleteProductModalBtn"'), 'Delete button must be positioned below the product image dropzone');
@@ -501,9 +502,6 @@ test('Product Deletion: Delete button positioned below product image, API route 
 
   const catalogJs = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
   assert.ok(catalogJs.includes("products.delete('/:id'"), 'catalog.js must implement DELETE /products/:id endpoint');
-
-  const localApiJs = fs.readFileSync(resolveRoot('public/js/local-api.js'), 'utf8');
-  assert.ok(localApiJs.includes("R('DELETE', '/products/([^/]+)'"), 'local-api.js must implement DELETE /products/:id route');
 });
 
 test('Hybrid Product ID: removes barcode variable from product collection, enforces duplicate Product ID constraint, and supports custom/auto IDs + POS checkout', () => {
@@ -526,101 +524,6 @@ test('Hybrid Product ID: removes barcode variable from product collection, enfor
   assert.ok(catalogJs.includes('PRODUCT_ID_RE = /^[A-Za-z0-9\\-_]+$/'), 'Backend must validate Product ID format against regex');
   assert.ok(catalogJs.includes("is already in use. Please use a unique ID or update existing stock."), 'Backend must return clear duplicate ID error message');
   assert.ok(!catalogJs.includes('barcode'), 'Backend catalog routes must not reference barcode');
-
-  // Execute end-to-end against LocalApi sandbox
-  const sandbox = {
-    window: {},
-    localStorage: {
-      _s: {},
-      getItem(k) { return this._s[k] || null; },
-      setItem(k, v) { this._s[k] = String(v); },
-      removeItem(k) { delete this._s[k]; }
-    },
-    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp, Error, parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(resolveRoot('public/js/mock-data.js'), 'utf8'), sandbox);
-  vm.runInContext(fs.readFileSync(resolveRoot('public/js/local-api.js'), 'utf8') + '\n;this.LocalApi = LocalApi;', sandbox);
-
-  const LocalApi = sandbox.LocalApi;
-  const auth = LocalApi.handle('POST', '/auth/login', { username: 'ronnie.manalo', password: 'Admin@12345' });
-  const token = auth.token;
-
-  // 1. Create product with scanned/custom QR code ID (e.g. NGK-CPR8EA9)
-  const customProd = LocalApi.handle('POST', '/products', {
-    id: 'ngk-cpr8ea9',
-    name: 'NGK Spark Plug CPR8EA-9',
-    brand: 'Bosch',
-    category: 'engine-parts',
-    sellingPrice: 180,
-    costPrice: 110,
-    stock: 15,
-    reorderLevel: 5,
-    compatibility: ['Universal (All Models)']
-  }, token);
-  assert.strictEqual(customProd.id, 'NGK-CPR8EA9', 'Custom ID must be uppercased and saved as product.id');
-  assert.strictEqual(customProd.sku, 'TM-NGK-CPR8EA9', 'Default SKU must use custom ID');
-  assert.strictEqual(customProd.barcode, undefined, 'barcode variable must not exist on product');
-
-  // 2. Create product with blank ID -> auto-generates cleanly (e.g. ENG-005)
-  const autoProd = LocalApi.handle('POST', '/products', {
-    id: '',
-    name: 'Generic Drain Bolt Washer',
-    brand: 'Generic',
-    category: 'engine-parts',
-    sellingPrice: 25,
-    costPrice: 10,
-    stock: 50,
-    reorderLevel: 10,
-    compatibility: ['Universal (All Models)']
-  }, token);
-  assert.match(autoProd.id, /^ENG-\d{3,}$/, 'Blank ID must auto-generate using category prefix');
-  assert.strictEqual(autoProd.barcode, undefined, 'barcode variable must not exist on auto-generated product');
-
-  // 3. Reject duplicate Product ID (case-insensitive)
-  assert.throws(() => {
-    LocalApi.handle('POST', '/products', {
-      id: 'NGK-cpr8ea9',
-      name: 'Duplicate Spark Plug',
-      brand: 'Bosch',
-      category: 'engine-parts',
-      sellingPrice: 180,
-      costPrice: 110,
-      stock: 5,
-      compatibility: ['Universal (All Models)']
-    }, token);
-  }, /Product ID 'NGK-CPR8EA9' is already in use\. Please use a unique ID or update existing stock\./);
-
-  // 4. Reject invalid characters (slashes, spaces, question marks, etc.)
-  assert.throws(() => {
-    LocalApi.handle('POST', '/products', {
-      id: 'BAD/ID?123',
-      name: 'Invalid ID Part',
-      brand: 'Bosch',
-      category: 'engine-parts',
-      sellingPrice: 100,
-      costPrice: 50,
-      stock: 5,
-      compatibility: ['Universal (All Models)']
-    }, token);
-  }, /Product ID may only contain letters, numbers, dashes \(-\), and underscores \(_\)/);
-
-  // 5. POS lookup & sale checkout for both custom-ID and auto-ID products
-  const lookedUpCustom = LocalApi.handle('GET', '/products/lookup/' + encodeURIComponent('NGK-CPR8EA9'), null, token);
-  assert.strictEqual(lookedUpCustom.id, 'NGK-CPR8EA9');
-  const lookedUpAuto = LocalApi.handle('GET', '/products/lookup/' + encodeURIComponent(autoProd.id), null, token);
-  assert.strictEqual(lookedUpAuto.id, autoProd.id);
-
-  const saleRes = LocalApi.handle('POST', '/sales', {
-    items: [
-      { productId: customProd.id, qty: 2 },
-      { productId: autoProd.id, qty: 3 }
-    ],
-    paymentMethod: 'Cash',
-    amountReceived: 500
-  }, token);
-  assert.strictEqual(saleRes.sale.status, 'Completed');
-  assert.strictEqual(saleRes.sale.items.length, 2);
 });
 
 

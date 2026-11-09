@@ -23,10 +23,10 @@ const { ensureDefaultFilters } = require('../src/services/filters');
 const RESET = process.argv.includes('--reset');
 
 function loadFixtures() {
-  const file = path.join(__dirname, '..', '..', 'public', 'js', 'mock-data.js');
+  const file = path.join(__dirname, 'fixtures.js');
   const code = fs.readFileSync(file, 'utf8') +
     '\n;({ CATEGORIES, SUPPLIERS, PRODUCTS, USERS, SALES, CUSTOMERS, INVENTORY_TRANSACTIONS, WARRANTIES, SHIFTS })';
-  return vm.runInNewContext(code, { console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp }, { filename: 'mock-data.js' });
+  return vm.runInNewContext(code, { console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp }, { filename: 'fixtures.js' });
 }
 
 const maxSuffix = (ids, re) => ids.reduce((m, id) => { const x = String(id).match(re); return x ? Math.max(m, parseInt(x[1], 10)) : m; }, 0);

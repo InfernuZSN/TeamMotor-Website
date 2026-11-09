@@ -8,7 +8,7 @@ const { warrantyStatus } = require('../utils/warranty');
 const { refreshNotifications } = require('../services/notifications');
 
 router.get('/', wrap(async (req, res) => {
-  const list = await withClaims(await Warranty.find({}).sort({ warrantyStart: -1, id: -1 }));
+  const list = await withClaims(await Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean());
   list.forEach(w => { w.status = warrantyStatus(w, w.claims); });
   res.json(list);
 }));

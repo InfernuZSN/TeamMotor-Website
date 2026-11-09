@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Log In — TeamMotor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Space+Mono:wght@700&display=swap">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/responsive.css">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
@@ -138,8 +141,6 @@
   </div>
 </div>
 
-<script src="js/mock-data.js"></script>
-<script src="js/local-api.js"></script>
 <script src="js/store.js"></script>
 <script src="js/analytics.js"></script>
 <script src="js/app.js"></script>
@@ -149,11 +150,6 @@ Boot.ready(function () {
   if (Api.getToken() && getSession() && !/reason=/.test(location.search)) {
     Api.get('/auth/me').then(function () { location.replace('index.html'); }).catch(function () { Api.clear(); });
   }
-  Api.detect().then(function (mode) {
-    if (mode !== 'local') return;
-    const note = document.querySelector('.login-demo-note');
-    if (note) note.innerHTML = '<strong>Offline mode</strong> \u2014 everything is saved in this browser only.<br>Admin: <b>ronnie.manalo</b> / <b>Admin@12345</b><br>Staff: <b>juan.delacruz</b> / <b>Staff@12345</b>';
-  }).catch(function (e) { showToast(e.message, 'danger'); });
   if (/reason=expired/.test(location.search)) showToast('Your session expired. Please log in again.', 'info');
 
   document.querySelectorAll('[data-toggle-secret]').forEach(function (btn) {

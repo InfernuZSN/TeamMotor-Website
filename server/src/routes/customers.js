@@ -37,21 +37,21 @@ async function statsMap() {
 }
 const decorate = (c, stats) => {
   const s = stats.get(c.id) || {};
-  return Object.assign(c.toJSON(), { totalPurchases: s.totalPurchases || 0, totalSpent: Math.round((s.totalSpent || 0) * 100) / 100, lastPurchase: s.lastPurchase || null });
+  return Object.assign({}, c.toJSON ? c.toJSON() : c, { totalPurchases: s.totalPurchases || 0, totalSpent: Math.round((s.totalSpent || 0) * 100) / 100, lastPurchase: s.lastPurchase || null });
 };
 
 router.get('/', wrap(async (req, res) => {
   const filter = {};
   if (req.query.status && ['Active', 'Inactive'].includes(req.query.status)) filter.status = req.query.status;
-  const [list, stats] = await Promise.all([Customer.find(filter).sort({ id: 1 }), statsMap()]);
+  const [list, stats] = await Promise.all([Customer.find(filter).sort({ id: 1 }).lean(), statsMap()]);
   res.json(list.map(c => decorate(c, stats)));
 }));
 
 router.get('/:id', wrap(async (req, res) => {
-  const c = await Customer.findOne({ id: req.params.id });
+  const c = await Customer.findOne({ id: req.params.id }).lean();
   if (!c) throw notFound('Customer not found.');
   const [stats, sales, warranties] = await Promise.all([
-    statsMap(), Sale.find({ customerId: c.id }).sort({ date: -1 }).limit(500), Warranty.find({ customerId: c.id }).sort({ warrantyStart: -1 })
+    statsMap(), Sale.find({ customerId: c.id }).sort({ date: -1 }).limit(500).lean(), Warranty.find({ customerId: c.id }).sort({ warrantyStart: -1 }).lean()
   ]);
   const w = await withClaims(warranties);
   w.forEach(x => { x.status = warrantyStatus(x, x.claims); });
