@@ -251,7 +251,8 @@ function renderSidebar(activeKey) {
   if (!session) return;
   const items = NAV_ITEMS[session.role] || NAV_ITEMS.Staff;
   const products = Store.get('products', []);
-  const lowStockCount = Analytics.lowStockProducts(products).length + Analytics.outOfStockProducts(products).length;
+  const expiryMonths = (Store.get('settings', {}).expiryWarningMonths) || 3;
+  const invAlertCount = Analytics.inventoryAlertCount(products, expiryMonths);
   // Profile photo (saved on the user record by profile.js as a resized data URL). The strict pattern
   // keeps anything unexpected out of the markup below.
   const mePhoto = profilePhotoFor(session);
@@ -265,7 +266,7 @@ function renderSidebar(activeKey) {
     items.map(item =>
       '<a class="nav-item' + (item.key === activeKey ? ' active' : '') + '" href="' + item.href + '" title="' + item.label + '">' +
         icon(item.iconName) + '<span>' + item.label + '</span>' +
-        (item.key === 'inventory' && lowStockCount > 0 ? '<span class="nav-badge">' + lowStockCount + '</span>' : '') +
+        (item.key === 'inventory' && invAlertCount > 0 ? '<span class="nav-badge">' + invAlertCount + '</span>' : '') +
       '</a>'
     ).join('') +
     '<div class="sidebar-footer">' +
@@ -432,12 +433,14 @@ function initSidebarToggle() {
   btn.type = 'button';
   btn.id = 'sidebarToggle';
   btn.className = 'sidebar-toggle';
+  btn.innerHTML = icon('chevronLeft');
   shell.appendChild(btn);
 
   function apply() {
     shell.classList.toggle('is-collapsed', collapsed);
-    btn.innerHTML = icon(collapsed ? 'chevronRight' : 'chevronLeft');
-    btn.setAttribute('aria-label', collapsed ? 'Maximize sidebar' : 'Minimize sidebar');
+    const label = collapsed ? 'Maximize sidebar' : 'Minimize sidebar';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-expanded', String(!collapsed));
   }
   btn.addEventListener('click', function () {
@@ -609,7 +612,7 @@ function initMobileFilterDrawers() {
     const bars = tabProducts.querySelectorAll(':scope > .filter-bar');
     if (bars.length >= 1) {
       bars[0].classList.add('mobile-collapsible-bar', 'mobile-bar-primary');
-      if (bars[1]) bars[1].classList.add('mobile-collapsible-bar', 'mobile-bar-secondary');
+      if (bars[1]) bars[1].classList.add('mobile-bar-secondary', 'mobile-bike-bar');
 
       const searchWrap = bars[0].querySelector('.search-input');
       const filterBtn = document.createElement('button');
@@ -626,15 +629,15 @@ function initMobileFilterDrawers() {
       quickChips.setAttribute('role', 'group');
       quickChips.setAttribute('aria-label', 'Quick stock status filters');
       quickChips.innerHTML =
-        '<button type="button" class="chip active" data-qstatus="">All</button>' +
-        '<button type="button" class="chip" data-qstatus="In Stock">In Stock</button>' +
-        '<button type="button" class="chip" data-qstatus="Low Stock">Low Stock</button>' +
-        '<button type="button" class="chip" data-qstatus="Out of Stock">Out of Stock</button>' +
-        '<button type="button" class="chip" data-qstatus="Expiring Soon">Expiring</button>' +
-        '<button type="button" class="chip" data-qarchived="1">Archived</button>';
+        '<button type="button" class="chip mobile-quick-chip active" data-qstatus="">All</button>' +
+        '<button type="button" class="chip mobile-quick-chip" data-qstatus="In Stock">In Stock</button>' +
+        '<button type="button" class="chip mobile-quick-chip" data-qstatus="Low Stock">Low Stock</button>' +
+        '<button type="button" class="chip mobile-quick-chip" data-qstatus="Out of Stock">Out of Stock</button>' +
+        '<button type="button" class="chip mobile-quick-chip" data-qstatus="Expiring Soon">Expiring</button>' +
+        '<button type="button" class="chip mobile-quick-chip" data-qarchived="1">Archived</button>';
       bars[0].insertAdjacentElement('afterend', quickChips);
 
-      const footerHost = bars[1] || bars[0];
+      const footerHost = bars[0];
       const drawerFoot = document.createElement('div');
       drawerFoot.className = 'mobile-filter-footer';
       drawerFoot.innerHTML =
@@ -669,10 +672,12 @@ function initMobileFilterDrawers() {
 
       filterBtn.addEventListener('click', function () {
         const open = tabProducts.classList.toggle('filters-open');
+        bars[0].classList.toggle('filters-open', open);
         filterBtn.setAttribute('aria-expanded', String(open));
       });
       document.getElementById('invMobileApplyFilters').addEventListener('click', function () {
         tabProducts.classList.remove('filters-open');
+        bars[0].classList.remove('filters-open');
         filterBtn.setAttribute('aria-expanded', 'false');
       });
       document.getElementById('invMobileResetFilters').addEventListener('click', function () {
@@ -744,6 +749,7 @@ function initMobileFilterDrawers() {
       };
       filterBtn.addEventListener('click', function () {
         const open = tabHistory.classList.toggle('filters-open');
+        bar.classList.toggle('filters-open', open);
         filterBtn.setAttribute('aria-expanded', String(open));
       });
       ['filterHistType', 'filterHistReason'].forEach(function (id) {

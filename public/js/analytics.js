@@ -139,5 +139,16 @@ const Analytics = {
 
   outOfStockProducts(products) {
     return products.filter(p => !p.archived && Utils.getStockStatus(p.stock, p.reorderLevel) === 'Out of Stock');
+  },
+
+  inventoryAlertCount(products, expiryMonths) {
+    const months = Number(expiryMonths) || 3;
+    return products.filter(p => {
+      if (p.archived) return false;
+      const stockStatus = Utils.getStockStatus(p.stock, p.reorderLevel);
+      if (stockStatus === 'Low Stock' || stockStatus === 'Out of Stock') return true;
+      const expStatus = Utils.expiryStatus(p, months);
+      return expStatus === 'Expiring Soon' || expStatus === 'Expired';
+    }).length;
   }
 };

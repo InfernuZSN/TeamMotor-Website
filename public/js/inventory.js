@@ -601,15 +601,16 @@ Boot.ready(function () {
     const compat = p.compatibility.includes(UNIVERSAL_FIT) ? 'Universal (All Models)' : p.compatibility.join(', ');
 
     document.getElementById('viewModalHead').innerHTML =
-      '<div class="flex gap-12">' +
-        (Utils.productImage(p)
-          ? '<img src="' + Utils.productImage(p) + '" alt="' + Utils.escapeHtml(p.name) + '" style="width:96px;height:96px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border);flex-shrink:0;">'
-          : '<div class="cell-thumb thumb-' + p.category + '" style="width:60px;height:60px;flex-shrink:0;">' +
-            '<svg viewBox="0 0 24 24" style="width:28px;height:28px;stroke-width:1.6;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>') +
-        '<div><h2 style="margin-bottom:2px;">' + Utils.escapeHtml(p.name) + '</h2>' +
-        '<div class="text-muted" style="font-size:.85rem;">' + p.id + ' &middot; ' + Utils.escapeHtml(p.brand || '') + ' &middot; ' + (cat ? cat.name : '') + '</div>' +
-        '<span class="badge ' + Utils.statusClass(status) + '" style="margin-top:6px;">' + status + '</span>' +
-        (p.archived ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</div>' +
+      '<div class="vp-head">' +
+        '<div class="vp-media">' +
+          (Utils.productImage(p)
+            ? '<img src="' + Utils.productImage(p) + '" alt="' + Utils.escapeHtml(p.name) + '">'
+            : '<div class="cell-thumb thumb-' + p.category + '">' +
+              '<svg viewBox="0 0 24 24">' + Utils.categoryIcon(p.category) + '</svg></div>') +
+        '</div>' +
+        '<div class="vp-head-info"><h2>' + Utils.escapeHtml(p.name) + '</h2>' +
+        '<div class="flex gap-8" style="flex-wrap:wrap;"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span>' +
+        (p.archived ? '<span class="badge badge-neutral">Archived</span>' : '') + '</div></div>' +
       '</div>';
 
     const skuDisplay = p.sku || ('TM-' + p.id);
@@ -620,6 +621,8 @@ Boot.ready(function () {
         viewField('Cost Price', Utils.formatPHP(p.costPrice)) +
         viewField('Product ID', Utils.escapeHtml(p.id)) +
         viewField('SKU', Utils.escapeHtml(skuDisplay)) +
+        viewField('Brand', Utils.escapeHtml(p.brand || '\u2014')) +
+        viewField('Category', Utils.escapeHtml(cat ? cat.name : p.category || '\u2014')) +
         viewField('Compatibility', compat) +
         viewField('Model Year', Utils.escapeHtml(p.compatYears || 'All Years')) +
         viewField('Warranty', Utils.escapeHtml(warrantyLabel(p))) +
@@ -825,6 +828,8 @@ Boot.ready(function () {
   }
 
   /* ---------- Category management ---------- */
+  const PROTECTED_CATEGORY_ID = 'other-parts';
+
   function renderCategoryList() {
     const categories = Store.get('categories', []);
     const products = Store.get('products', []);
@@ -832,17 +837,23 @@ Boot.ready(function () {
       const count = products.filter(p => p.category === c.id && !p.archived).length;
       const inUse = products.some(p => p.category === c.id);
       const isInactive = c.status === 'Inactive';
+      const isProtected = c.id === PROTECTED_CATEGORY_ID;
+      const lockAttrs = isProtected ? ' disabled style="opacity:.4;cursor:not-allowed;" title="Protected default category"' : '';
       return '<div class="manage-filter-row">' +
         '<div class="manage-filter-info"><div style="font-weight:600;color:var(--ink);font-size:.88rem;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">' +
           Utils.escapeHtml(c.name) +
           '<span class="badge ' + (isInactive ? 'badge-danger' : 'badge-ok') + '" style="font-size:0.7rem;padding:2px 6px;">' + (isInactive ? 'Inactive' : 'Active') + '</span>' +
+          (isProtected ? '<span class="badge badge-neutral" style="font-size:0.7rem;padding:2px 6px;">Protected</span>' : '') +
         '</div>' +
         '<div class="hint" style="margin:2px 0 0;">Prefix: ' + c.prefix + ' &bull; ' + count + ' product' + (count === 1 ? '' : 's') + '</div></div>' +
         '<div class="manage-filter-actions">' +
-          '<button type="button" class="btn btn-secondary btn-sm" data-toggle-category="' + c.id + '" title="' + (isInactive ? 'Activate' : 'Deactivate') + ' category">' + (isInactive ? 'Activate' : 'Deactivate') + '</button>' +
-          '<button type="button" class="btn btn-secondary btn-sm" data-edit-category="' + c.id + '" title="Edit category name">Rename</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-toggle-category="' + c.id + '"' +
+            (isProtected ? lockAttrs : ' title="' + (isInactive ? 'Activate' : 'Deactivate') + ' category"') + '>' +
+            (isInactive ? 'Activate' : 'Deactivate') + '</button>' +
+          '<button type="button" class="btn btn-secondary btn-sm" data-edit-category="' + c.id + '"' +
+            (isProtected ? lockAttrs : ' title="Edit category name"') + '>Rename</button>' +
           '<button type="button" class="icon-btn" data-delete-category="' + c.id + '" aria-label="Delete category ' + Utils.escapeHtml(c.name) + '"' +
-            (inUse ? ' title="In use \u2014 move its products to another category first" style="opacity:.45;"' : ' title="Delete category"') + '>' +
+            (isProtected ? lockAttrs : (inUse ? ' title="In use \u2014 move its products to another category first" style="opacity:.45;"' : ' title="Delete category"')) + '>' +
             '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></svg></button>' +
         '</div>' +
       '</div>';
@@ -852,6 +863,7 @@ Boot.ready(function () {
   async function editCategory(categoryId) {
     const cat = Store.get('categories', []).find(c => c.id === categoryId);
     if (!cat) return;
+    if (cat.id === PROTECTED_CATEGORY_ID) { showToast('The "Others" category is a protected default and cannot be renamed.', 'danger'); return; }
     const newName = prompt('Enter new category name:', cat.name);
     if (newName === null) return;
     const trimmed = newName.trim();
@@ -866,6 +878,7 @@ Boot.ready(function () {
   async function toggleCategoryStatus(categoryId) {
     const cat = Store.get('categories', []).find(c => c.id === categoryId);
     if (!cat) return;
+    if (cat.id === PROTECTED_CATEGORY_ID) { showToast('The "Others" category is a protected default and cannot be deactivated.', 'danger'); return; }
     const newStatus = cat.status === 'Inactive' ? 'Active' : 'Inactive';
     try {
       await Api.put('/categories/' + encodeURIComponent(categoryId), { status: newStatus });
@@ -879,6 +892,10 @@ Boot.ready(function () {
   function deleteCategory(categoryId) {
     const cat = Store.get('categories', []).find(c => c.id === categoryId);
     if (!cat) return;
+    if (cat.id === PROTECTED_CATEGORY_ID) {
+      showToast('The "Others" category is a protected default and cannot be deleted.', 'danger');
+      return;
+    }
     const used = Store.get('products', []).filter(p => p.category === categoryId).length;
     if (used) {
       showToast('"' + cat.name + '" still has ' + used + ' product' + (used === 1 ? '' : 's') + ' (archived ones count too). Move them to another category first (Edit product \u2192 Category).', 'danger');

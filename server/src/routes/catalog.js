@@ -16,12 +16,15 @@ const motoBrands = express.Router();
 const products = express.Router();
 
 /* ---------------- categories ---------------- */
+const PROTECTED_CATEGORY_ID = 'other-parts';
 categories.get('/', wrap(async (req, res) => res.json(await Category.find({}).sort({ name: 1 }).lean())));
 categories.post('/', adminOnly, wrap(async (req, res) => {
   const name = String(req.body.name || '').trim();
   if (!name) throw bad('Category name is required.');
   const id = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  if (await Category.findOne({ id })) throw conflict('That category already exists.');
+  if (id === PROTECTED_CATEGORY_ID || id === 'others' || await Category.findOne({ $or: [{ id }, { name: new RegExp('^' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i') }] })) {
+    throw conflict('That category already exists.');
+  }
   const taken = (await Category.find({}).select('prefix')).map(c => c.prefix);
   let prefix = (req.body.prefix || name.replace(/[^A-Za-z]/g, '').slice(0, 3)).toUpperCase().padEnd(3, 'X');
   for (let i = 0; taken.includes(prefix) && i < 26; i++) prefix = prefix.slice(0, 2) + String.fromCharCode(65 + i);
@@ -33,6 +36,9 @@ categories.post('/', adminOnly, wrap(async (req, res) => {
 categories.put('/:id', adminOnly, wrap(async (req, res) => {
   const cat = await Category.findOne({ id: req.params.id });
   if (!cat) throw notFound('Category not found.');
+  if (cat.id === PROTECTED_CATEGORY_ID) {
+    throw bad('The "Others" category is a protected default and cannot be renamed or deactivated.');
+  }
   const set = {};
   if (req.body.name !== undefined) {
     const name = String(req.body.name || '').trim();
@@ -55,6 +61,9 @@ categories.put('/:id', adminOnly, wrap(async (req, res) => {
 categories.delete('/:id', adminOnly, wrap(async (req, res) => {
   const cat = await Category.findOne({ id: req.params.id });
   if (!cat) throw notFound('Category not found.');
+  if (cat.id === PROTECTED_CATEGORY_ID) {
+    throw bad('The "Others" category is a protected default and cannot be deleted.');
+  }
   const used = await Product.countDocuments({ category: cat.id });
   if (used) throw conflict('"' + cat.name + '" still has ' + used + ' product(s) (archived ones count). Move them first.');
   await cat.deleteOne();

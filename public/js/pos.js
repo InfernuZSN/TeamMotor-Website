@@ -216,12 +216,20 @@ Boot.ready(function () {
       '<span class="pt-tile-bottom"><span class="pt-tile-price">' + pesoShort(p.sellingPrice) + '</span>' + stockBadge(p, remaining) + '</span>' +
     '</button>';
   }
+  const pgProducts = createPager($('ptPager'), function () {
+    renderGrid();
+    const g = $('ptGrid'), w = $('ptGridWrap') || document.querySelector('.pt-grid-wrap');
+    if (g) g.scrollTop = 0;
+    if (w) w.scrollTop = 0;
+  });
+
   function renderGrid() {
     const q = searchText();
-    const rows = visibleProducts().sort(function (a, b) {
+    const all = visibleProducts().sort(function (a, b) {
       const da = a.stock <= 0 || isExpired(a) ? 1 : 0, db = b.stock <= 0 || isExpired(b) ? 1 : 0;
       return da - db || (activeCat && !q ? 0 : catRank(a.category) - catRank(b.category)) || a.name.localeCompare(b.name);   // in All / search, group by category so the colours cluster
     });
+    const rows = pgProducts.slice(all, [activeCat, q, fit.brand, fit.model].join('|'));
     const grid = $('ptGrid');
     if (!rows.length) {
       const why = q ? 'Nothing matches \u201C' + esc($('ptSearch').value.trim()) + '\u201D.' :

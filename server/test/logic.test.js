@@ -526,6 +526,17 @@ test('Hybrid Product ID: removes barcode variable from product collection, enfor
   assert.ok(!catalogJs.includes('barcode'), 'Backend catalog routes must not reference barcode');
 });
 
+test('Protected Others Category: prevents renaming, deactivating, or deleting other-parts across UI and API', () => {
+  const catalogJs = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogJs.includes("PROTECTED_CATEGORY_ID = 'other-parts'"), 'catalog.js must mark other-parts as protected');
+  assert.ok(catalogJs.includes('cannot be renamed or deactivated'), 'PUT /categories/:id must block renaming/deactivating Others');
+  assert.ok(catalogJs.includes('cannot be deleted'), 'DELETE /categories/:id must block deleting Others');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes("PROTECTED_CATEGORY_ID = 'other-parts'"), 'inventory.js must mark other-parts as protected in Manage Categories');
+  assert.ok(invJs.includes('Protected default category'), 'inventory.js must disable category actions for Others');
+});
+
 
 
 

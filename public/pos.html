@@ -25,7 +25,7 @@
     <button type="button" class="pt-iconbtn" id="hamburgerBtn" aria-label="Open menu"><svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
 
     <div class="pt-brand">
-      <img src="img/receipt-logo.png" alt="" class="pt-brand-logo" width="36" height="36">
+      <img src="img/favicon.png?v=4" alt="" class="pt-brand-logo" width="36" height="36" decoding="async">
       <div class="pt-brand-text"><strong id="ptShopName">TeamMotor</strong><span>POS terminal</span></div>
     </div>
 
@@ -92,8 +92,9 @@
       </div>
       <div class="pt-scanmsg" id="ptScanMsg" role="status" aria-live="polite"></div>
 
-      <div class="pt-grid-wrap">
+      <div class="pt-grid-wrap" id="ptGridWrap">
         <div class="pt-grid" id="ptGrid"></div>
+        <div id="ptPager"></div>
       </div>
     </section>
 
