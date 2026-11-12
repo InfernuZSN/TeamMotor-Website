@@ -309,6 +309,7 @@
     stroke-linecap: round;
   }
   .mobile-filter-btn.has-active,
+  .mobile-filter-btn.has-active-filters,
   .mobile-filter-btn[aria-expanded="true"] {
     border-color: var(--ink);
     background: var(--paper);
@@ -855,6 +856,70 @@
   .btn-register {
     width: 100%;
     margin-top: 2rem;
+  }
+}
+
+/* ---------- Audit Trail filter bar (mobile) ----------
+   Two-column grid: full-width search + Filters toggle, then a collapsible drawer with
+   [Action | Sensitive] and [From | To] rows at a uniform 44px height, then Export CSV. */
+@media (max-width: 768px) {
+  .au-filter-bar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: .5rem;
+    width: 100%;
+    align-items: end !important;
+  }
+  .au-filter-bar > .search-input,
+  .au-filter-bar > .mobile-filter-btn {
+    grid-column: 1 / -1;
+    max-width: none !important;
+    width: 100%;
+  }
+  .au-filter-bar > #auAction,
+  .au-filter-bar > .au-sens {
+    width: 100%;
+    min-width: 0;
+    height: 2.75rem;
+    min-height: 2.75rem;
+    margin: 0;
+    box-sizing: border-box;
+  }
+  .au-filter-bar > .au-sens {
+    justify-content: center;
+    padding: 0 .625rem;
+    white-space: nowrap;
+  }
+  .au-filter-bar > .au-sens input { margin: 0; }
+  .au-filter-bar > .au-date-group {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .25rem;
+    height: auto;
+    min-width: 0;
+  }
+  .au-filter-bar .au-date-label {
+    font-size: .7rem;
+    font-weight: 700;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--steel);
+  }
+  .au-filter-bar .au-date-input {
+    width: 100%;
+    min-width: 0;
+    height: 2.75rem;
+  }
+  /* Collapsed by default — the Filters button reveals the drawer */
+  .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > #auAction,
+  .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > .au-sens,
+  .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > .au-date-group {
+    display: none !important;
+  }
+  .page-header:has(.au-filter-bar) .actions .btn {
+    flex: 1 1 100%;
+    min-height: 2.75rem;
   }
 }
 
