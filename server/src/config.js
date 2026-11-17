@@ -1,4 +1,5 @@
 const path = require('path');
+const crypto = require('crypto');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const env = process.env.NODE_ENV || 'development';
@@ -24,9 +25,20 @@ const config = {
   }
 };
 
-if (!config.jwtSecret || config.jwtSecret.length < 24 || /change-me/i.test(config.jwtSecret)) {
-  config.jwtSecret = 'teammotor_production_jwt_secret_key_9bfb90c0_secure_token_key_2026';
-  console.warn('[config] JWT_SECRET missing or default — using strong production fallback secret.');
+function validateJwtSecret(secret, isProd) {
+  const s = String(secret || '').trim();
+  const isWeak = !s || s.length < 32 || /change-me|default|placeholder|teammotor_production_jwt_secret/i.test(s);
+  if (!isWeak) return s;
+  if (isProd) {
+    throw new Error('[config] FATAL: JWT_SECRET must be configured with a strong secret (at least 32 characters) in production.');
+  }
+  return crypto.randomBytes(32).toString('hex');
 }
+
+if (!config.jwtSecret || config.jwtSecret.length < 32 || /change-me|default|placeholder|teammotor_production_jwt_secret/i.test(config.jwtSecret)) {
+  config.jwtSecret = validateJwtSecret(config.jwtSecret, config.isProd);
+  console.warn('[config] Development mode: JWT_SECRET missing or weak — generated ephemeral per-boot secret.');
+}
+config.validateJwtSecret = validateJwtSecret;
 
 module.exports = config;

@@ -194,7 +194,8 @@ Boot.ready(function () {
     const contact = formatPhMobile(fieldValue('contact'));
     try {
       user = await Api.put('/users/me/profile', { name: name, email: email, birthDate: fieldValue('birthDate'), contactNumber: contact });
-      await Store.refresh();
+      Store.upsertItem('users', user);
+      if (Store.syncInBackground) Store.syncInBackground();
     } catch (err) {
       if (/email/i.test(err.message)) { setFieldError('email', err.message); FIELDS.email.input.focus(); }
       else showToast(err.message, 'danger');

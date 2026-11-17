@@ -81,9 +81,9 @@ bootstrap.get('/', wrap(async (req, res) => {
     suppliers,
     products,
     customers,
-    sales,
+    salesFull,
     txns,
-    warranties,
+    warrantiesFull,
     notifs,
     users,
     shifts,
@@ -96,11 +96,11 @@ bootstrap.get('/', wrap(async (req, res) => {
     Supplier.find({}).sort({ id: 1 }).lean(),
     Product.find({}).sort({ id: 1 }).lean(),
     Customer.find({}).sort({ id: 1 }).lean(),
-    Sale.find({}).sort({ date: -1 }).limit(300).lean(),
+    Sale.find({}).sort({ date: -1 }).limit(300).lean().then(withItems),
     InventoryTransaction.find({}).sort({ date: -1 }).limit(300).lean(),
-    Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean(),
+    Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean().then(withClaims),
     Notification.find({}).sort({ date: -1 }).lean(),
-    isAdmin ? User.find({}).sort({ id: 1 }).lean() : User.find({ id: req.user.id }).lean(),
+    isAdmin ? User.find({}).sort({ id: 1 }).lean() : (req.userDoc ? Promise.resolve([req.userDoc]) : User.find({ id: req.user.id }).lean()),
     isAdmin ? Shift.find({}).sort({ clockIn: -1 }).limit(300).lean() : Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(100).lean(),
     Brand.find({}).sort({ name: 1 }).lean(),
     MotorcycleBrand.find({}).sort({ name: 1 }).lean(),
@@ -110,11 +110,7 @@ bootstrap.get('/', wrap(async (req, res) => {
     ])
   ]);
 
-  const [salesFull, warrantiesFull, expiry] = await Promise.all([
-    withItems(sales),
-    withClaims(warranties),
-    expiryReport(settingsDoc, products)
-  ]);
+  const expiry = await expiryReport(settingsDoc, products);
 
   warrantiesFull.forEach(w => { w.status = warrantyStatus(w, w.claims); });
   const sm = new Map(stats.map(s => [s._id, s]));
@@ -127,7 +123,7 @@ bootstrap.get('/', wrap(async (req, res) => {
     });
   });
 
-  const me = users.find(u => u.id === req.user.id) || await User.findOne({ id: req.user.id }).lean();
+  const me = req.userDoc || users.find(u => u.id === req.user.id) || await User.findOne({ id: req.user.id }).lean();
 
   res.json({
     me,

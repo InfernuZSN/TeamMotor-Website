@@ -6,6 +6,9 @@ const { audit } = require('../utils/audit');
 const { withClaims } = require('../services/serialize');
 const { warrantyStatus } = require('../utils/warranty');
 const { refreshNotifications } = require('../services/notifications');
+const { today } = require('../utils/dates');
+
+const ALLOWED_CLAIM_STATUSES = ['Pending', 'Approved', 'Resolved', 'Rejected'];
 
 router.get('/', wrap(async (req, res) => {
   const list = await withClaims(await Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean());
@@ -19,12 +22,22 @@ router.post('/:id/claims', wrap(async (req, res) => {
   if (w.status === 'Voided') throw conflict('This warranty belongs to a voided sale.');
   const description = String(req.body.description || '').trim(), resolution = String(req.body.resolution || '').trim();
   if (!description || !resolution) throw bad('Defect description and action taken are both required.');
-  const status = ['Pending', 'Approved', 'Resolved', 'Rejected'].includes(req.body.status) ? req.body.status : 'Approved';
-  const claim = await WarrantyClaim.create({
-    id: await nextId('CLM', 3), warrantyId: w.id, date: req.body.date || new Date().toISOString().slice(0, 10),
-    description, resolution, status, staff: req.user.name
-  });
-  await audit(req, 'warranty.claim', 'warranty', w.id, { claimId: claim.id, status, productName: w.productName || null, saleId: w.saleId || null, description: description.slice(0, 200), resolution: resolution.slice(0, 200) });
+  let status = 'Pending';
+  if (req.body.status !== undefined && req.body.status !== null && String(req.body.status).trim() !== '') {
+    const rawStatus = String(req.body.status).trim();
+    if (!ALLOWED_CLAIM_STATUSES.includes(rawStatus)) {
+      throw bad('Invalid warranty claim status. Allowed values: Pending, Approved, Resolved, Rejected.');
+    }
+    status = rawStatus;
+  }
+  const claimId = await nextId('CLM', 3);
+  const [claim] = await Promise.all([
+    WarrantyClaim.create({
+      id: claimId, warrantyId: w.id, date: req.body.date || today(),
+      description, resolution, status, staff: req.user.name
+    }),
+    audit(req, 'warranty.claim', 'warranty', w.id, { claimId, status, productName: w.productName || null, saleId: w.saleId || null, description: description.slice(0, 200), resolution: resolution.slice(0, 200) })
+  ]);
   refreshNotifications().catch(() => {});
   res.status(201).json(claim);
 }));

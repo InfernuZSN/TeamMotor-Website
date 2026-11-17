@@ -124,7 +124,7 @@ Boot.ready(function () {
     document.getElementById('claimDate').value = Analytics.dateKey(Utils.demoNow().toISOString());
     document.getElementById('claimDescription').value = '';
     document.getElementById('claimResolution').value = '';
-    document.getElementById('claimStatus').value = 'Approved';
+    document.getElementById('claimStatus').value = 'Pending';
 
     document.getElementById('warrantyViewOverlay').classList.remove('open');
     document.getElementById('warrantyClaimOverlay').classList.add('open');
@@ -143,11 +143,18 @@ Boot.ready(function () {
       const claim = await Api.post('/warranties/' + encodeURIComponent(warId) + '/claims', {
         date: document.getElementById('claimDate').value, status: document.getElementById('claimStatus').value, description: desc, resolution: res
       });
-      await Store.refresh();
+      const existing = Store.get('warranties', []).find(function (x) { return x.id === warId; });
+      if (existing) {
+        const claims = (existing.claims || []).concat([claim]);
+        const nextW = Object.assign({}, existing, { claims: claims });
+        nextW.status = Utils.getWarrantyStatus(nextW);
+        Store.upsertItem('warranties', nextW);
+      }
       document.getElementById('warrantyClaimOverlay').classList.remove('open');
       renderStats();
       renderTable();
       if (window.Notifications) Notifications.render();
+      if (Store.syncInBackground) Store.syncInBackground();
       showToast('Warranty claim successfully recorded (' + claim.id + ').', 'ok');
     } catch (err) { showToast(err.message, 'danger'); }
   }
@@ -190,6 +197,10 @@ Boot.ready(function () {
       overlay.addEventListener('click', function (e) {
         if (e.target === overlay) overlay.classList.remove('open');
       });
+    });
+    window.addEventListener('store:refreshed', function () {
+      renderStats();
+      renderTable();
     });
   });
 });

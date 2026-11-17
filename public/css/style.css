@@ -455,6 +455,7 @@ button { font-family: inherit; }
 .table-card { background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .86rem; min-width: 38.75rem; }
+thead, thead tr { background: var(--ink); }
 thead th {
   text-align: left; font-family: var(--font-label); font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
   color: #fff; font-weight: 500; padding: 0.8125rem 1rem; border-bottom: 1px solid var(--ink);
@@ -1572,6 +1573,7 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
   .page-inventory .tab-panel.active > .filter-bar { flex: 0 0 auto; }
   .page-inventory .tab-panel.active > .table-card { flex: 1 1 auto; min-height: 14rem; display: flex; flex-direction: column; }
   .page-inventory .table-card > .table-wrap { flex: 1 1 auto; min-height: 0; max-height: none; overflow-y: auto; overflow-x: hidden; }
+  .page-inventory .table-card > .table-wrap > table:has(.empty-state) { height: 100%; }
 }
 .page-inventory table { width: 100%; min-width: 0; table-layout: fixed; }
 .page-inventory thead th, .page-inventory tbody td { overflow: hidden; text-overflow: ellipsis; }
@@ -1583,15 +1585,16 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .page-inventory .cell-product > div:last-child { min-width: 0; flex: 1 1 auto; }
 .page-inventory .cell-product .name, .page-inventory .cell-product .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-inventory .cell-product .name .badge { margin-left: 0.25rem; }
-.page-inventory .col-actions { padding-left: 0.25rem; padding-right: 0.25rem; }
+.page-inventory .col-actions { padding-left: 0.25rem; padding-right: 0.5rem; }
 .page-inventory .col-actions .flex { gap: 2px; flex-wrap: nowrap; }
 .page-inventory .col-actions .icon-btn { width: 1.625rem; height: 1.625rem; }
+.page-inventory .col-actions .icon-btn[data-delete-prod]:hover { border-color: var(--danger); background: var(--danger-bg); }
 .page-inventory td.col-status { white-space: normal; }
 .page-inventory td.col-status .badge { margin: 0 0.125rem 0.125rem 0; }
 /* Products table columns: 1 Product (takes the rest) 2 Brand 3 Category 4 Compatibility 5 Supplier 6 Price 7 Stock 8 Status 9 Last Updated 10 Actions */
 #tab-products th:nth-child(2) { width: 5.5rem; } #tab-products th:nth-child(3) { width: 6rem; } #tab-products th:nth-child(4) { width: 7.5rem; }
 #tab-products th:nth-child(5) { width: 7.5rem; } #tab-products th:nth-child(6) { width: 5rem; } #tab-products th:nth-child(7) { width: 4.25rem; }
-#tab-products th:nth-child(8) { width: 8rem; } #tab-products th:nth-child(9) { width: 4.5rem; } #tab-products th:nth-child(10) { width: 11rem; }
+#tab-products th:nth-child(8) { width: 8rem; } #tab-products th:nth-child(9) { width: 4.5rem; } #tab-products th:nth-child(10) { width: 13.25rem; }
 @media (max-width: 1599px) { #tab-products th:nth-child(9), #tab-products td:nth-child(9) { display: none; } }
 @media (max-width: 1399px) { #tab-products th:nth-child(2), #tab-products td:nth-child(2) { display: none; } }
 @media (max-width: 1179px) { #tab-products th:nth-child(5), #tab-products td:nth-child(5) { display: none; } }

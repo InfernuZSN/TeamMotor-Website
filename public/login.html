@@ -466,23 +466,9 @@ Boot.ready(function () {
             const googleBtn = document.querySelector('.btn-google');
             await Utils.withBusy(googleBtn, async function () {
               try {
-                let googleEmail = '';
-                try {
-                  const gInfoRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: 'Bearer ' + resp.access_token }
-                  });
-                  if (gInfoRes.ok) {
-                    const gInfo = await gInfoRes.json();
-                    googleEmail = (gInfo.email || '').trim().toLowerCase();
-                  }
-                } catch (e) {
-                  console.warn('[Google Auth] Client fetch userinfo failed, backend will verify:', e);
-                }
-
-                console.log('[Google Auth] Authenticating with TeamMotor...', { email: googleEmail });
+                console.log('[Google Auth] Authenticating with TeamMotor...');
                 const res = await Api.post('/auth/google', {
-                  accessToken: resp.access_token,
-                  email: googleEmail
+                  accessToken: resp.access_token
                 });
                 console.log('[Google Auth] Authenticated successfully:', res.user);
                 setSession(res.token, res.user);

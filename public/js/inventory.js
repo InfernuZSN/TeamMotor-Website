@@ -5,14 +5,23 @@ Boot.ready(function () {
   if (!initShell('inventory')) return;
   const isAdmin = getSession().role === 'Admin';   // Staff don't see admin buttons; the server enforces it regardless
   const expiryMonths = function () { return (Store.get('settings', {}).expiryWarningMonths) || 3; };
-  async function afterChange() {
-    await Store.refresh();
-    populateStaticSelects(); populateCompatBrandSelect(); renderProductsTable(); renderHistoryTable();
-    renderCategoryList(); renderBrandList(); renderSupplierList(); renderMotoBrandList();
+  function afterChange(scope) {
+    populateStaticSelects();
+    populateCompatBrandSelect();
+    renderProductsTable();
+    renderHistoryTable();
+    const filterModal = document.getElementById('categoryModalOverlay');
+    if (scope === 'filters' || (filterModal && filterModal.classList.contains('open'))) {
+      renderCategoryList();
+      renderBrandList();
+      renderSupplierList();
+      renderMotoBrandList();
+    }
     const addBtn = document.getElementById('addProductBtn');
     if (addBtn) { addBtn.style.display = ''; addBtn.disabled = false; }
     if (window.Notifications) Notifications.render();
     renderSidebar('inventory');
+    if (Store.syncInBackground) Store.syncInBackground();
   }
   let editingProductId = null;
   let compatSelections = [];
@@ -174,6 +183,14 @@ Boot.ready(function () {
   const pgHistory = createPager(document.getElementById('histPager'), function () { renderHistoryTable(); });
   const filterSig = function (ids) { return ids.map(function (id) { return document.getElementById(id).value; }).join('|'); };
 
+  function visibleColSpan(tbody, fallback) {
+    const table = tbody && tbody.closest('table');
+    const ths = table ? Array.from(table.querySelectorAll('thead th')) : [];
+    if (!ths.length) return fallback;
+    const vis = ths.filter(function (th) { return window.getComputedStyle(th).display !== 'none'; }).length;
+    return vis || fallback;
+  }
+
   function renderProductsTable() {
     const categories = Store.get('categories', []);
     const suppliers = Store.get('suppliers', []);
@@ -181,7 +198,7 @@ Boot.ready(function () {
     const rows = pgProducts.slice(all, filterSig(['invSearch', 'filterCategory', 'filterStatus', 'filterBrand', 'filterModel', 'filterProductBrand', 'filterSupplier', 'sortBy']) + '|' + showArchived);
     const tbody = document.getElementById('productsTbody');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state">' + icon('search') + '<h3>' + (showArchived ? 'No archived products' : 'No products match your filters') + '</h3><p>' + (showArchived ? 'Nothing has been archived yet.' : 'Try a different search or clear filters.') + '</p></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="' + visibleColSpan(tbody, 10) + '"><div class="empty-state">' + icon('search') + '<h3>' + (showArchived ? 'No archived products' : 'No products match your filters') + '</h3><p>' + (showArchived ? 'Nothing has been archived yet.' : 'Try a different search or clear filters.') + '</p></div></td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(p => {
@@ -244,7 +261,7 @@ Boot.ready(function () {
     const rows = pgHistory.slice(filtered, filterSig(['histSearch', 'filterHistType', 'filterHistReason']));
     const tbody = document.getElementById('historyTbody');
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="9"><div class="empty-state">' + icon('history') + '<h3>No history yet</h3></div></td></tr>';
+      tbody.innerHTML = '<tr><td colspan="' + visibleColSpan(tbody, 9) + '"><div class="empty-state">' + icon('history') + '<h3>No history yet</h3></div></td></tr>';
       return;
     }
     tbody.innerHTML = rows.map(t => {
@@ -539,15 +556,17 @@ Boot.ready(function () {
     await Utils.withBusy(document.getElementById('saveProductBtn'), async function () {
       try {
         if (editingProductId) {
-          await Api.put('/products/' + encodeURIComponent(editingProductId), payload);
+          const updated = await Api.put('/products/' + encodeURIComponent(editingProductId), payload);
+          Store.upsertItem('products', updated);
           showToast('Updated ' + payload.name + '.', 'ok');
         } else {
           payload.stock = parseInt(document.getElementById('pStock').value, 10) || 0;   // opening stock (recorded as a Stock In transaction)
           const created = await Api.post('/products', payload);
+          Store.upsertItem('products', created);
           showToast('Added ' + created.name + ' (' + created.id + ').', 'ok');
         }
         closeModal('productModalOverlay');
-        await afterChange();
+        afterChange('products');
       } catch (err) { showToast(err.message, 'danger'); }
     });
   }
@@ -733,8 +752,13 @@ Boot.ready(function () {
     await Utils.withBusy(document.getElementById('saveStockBtn'), async function () {
       try {
         const r = await Api.post(stockModalType === 'in' ? '/inventory/stock-in' : '/inventory/stock-out', body);
+        if (r && r.product) Store.upsertItem('products', r.product);
+        if (r && r.transaction) Store.upsertItem('inventoryTransactions', r.transaction, { prepend: true });
+        if (stockModalType === 'in' && body.supplierId) {
+          Store.upsertItem('suppliers', { id: body.supplierId, lastDelivery: String(body.date || Utils.todayStr()).slice(0, 10) });
+        }
         closeModal('stockModalOverlay');
-        await afterChange();
+        afterChange('products');
         showToast((stockModalType === 'in' ? 'Stocked in ' : 'Stocked out ') + qty + ' units of ' + r.product.name + '. (' + r.transaction.previousStock + ' \u2192 ' + r.transaction.newStock + ')', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }    // e.g. someone sold the stock a moment ago
     });
@@ -747,6 +771,7 @@ Boot.ready(function () {
     document.getElementById('adjProductId').value = p.id;
     document.getElementById('adjProductName').textContent = p.name + ' (' + p.id + ') \u2014 system stock: ' + p.stock;
     document.getElementById('adjQty').value = p.stock;
+    document.getElementById('adjQty').dataset.expectedStock = String(p.stock);
     document.getElementById('adjReason').value = '';
     document.getElementById('adjError').textContent = '';
     openModal('adjustModalOverlay');
@@ -758,9 +783,14 @@ Boot.ready(function () {
     if (reason.length < 3) { document.getElementById('adjError').textContent = 'A reason is required.'; return; }
     await Utils.withBusy(document.getElementById('adjSaveBtn'), async function () {
       try {
-        const r = await Api.post('/inventory/adjust', { productId: document.getElementById('adjProductId').value, newQuantity: newQuantity, reason: reason });
+        const expectedStockVal = parseInt(document.getElementById('adjQty').dataset.expectedStock, 10);
+        const payload = { productId: document.getElementById('adjProductId').value, newQuantity: newQuantity, reason: reason };
+        if (!isNaN(expectedStockVal) && expectedStockVal >= 0) payload.expectedStock = expectedStockVal;
+        const r = await Api.post('/inventory/adjust', payload);
+        if (r && r.product) Store.upsertItem('products', r.product);
+        if (r && r.transaction) Store.upsertItem('inventoryTransactions', r.transaction, { prepend: true });
         closeModal('adjustModalOverlay');
-        await afterChange();
+        afterChange('products');
         showToast('Stock adjusted: ' + r.transaction.previousStock + ' \u2192 ' + r.transaction.newStock + '. Logged in history and audit trail.', 'ok');
       } catch (err) { document.getElementById('adjError').textContent = err.message; }
     });
@@ -804,8 +834,9 @@ Boot.ready(function () {
     showConfirm('Delete "' + product.name + '"?', 'Are you sure you want to permanently delete this product from the inventory? This cannot be undone.', async function () {
       try {
         await Api.del('/products/' + encodeURIComponent(productId));
+        Store.removeItem('products', productId);
         closeModal('productModalOverlay');
-        await afterChange();
+        afterChange('products');
         showToast('Deleted ' + product.name + '.', 'ok');
       } catch (err) {
         showToast(err.message, 'danger');
@@ -816,14 +847,24 @@ Boot.ready(function () {
     const product = Store.get('products', []).find(p => p.id === productId);
     if (!product) return;
     showConfirm('Archive ' + product.name + '?', 'Archived products are hidden from POS, the storefront, and default reports, but their history is kept. You can unarchive anytime.', async function () {
-      try { await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: true }); await afterChange(); showToast(product.name + ' archived.', 'ok'); }
+      try {
+        const p = await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: true });
+        Store.upsertItem('products', p);
+        afterChange('products');
+        showToast(product.name + ' archived.', 'ok');
+      }
       catch (err) { showToast(err.message, 'danger'); }
     });
   }
   async function unarchiveProduct(productId) {
     const product = Store.get('products', []).find(p => p.id === productId);
     if (!product) return;
-    try { await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: false }); await afterChange(); showToast(product.name + ' unarchived.', 'ok'); }
+    try {
+      const p = await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: false });
+      Store.upsertItem('products', p);
+      afterChange('products');
+      showToast(product.name + ' unarchived.', 'ok');
+    }
     catch (err) { showToast(err.message, 'danger'); }
   }
 
@@ -869,8 +910,9 @@ Boot.ready(function () {
     const trimmed = newName.trim();
     if (!trimmed) { showToast('Category name cannot be empty.', 'danger'); return; }
     try {
-      await Api.put('/categories/' + encodeURIComponent(categoryId), { name: trimmed });
-      await afterChange(); renderCategoryList();
+      const updated = await Api.put('/categories/' + encodeURIComponent(categoryId), { name: trimmed });
+      Store.upsertItem('categories', updated);
+      afterChange('filters');
       showToast('Renamed category to "' + trimmed + '".', 'ok');
     } catch (err) { showToast(err.message, 'danger'); }
   }
@@ -881,8 +923,9 @@ Boot.ready(function () {
     if (cat.id === PROTECTED_CATEGORY_ID) { showToast('The "Others" category is a protected default and cannot be deactivated.', 'danger'); return; }
     const newStatus = cat.status === 'Inactive' ? 'Active' : 'Inactive';
     try {
-      await Api.put('/categories/' + encodeURIComponent(categoryId), { status: newStatus });
-      await afterChange(); renderCategoryList();
+      const updated = await Api.put('/categories/' + encodeURIComponent(categoryId), { status: newStatus });
+      Store.upsertItem('categories', updated);
+      afterChange('filters');
       showToast((newStatus === 'Active' ? 'Activated' : 'Deactivated') + ' category "' + cat.name + '".', 'ok');
     } catch (err) { showToast(err.message, 'danger'); }
   }
@@ -904,7 +947,8 @@ Boot.ready(function () {
     showConfirm('Delete the "' + cat.name + '" category?', 'It has no products. This removes it from Inventory and POS. You can add it again later.', async function () {
       try {
         await Api.del('/categories/' + encodeURIComponent(categoryId));
-        await afterChange(); renderCategoryList();
+        Store.removeItem('categories', categoryId);
+        afterChange('filters');
         showToast('Deleted category "' + cat.name + '".', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }
     });
@@ -952,8 +996,12 @@ Boot.ready(function () {
     const trimmed = newName.trim();
     if (!trimmed) { showToast('Brand name cannot be empty.', 'danger'); return; }
     try {
-      await Api.put('/brands/' + encodeURIComponent(brandId), { name: trimmed });
-      await afterChange();
+      const updated = await Api.put('/brands/' + encodeURIComponent(brandId), { name: trimmed });
+      Store.upsertItem('brands', updated);
+      Store.set('products', Store.get('products', []).map(function (p) {
+        return p.brand === brand.name ? Object.assign({}, p, { brand: trimmed }) : p;
+      }));
+      afterChange('filters');
       showToast('Renamed brand to "' + trimmed + '".', 'ok');
     } catch (err) { showToast(err.message, 'danger'); }
   }
@@ -969,7 +1017,8 @@ Boot.ready(function () {
     showConfirm('Delete the "' + brand.name + '" brand?', 'It has no products. This removes it from the Brand dropdown and filters. You can add it again later.', async function () {
       try {
         await Api.del('/brands/' + encodeURIComponent(brandId));
-        await afterChange();
+        Store.removeItem('brands', brandId);
+        afterChange('filters');
         showToast('Deleted brand "' + brand.name + '".', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }
     });
@@ -1032,7 +1081,8 @@ Boot.ready(function () {
     showConfirm('Delete "' + mb.name + '" from Motorcycle Compatibility?', 'This removes ' + mb.name + ' and its models from the compatibility selectors. You can add it again later.', async function () {
       try {
         await Api.del('/moto-brands/' + encodeURIComponent(motoId));
-        await afterChange();
+        Store.removeItem('motoBrands', motoId);
+        afterChange('filters');
         showToast('Deleted motorcycle brand "' + mb.name + '".', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }
     });
@@ -1045,9 +1095,10 @@ Boot.ready(function () {
     const model = input ? input.value.trim() : '';
     if (!model) { showToast('Enter a model name first.', 'danger'); return; }
     try {
-      await Api.post('/moto-brands/' + encodeURIComponent(motoId) + '/models', { model: model });
+      const updated = await Api.post('/moto-brands/' + encodeURIComponent(motoId) + '/models', { model: model });
       if (input) input.value = '';
-      await afterChange();
+      Store.upsertItem('motoBrands', updated);
+      afterChange('filters');
       showToast('Added model "' + model + '" to ' + mb.name + '.', 'ok');
     } catch (err) { showToast(err.message, 'danger'); }
   }
@@ -1063,8 +1114,9 @@ Boot.ready(function () {
     }
     showConfirm('Remove model "' + combo + '"?', 'It is not used by any products. You can add it back anytime.', async function () {
       try {
-        await Api.del('/moto-brands/' + encodeURIComponent(motoId) + '/models/' + encodeURIComponent(model));
-        await afterChange();
+        const updated = await Api.del('/moto-brands/' + encodeURIComponent(motoId) + '/models/' + encodeURIComponent(model));
+        Store.upsertItem('motoBrands', updated);
+        afterChange('filters');
         showToast('Removed model "' + combo + '".', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }
     });
@@ -1118,7 +1170,8 @@ Boot.ready(function () {
     showConfirm('Delete supplier "' + s.name + '"?', 'It has no products linked. This removes it from the Supplier list and filters. You can add it again later.', async function () {
       try {
         await Api.del('/suppliers/' + encodeURIComponent(supplierId));
-        await afterChange();
+        Store.removeItem('suppliers', supplierId);
+        afterChange('filters');
         showToast('Deleted supplier "' + s.name + '".', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }
     });
@@ -1152,10 +1205,12 @@ Boot.ready(function () {
     };
     await Utils.withBusy(document.getElementById('saveSupplierBtn'), async function () {
       try {
-        if (editingSupplierId) { await Api.put('/suppliers/' + encodeURIComponent(editingSupplierId), payload); showToast('Updated ' + payload.name + '.', 'ok'); }
-        else { await Api.post('/suppliers', payload); showToast('Added supplier ' + payload.name + '.', 'ok'); }
+        let saved;
+        if (editingSupplierId) { saved = await Api.put('/suppliers/' + encodeURIComponent(editingSupplierId), payload); showToast('Updated ' + payload.name + '.', 'ok'); }
+        else { saved = await Api.post('/suppliers', payload); showToast('Added supplier ' + payload.name + '.', 'ok'); }
+        Store.upsertItem('suppliers', saved);
         closeModal('supplierModalOverlay');
-        await afterChange();                 // refreshes the supplier list AND every supplier dropdown / column on this page
+        afterChange('filters');                 // refreshes the supplier list AND every supplier dropdown / column on this page
       } catch (err) { showToast(err.message, 'danger'); }
     });
   }
@@ -1351,13 +1406,16 @@ Boot.ready(function () {
       const nameInput = document.getElementById('newCategoryName');
       const name = nameInput.value.trim();
       if (!name) { showToast('Enter a category name first.', 'danger'); return; }
-      try {
-        await Api.post('/categories', { name: name });
-        nameInput.value = '';
-        document.getElementById('newCategoryPrefix').textContent = '\u2014';
-        await afterChange(); renderCategoryList();
-        showToast('Added category "' + name + '".', 'ok');
-      } catch (err) { showToast(err.message, 'danger'); }
+      await Utils.withBusy(this, async function () {
+        try {
+          const created = await Api.post('/categories', { name: name });
+          nameInput.value = '';
+          document.getElementById('newCategoryPrefix').textContent = '\u2014';
+          Store.upsertItem('categories', created);
+          afterChange('filters');
+          showToast('Added category "' + name + '".', 'ok');
+        } catch (err) { showToast(err.message, 'danger'); }
+      });
     });
     document.getElementById('categoryList').addEventListener('click', function (e) {
       const delBtn = e.target.closest('[data-delete-category]');
@@ -1373,12 +1431,15 @@ Boot.ready(function () {
       const nameInput = document.getElementById('newBrandName');
       const name = nameInput ? nameInput.value.trim() : '';
       if (!name) { showToast('Enter a brand name first.', 'danger'); return; }
-      try {
-        await Api.post('/brands', { name: name });
-        nameInput.value = '';
-        await afterChange();
-        showToast('Added brand "' + name + '".', 'ok');
-      } catch (err) { showToast(err.message, 'danger'); }
+      await Utils.withBusy(document.getElementById('addBrandBtn'), async function () {
+        try {
+          const created = await Api.post('/brands', { name: name });
+          nameInput.value = '';
+          Store.upsertItem('brands', created);
+          afterChange('filters');
+          showToast('Added brand "' + name + '".', 'ok');
+        } catch (err) { showToast(err.message, 'danger'); }
+      });
     };
     const addBrandBtn = document.getElementById('addBrandBtn');
     if (addBrandBtn) addBrandBtn.addEventListener('click', addBrandHandler);
@@ -1407,13 +1468,16 @@ Boot.ready(function () {
         else if (modelsInput) modelsInput.focus();
         return;
       }
-      try {
-        await Api.post('/moto-brands', { name: name, models: models });
-        if (nameInput) nameInput.value = '';
-        if (modelsInput) modelsInput.value = '';
-        await afterChange();
-        showToast('Added motorcycle brand "' + name + '" with ' + models.length + ' model' + (models.length === 1 ? '' : 's') + '.', 'ok');
-      } catch (err) { showToast(err.message, 'danger'); }
+      await Utils.withBusy(document.getElementById('addMotoBrandBtn'), async function () {
+        try {
+          const created = await Api.post('/moto-brands', { name: name, models: models });
+          if (nameInput) nameInput.value = '';
+          if (modelsInput) modelsInput.value = '';
+          Store.upsertItem('motoBrands', created);
+          afterChange('filters');
+          showToast('Added motorcycle brand "' + name + '" with ' + models.length + ' model' + (models.length === 1 ? '' : 's') + '.', 'ok');
+        } catch (err) { showToast(err.message, 'danger'); }
+      });
     };
     const addMotoBrandBtn = document.getElementById('addMotoBrandBtn');
     if (addMotoBrandBtn) addMotoBrandBtn.addEventListener('click', addMotoBrandHandler);
@@ -1501,5 +1565,15 @@ Boot.ready(function () {
         document.getElementById('vtab-' + btn.dataset.tab).classList.add('active');
       });
     });
+  });
+
+  window.addEventListener('store:refreshed', function () {
+    const modal = document.getElementById('productModalOverlay');
+    if (!modal || !modal.classList.contains('open')) {
+      populateStaticSelects();
+      populateCompatBrandSelect();
+    }
+    renderProductsTable();
+    renderHistoryTable();
   });
 });

@@ -61,9 +61,11 @@ Boot.ready(function () {
     const body = { name: $('cName').value.trim(), contactNumber: $('cPhone').value.trim(), email: $('cEmail').value.trim(), address: $('cAddress').value.trim(), notes: $('cNotes').value.trim() };
     await Utils.withBusy($('custSaveBtn'), async function () {
       try {
-        if (editingId) { await Api.put('/customers/' + encodeURIComponent(editingId), body); showToast('Updated ' + body.name + '.', 'ok'); }
-        else { const c = await Api.post('/customers', body); showToast('Added ' + c.name + ' (' + c.id + ').', 'ok'); }
-        await Store.refresh(); closeModal('custModalOverlay'); render();
+        let saved;
+        if (editingId) { saved = await Api.put('/customers/' + encodeURIComponent(editingId), body); showToast('Updated ' + body.name + '.', 'ok'); }
+        else { saved = await Api.post('/customers', body); showToast('Added ' + saved.name + ' (' + saved.id + ').', 'ok'); }
+        Store.upsertItem('customers', saved); closeModal('custModalOverlay'); render();
+        if (Store.syncInBackground) Store.syncInBackground();
       } catch (err) { showToast(err.message, 'danger'); }
     });
   }
@@ -112,13 +114,25 @@ Boot.ready(function () {
       else if (de) {
         const c = Store.get('customers', []).find(function (x) { return x.id === de.dataset.deactivate; });
         confirmDialog('Mark ' + c.name + ' as inactive?', 'Their sales history and warranties stay linked. They will no longer appear in the POS customer list. You can reactivate them later.', async function () {
-          try { await Api.del('/customers/' + encodeURIComponent(c.id)); await Store.refresh(); render(); showToast(c.name + ' marked inactive.', 'ok'); } catch (err) { showToast(err.message, 'danger'); }
+          try {
+            const updated = await Api.del('/customers/' + encodeURIComponent(c.id));
+            Store.upsertItem('customers', updated);
+            render();
+            showToast(c.name + ' marked inactive.', 'ok');
+            if (Store.syncInBackground) Store.syncInBackground();
+          } catch (err) { showToast(err.message, 'danger'); }
         });
       } else if (re) {
-        Api.post('/customers/' + encodeURIComponent(re.dataset.reactivate) + '/reactivate').then(function () { return Store.refresh(); }).then(function () { render(); showToast('Customer reactivated.', 'ok'); }).catch(function (err) { showToast(err.message, 'danger'); });
+        Api.post('/customers/' + encodeURIComponent(re.dataset.reactivate) + '/reactivate').then(function (updated) {
+          Store.upsertItem('customers', updated);
+          render();
+          showToast('Customer reactivated.', 'ok');
+          if (Store.syncInBackground) Store.syncInBackground();
+        }).catch(function (err) { showToast(err.message, 'danger'); });
       }
     });
     document.querySelectorAll('[data-close]').forEach(function (b) { b.addEventListener('click', function () { closeModal(b.dataset.close); }); });
     document.querySelectorAll('.modal-overlay').forEach(function (o) { o.addEventListener('click', function (e) { if (e.target === o) o.classList.remove('open'); }); });
+    window.addEventListener('store:refreshed', render);
   });
 });

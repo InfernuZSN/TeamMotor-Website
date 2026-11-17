@@ -155,6 +155,7 @@ const Sale = make('Sale', 'sales', {
   reference: { type: String, default: null },
   status: { type: String, enum: ['Completed', 'Voided', 'Cancelled', 'Refunded', 'Pending'], default: 'Completed', index: true },
   paymentStatus: { type: String, default: 'Paid' },
+  paymentVerification: { type: String, default: 'Cash Tendered' },
   staff: { type: String, default: '' },                                   // display name (kept for receipts/CSV)
   staffUsername: { type: String, default: '' },
   customerId: { type: String, default: null, index: true },
@@ -204,7 +205,7 @@ const Warranty = make('Warranty', 'warranties', {
   productId: { type: String, required: true },
   productName: String,
   purchaseDate: String,
-  warrantyStart: String,
+  warrantyStart: { type: String, index: true },
   warrantyExpiration: String,
   coverage: String,
   status: { type: String, default: 'Active' },                            // Active | Expiring Soon | Expired | Claimed | Voided
@@ -231,7 +232,7 @@ const Notification = make('Notification', 'notifications', {
   title: String,
   message: String,
   link: String,
-  date: String,
+  date: { type: String, index: true },
   read: { type: Boolean, default: false }
 });
 
@@ -240,7 +241,7 @@ const Shift = make('Shift', 'shifts', {
   id: { ...idField },
   username: { type: String, required: true, index: true },
   name: String,
-  clockIn: { type: String, required: true },
+  clockIn: { type: String, required: true, index: true },
   clockOut: { type: String, default: null }
 });
 

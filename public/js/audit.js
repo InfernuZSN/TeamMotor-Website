@@ -1,6 +1,10 @@
 /* audit.js — Audit Trail viewer (Admin only; the API enforces it too).
    Stored action codes (e.g. stock.adjust) are never changed — they drive filtering and export. The page only adds a friendly
    label, a one-line readable summary, and a full-detail modal with before -> after. */
+let initialAuditPrefetch = (typeof Api !== 'undefined' && Api.getToken() && typeof getSession === 'function' && (getSession() || {}).role === 'Admin')
+  ? Api.get('/audit?page=1&limit=25').catch(function () { return null; })
+  : null;
+
 Boot.ready(function () {
   if (!initShell('audit')) return;
   if (!requireRole('Admin')) return;
@@ -131,7 +135,14 @@ Boot.ready(function () {
   }
   async function load() {
     try {
-      const r = await Api.get('/audit?' + query());
+      const qs = query();
+      let r = null;
+      if (initialAuditPrefetch && qs === 'page=1&limit=25') {
+        const pending = initialAuditPrefetch;
+        initialAuditPrefetch = null;
+        r = await pending;
+      }
+      if (!r) r = await Api.get('/audit?' + qs);
       lastRows = r.rows;
       pg.update(r.total, r.page);
       $('auTbody').innerHTML = r.rows.length ? r.rows.map(function (a, i) {

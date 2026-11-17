@@ -257,5 +257,8 @@ Boot.ready(function () {
     });
     setInterval(refresh, 30000);
     document.addEventListener('visibilitychange', function () { if (!document.hidden) refresh(); });
+    window.addEventListener('store:refreshed', function () {
+      if (!refreshing) { render(); stamp(true); }
+    });
   });
 });

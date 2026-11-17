@@ -66,8 +66,10 @@ categories.delete('/:id', adminOnly, wrap(async (req, res) => {
   }
   const used = await Product.countDocuments({ category: cat.id });
   if (used) throw conflict('"' + cat.name + '" still has ' + used + ' product(s) (archived ones count). Move them first.');
-  await cat.deleteOne();
-  await audit(req, 'category.delete', 'category', cat.id, { name: cat.name });
+  await Promise.all([
+    cat.deleteOne(),
+    audit(req, 'category.delete', 'category', cat.id, { name: cat.name })
+  ]);
   res.json({ ok: true });
 }));
 
@@ -93,8 +95,10 @@ suppliers.delete('/:id', adminOnly, wrap(async (req, res) => {
   if (!s) throw notFound('Supplier not found.');
   const used = await Product.countDocuments({ supplier: s.id });
   if (used) throw conflict('"' + s.name + '" is still linked to ' + used + ' product(s) (archived ones count). Change their supplier first.');
-  await s.deleteOne();
-  await audit(req, 'supplier.delete', 'supplier', s.id, { name: s.name });
+  await Promise.all([
+    s.deleteOne(),
+    audit(req, 'supplier.delete', 'supplier', s.id, { name: s.name })
+  ]);
   res.json({ ok: true });
 }));
 
@@ -126,8 +130,10 @@ brands.put('/:id', adminOnly, wrap(async (req, res) => {
   if (dup) throw conflict('The brand "' + name + '" already exists.');
   const oldName = b.name;
   b.name = name;
-  await b.save();
-  const r = oldName === name ? { modifiedCount: 0 } : await Product.updateMany({ brand: oldName }, { $set: { brand: name, lastUpdated: new Date().toISOString() } });
+  const [, r] = await Promise.all([
+    b.save(),
+    oldName === name ? Promise.resolve({ modifiedCount: 0 }) : Product.updateMany({ brand: oldName }, { $set: { brand: name, lastUpdated: new Date().toISOString() } })
+  ]);
   await audit(req, 'brand.update', 'brand', b.id, { name, changes: { name: { from: oldName, to: name } }, productsUpdated: r.modifiedCount || 0 });
   res.json(b);
 }));
@@ -136,8 +142,10 @@ brands.delete('/:id', adminOnly, wrap(async (req, res) => {
   if (!b) throw notFound('Brand not found.');
   const used = await Product.countDocuments({ brand: b.name });
   if (used) throw conflict('"' + b.name + '" is still used by ' + used + ' product(s) (archived ones count). Change their brand first.');
-  await b.deleteOne();
-  await audit(req, 'brand.delete', 'brand', b.id, { name: b.name });
+  await Promise.all([
+    b.deleteOne(),
+    audit(req, 'brand.delete', 'brand', b.id, { name: b.name })
+  ]);
   res.json({ ok: true });
 }));
 
@@ -164,8 +172,10 @@ motoBrands.delete('/:id', adminOnly, wrap(async (req, res) => {
   if (!mb) throw notFound('Motorcycle brand not found.');
   const used = mb.models.length ? await compatUsers(mb.models.map(m => mb.name + ' ' + m)) : 0;
   if (used) throw conflict('"' + mb.name + '" models are still used by ' + used + ' product(s) (archived ones count). Remove them from those products first.');
-  await mb.deleteOne();
-  await audit(req, 'moto.delete', 'motorcycle_brand', mb.id, { name: mb.name, models: mb.models });
+  await Promise.all([
+    mb.deleteOne(),
+    audit(req, 'moto.delete', 'motorcycle_brand', mb.id, { name: mb.name, models: mb.models })
+  ]);
   res.json({ ok: true });
 }));
 motoBrands.post('/:id/models', adminOnly, wrap(async (req, res) => {
@@ -211,30 +221,40 @@ function cleanProduct(body) {
 /* Brand and motorcycle compatibility must come from the Manage Filters lists. Values a product ALREADY has are
    accepted unchanged on edit, so saving an older product never fails because of something it was created with. */
 async function checkFilterValues(data, before) {
+  let brandPromise = Promise.resolve(null);
   if (data.brand !== undefined) {
     data.brand = String(data.brand || '').trim();
     if (data.brand && !(before && before.brand === data.brand)) {
-      const match = await Brand.findOne({ name: sameName(data.brand) });
-      if (!match) {
-        throw bad('Unknown brand "' + data.brand + '". Add it under Manage Filters → Manage Brands first.');
-      }
-      data.brand = match.name;
+      brandPromise = Brand.findOne({ name: sameName(data.brand) }).lean();
     }
   }
+  let motoPromise = Promise.resolve(null);
+  let fresh = [];
   if (data.compatibility !== undefined) {
     if (!Array.isArray(data.compatibility)) throw bad('Compatibility must be a list.');
     const had = new Set((before ? before.compatibility || [] : []).map(x => x.toLowerCase()));
-    const fresh = data.compatibility.filter(c => c !== UNIVERSAL_FIT && !had.has(c.toLowerCase()));
+    fresh = data.compatibility.filter(c => c !== UNIVERSAL_FIT && !had.has(c.toLowerCase()));
     if (fresh.length) {
-      const allowed = new Map();
-      (await MotorcycleBrand.find({})).forEach(mb => mb.models.forEach(m => {
-        const full = mb.name + ' ' + m;
-        allowed.set(full.toLowerCase(), full);
-      }));
-      const unknown = fresh.filter(c => !allowed.has(c.toLowerCase()));
-      if (unknown.length) throw bad('Unknown motorcycle model(s): ' + unknown.join(', ') + '. Add them under Manage Filters → Manage Motorcycle Compatibility first.');
-      data.compatibility = data.compatibility.map(c => allowed.get(c.toLowerCase()) || c);
+      motoPromise = MotorcycleBrand.find({}).lean();
     }
+  }
+
+  const [match, motoList] = await Promise.all([brandPromise, motoPromise]);
+  if (data.brand && !(before && before.brand === data.brand)) {
+    if (!match) {
+      throw bad('Unknown brand "' + data.brand + '". Add it under Manage Filters → Manage Brands first.');
+    }
+    data.brand = match.name;
+  }
+  if (fresh.length) {
+    const allowed = new Map();
+    motoList.forEach(mb => mb.models.forEach(m => {
+      const full = mb.name + ' ' + m;
+      allowed.set(full.toLowerCase(), full);
+    }));
+    const unknown = fresh.filter(c => !allowed.has(c.toLowerCase()));
+    if (unknown.length) throw bad('Unknown motorcycle model(s): ' + unknown.join(', ') + '. Add them under Manage Filters → Manage Motorcycle Compatibility first.');
+    data.compatibility = data.compatibility.map(c => allowed.get(c.toLowerCase()) || c);
   }
 }
 
@@ -253,17 +273,21 @@ products.post('/', wrap(async (req, res) => {
   const data = cleanProduct(req.body);
   if (!data.name || !data.category) throw bad('Name and category are required.');
   if (data.sellingPrice === undefined) throw bad('Selling price is required.');
-  const cat = await Category.findOne({ id: data.category });
-  if (!cat) throw bad('Unknown category.');
-  await checkFilterValues(data, null);
   const stock = Math.max(0, parseInt(req.body.stock, 10) || 0);
   const customId = req.body.id !== undefined && req.body.id !== null ? String(req.body.id).trim().toUpperCase() : '';
+  if (customId && (customId.length > 40 || !PRODUCT_ID_RE.test(customId))) {
+    throw bad('Product ID may only contain letters, numbers, dashes (-), and underscores (_) (max 40 characters).');
+  }
+
+  const [cat, , existing] = await Promise.all([
+    Category.findOne({ id: data.category }).lean(),
+    checkFilterValues(data, null),
+    customId ? Product.findOne({ id: sameName(customId) }).select('id').lean() : Promise.resolve(null)
+  ]);
+  if (!cat) throw bad('Unknown category.');
+
   let id;
   if (customId) {
-    if (customId.length > 40 || !PRODUCT_ID_RE.test(customId)) {
-      throw bad('Product ID may only contain letters, numbers, dashes (-), and underscores (_) (max 40 characters).');
-    }
-    const existing = await Product.findOne({ id: sameName(customId) });
     if (existing) {
       throw conflict("Product ID '" + customId + "' is already in use. Please use a unique ID or update existing stock.");
     }
@@ -271,16 +295,39 @@ products.post('/', wrap(async (req, res) => {
   } else {
     do {
       id = cat.prefix + '-' + String(await nextSeq('PRD-' + cat.prefix)).padStart(3, '0');
-    } while (await Product.findOne({ id: sameName(id) }));
+    } while (await Product.findOne({ id: sameName(id) }).select('id').lean());
   }
   if (!data.sku) data.sku = 'TM-' + id;
-  const product = await Product.create(Object.assign({}, data, { id, stock: 0, archived: false, lastUpdated: new Date().toISOString() }));
+  const now = new Date().toISOString();
+  const [product, trxId] = await Promise.all([
+    Product.create(Object.assign({}, data, { id, stock, archived: false, lastUpdated: now })),
+    stock > 0 ? nextId('TRX', 4) : Promise.resolve(null)
+  ]);
+
+  const postOps = [
+    audit(req, 'product.create', 'product', id, { name: product.name, category: product.category, initialStock: stock, sellingPrice: product.sellingPrice, costPrice: product.costPrice })
+  ];
   if (stock > 0) {
-    await changeStock({ productId: id, delta: stock, type: 'Stock In', user: req.user.name, supplierId: product.supplier, reference: 'Initial stock', notes: 'Initial stock on product creation' });
+    postOps.push(InventoryTransaction.create({
+      id: trxId,
+      productId: id,
+      productName: product.name,
+      type: 'Stock In',
+      quantity: stock,
+      previousStock: 0,
+      newStock: stock,
+      date: now,
+      created_at: now,
+      user: req.user.name || '',
+      supplierId: product.supplier || null,
+      reference: 'Initial stock',
+      reason: null,
+      notes: 'Initial stock on product creation'
+    }));
   }
-  await audit(req, 'product.create', 'product', id, { name: product.name, category: product.category, initialStock: stock, sellingPrice: product.sellingPrice, costPrice: product.costPrice });
+  await Promise.all(postOps);
   refreshNotifications().catch(() => {});
-  res.status(201).json(await Product.findOne({ id }));
+  res.status(201).json(product);
 }));
 
 products.put('/:id', adminOnly, wrap(async (req, res) => {
@@ -312,8 +359,10 @@ products.post('/:id/archive', adminOnly, wrap(async (req, res) => {
 products.delete('/:id', adminOnly, wrap(async (req, res) => {
   const p = await Product.findOne({ id: req.params.id });
   if (!p) throw notFound('Product not found.');
-  await p.deleteOne();
-  await audit(req, 'product.delete', 'product', p.id, { name: p.name, category: p.category });
+  await Promise.all([
+    p.deleteOne(),
+    audit(req, 'product.delete', 'product', p.id, { name: p.name, category: p.category })
+  ]);
   refreshNotifications().catch(() => {});
   res.json({ ok: true });
 }));

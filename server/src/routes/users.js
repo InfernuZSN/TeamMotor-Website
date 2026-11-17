@@ -5,6 +5,7 @@ const { adminOnly } = require('../middleware/auth');
 const { wrap, bad, notFound, forbidden, conflict } = require('../utils/errors');
 const { nextId } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
+const { today } = require('../utils/dates');
 
 const PW_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const checkPw = (pw) => { if (!PW_RE.test(String(pw || ''))) throw bad('Password must be at least 8 characters and include a letter and a number.'); };
@@ -26,11 +27,15 @@ router.post('/', adminOnly, wrap(async (req, res) => {
   if (!b.name || !b.username) throw bad('Name and username are required.');
   if (!['Admin', 'Staff'].includes(b.role)) throw bad('Role must be Admin or Staff.');
   checkPw(b.password);
-  await assertEmailFree(b.email);
+  const [, id, passwordHash] = await Promise.all([
+    assertEmailFree(b.email),
+    nextId('USR', 3),
+    bcrypt.hash(b.password, 10)
+  ]);
   const user = await User.create({
-    id: await nextId('USR', 3), name: String(b.name).trim(), username: String(b.username).trim().toLowerCase(),
+    id, name: String(b.name).trim(), username: String(b.username).trim().toLowerCase(),
     email: String(b.email || '').trim().toLowerCase(), role: b.role, status: 'Active', contactNumber: b.contactNumber || '', birthDate: b.birthDate || '',
-    dateAdded: new Date().toISOString().slice(0, 10), passwordHash: await bcrypt.hash(b.password, 10)
+    dateAdded: today(), passwordHash
   });
   await audit(req, 'user.create', 'user', user.id, { username: user.username, name: user.name, role: user.role });
   res.status(201).json(user);
@@ -51,11 +56,14 @@ router.put('/:id', adminOnly, wrap(async (req, res) => {
   if (b.status) { if (!['Active', 'Inactive'].includes(b.status)) throw bad('Invalid status.'); user.status = b.status; }
   if (b.password) { checkPw(b.password); user.passwordHash = await bcrypt.hash(b.password, 10); user.tokenVersion = (user.tokenVersion || 0) + 1; }
   if (user.role !== beforeDoc.role || user.status !== beforeDoc.status) user.tokenVersion = (user.tokenVersion || 0) + 1;
-  await user.save();
   const ch = diff(beforeDoc, user, FIELDS), bf = {}, af = {};
   Object.keys(ch).forEach(k => { bf[k] = ch[k].from; af[k] = ch[k].to; });
-  await audit(req, 'user.update', 'user', user.id, { targetUsername: user.username, targetName: user.name, before: bf, after: af, passwordReset: !!b.password });
-  if (b.password) await audit(req, 'user.password_change', 'user', user.id, { targetUserId: user.id, targetUsername: user.username, changedBy: 'admin' });
+  const writes = [
+    user.save(),
+    audit(req, 'user.update', 'user', user.id, { targetUsername: user.username, targetName: user.name, before: bf, after: af, passwordReset: !!b.password })
+  ];
+  if (b.password) writes.push(audit(req, 'user.password_change', 'user', user.id, { targetUserId: user.id, targetUsername: user.username, changedBy: 'admin' }));
+  await Promise.all(writes);
   res.json(user);
 }));
 
@@ -63,8 +71,10 @@ router.delete('/:id', adminOnly, wrap(async (req, res) => {
   const user = await User.findOne({ id: req.params.id });
   if (!user) throw notFound('User not found.');
   if (user.id === req.user.id) throw forbidden('You cannot delete your own account.');
-  await User.deleteOne({ id: user.id });
-  await audit(req, 'user.delete', 'user', user.id, { username: user.username, name: user.name, role: user.role });
+  await Promise.all([
+    User.deleteOne({ id: user.id }),
+    audit(req, 'user.delete', 'user', user.id, { username: user.username, name: user.name, role: user.role })
+  ]);
   res.json({ ok: true });
 }));
 
@@ -79,12 +89,14 @@ router.put('/me/profile', wrap(async (req, res) => {
     if (b.photo && !PHOTO_RE.test(b.photo)) throw bad('Photo must be an image data URL.');
     user.photo = b.photo || '';
   }
-  await user.save();
   const pc = diff(pBefore, user, PF), pb = {}, pa = {};
   Object.keys(pc).forEach(k => { pb[k] = pc[k].from; pa[k] = pc[k].to; });
   const pd = { targetUsername: user.username, before: pb, after: pa };
   if ((user.photo || '') !== photoBefore) pd.photoChanged = true;
-  await audit(req, 'user.profile_update', 'user', user.id, pd);
+  await Promise.all([
+    user.save(),
+    audit(req, 'user.profile_update', 'user', user.id, pd)
+  ]);
   res.json(user);
 }));
 

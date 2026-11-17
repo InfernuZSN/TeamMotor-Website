@@ -168,11 +168,13 @@ Boot.ready(function () {
 
     await Utils.withBusy(document.getElementById('saveUserBtn') || document.querySelector('#userModalOverlay .btn-primary'), async function () {
       try {
-        if (editingUserId) { await Api.put('/users/' + encodeURIComponent(editingUserId), payload); showToast('Updated ' + payload.name + '.', 'ok'); }
-        else { await Api.post('/users', payload); showToast('Added ' + payload.name + ' as ' + payload.role + '.', 'ok'); }
-        await Store.refresh();
+        let saved;
+        if (editingUserId) { saved = await Api.put('/users/' + encodeURIComponent(editingUserId), payload); showToast('Updated ' + payload.name + '.', 'ok'); }
+        else { saved = await Api.post('/users', payload); showToast('Added ' + payload.name + ' as ' + payload.role + '.', 'ok'); }
+        Store.upsertItem('users', saved);
         closeModal('userModalOverlay');
         renderTable();
+        if (Store.syncInBackground) Store.syncInBackground();
       } catch (err) { showToast(err.message, 'danger'); }
     });
   }
@@ -231,8 +233,9 @@ Boot.ready(function () {
     confirmDialog('Delete ' + u.name + '?', 'This permanently removes ' + u.name + ' (' + u.role + ') from the system so they can no longer sign in. Past sales and shift history are preserved.', async function () {
       try {
         await Api.del('/users/' + encodeURIComponent(userId));
-        await Store.refresh();
+        Store.removeItem('users', userId);
         renderTable();
+        if (Store.syncInBackground) Store.syncInBackground();
         showToast('Deleted user account "' + u.name + '".', 'ok');
       } catch (err) {
         showToast(err.message, 'danger');
@@ -257,5 +260,6 @@ Boot.ready(function () {
     document.querySelectorAll('.modal-overlay').forEach(function (overlay) {
       overlay.addEventListener('click', function (e) { if (e.target === overlay) closeModal(overlay.id); });
     });
+    window.addEventListener('store:refreshed', renderTable);
   });
 });

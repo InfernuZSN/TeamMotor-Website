@@ -1,5 +1,21 @@
+const BUSINESS_TZ = 'Asia/Manila';
 const pad = (n) => String(n).padStart(2, '0');
 const ymd = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+
+/* Format any Date or ISO timestamp as 'YYYY-MM-DD' in Asia/Manila business timezone. */
+function manilaDate(input) {
+  const d = input instanceof Date ? input : (input !== undefined && input !== null ? new Date(input) : new Date());
+  if (isNaN(d.getTime())) return String(input || '').slice(0, 10);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: BUSINESS_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(d);
+  const map = {};
+  for (const p of parts) map[p.type] = p.value;
+  return `${map.year}-${map.month}-${map.day}`;
+}
 
 /* 'YYYY-MM-DD' + n months, clamping the day (Jan 31 + 1 month = Feb 28/29). */
 function addMonths(dateStr, months) {
@@ -20,7 +36,7 @@ function calculateWarrantyExpiry(startDateStr, duration, unit) {
   if (u.startsWith('year')) return addMonths(startDateStr, Number(duration) * 12);
   return addMonths(startDateStr, Number(duration));
 }
-/* Shop-local "today" (server TZ; set TZ=Asia/Manila in the environment for PH deployments). */
-const today = () => ymd(new Date());
+/* Shop-local "today" in Asia/Manila timezone. */
+const today = () => manilaDate(new Date());
 
-module.exports = { ymd, addMonths, addDays, calculateWarrantyExpiry, today };
+module.exports = { ymd, addMonths, addDays, calculateWarrantyExpiry, today, manilaDate, BUSINESS_TZ };

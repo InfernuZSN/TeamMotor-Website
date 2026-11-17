@@ -177,8 +177,12 @@
         <p>Customer scans the QR with GCash. Confirm the payment shows in your wallet before you tap Confirm.</p>
       </div>
       <label class="pt-ref" id="payRefWrap" hidden>
-        <span id="payRefLabel">Reference number (optional)</span>
-        <input type="text" id="payRef" maxlength="80" autocomplete="off" placeholder="Wallet / transfer reference">
+        <span id="payRefLabel">GCash Reference number (required)</span>
+        <input type="text" id="payRef" maxlength="80" autocomplete="off" placeholder="Enter GCash reference no. (min 4 chars)">
+      </label>
+      <label class="pt-toggle" id="gcashConfirmWrap" hidden style="margin-top:0.5rem;">
+        <input type="checkbox" id="gcashConfirmed">
+        <span>I confirmed payment in the store GCash wallet (manual cashier verification)</span>
       </label>
 
       <details class="pt-prev" id="payPreview">

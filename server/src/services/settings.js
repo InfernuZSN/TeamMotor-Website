@@ -1,11 +1,19 @@
 const { Setting } = require('../models');
 
 const DEFAULTS_KEY = 'shop';
+const SETTINGS_TTL = 30 * 1000;
+let cachedSettings = null;
+let cachedAt = 0;
 
 async function getSettings() {
+  if (cachedSettings && (Date.now() - cachedAt < SETTINGS_TTL)) {
+    return Object.assign({}, cachedSettings);
+  }
   let doc = await Setting.findOne({ key: DEFAULTS_KEY });
   if (!doc) doc = await Setting.create({ key: DEFAULTS_KEY });
-  return doc.toJSON();
+  cachedSettings = doc.toJSON();
+  cachedAt = Date.now();
+  return Object.assign({}, cachedSettings);
 }
 
 async function updateSettings(patch, user) {
@@ -14,7 +22,9 @@ async function updateSettings(patch, user) {
   allowed.forEach(k => { if (patch[k] !== undefined) set[k] = patch[k]; });
   set.updatedBy = user && user.name; set.updatedAt = new Date().toISOString();
   const doc = await Setting.findOneAndUpdate({ key: DEFAULTS_KEY }, { $set: set }, { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true });
-  return doc.toJSON();
+  cachedSettings = doc.toJSON();
+  cachedAt = Date.now();
+  return Object.assign({}, cachedSettings);
 }
 
 /* The part of settings that is printed on receipts / snapshotted on each sale. */

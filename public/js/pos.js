@@ -574,7 +574,8 @@ Boot.ready(function () {
     $('nonCashPanel').hidden = isCash;
     $('extraGcash').hidden = method !== 'GCash';
     $('payRefWrap').hidden = isCash;
-    $('payRefLabel').textContent = 'Reference number (optional)';
+    if ($('gcashConfirmWrap')) $('gcashConfirmWrap').hidden = method !== 'GCash';
+    $('payRefLabel').textContent = method === 'GCash' ? 'GCash Reference number (required)' : 'Reference number';
     renderPayAmounts();
   }
   function fmtTender(s) {
@@ -599,8 +600,12 @@ Boot.ready(function () {
       btn.disabled = !enough || isSubmitting;
       btn.textContent = 'Confirm payment';
     } else {
-      $('nonCashText').textContent = 'Customer pays ' + peso(t.total) + ' by ' + method + '.';
-      btn.disabled = isSubmitting;
+      const refVal = $('payRef') ? $('payRef').value.trim() : '';
+      const refOk = method !== 'GCash' || refVal.length >= 4;
+      const confirmEl = $('gcashConfirmed');
+      const confirmOk = method !== 'GCash' || !confirmEl || confirmEl.checked;
+      $('nonCashText').textContent = 'Customer pays ' + peso(t.total) + ' by ' + method + '. Enter reference & confirm receipt.';
+      btn.disabled = isSubmitting || !refOk || !confirmOk;
       btn.textContent = 'Confirm ' + method + ' payment';
     }
   }
@@ -651,7 +656,7 @@ Boot.ready(function () {
   function openPay() {
     if (isSubmitting) return;
     if (!cart.length) { showToast('The cart is empty. Add items first.', 'danger'); return; }
-    method = 'Cash'; tendered = ''; $('payRef').value = ''; $('payPreview').open = false;
+    method = 'Cash'; tendered = ''; $('payRef').value = ''; if ($('gcashConfirmed')) $('gcashConfirmed').checked = false; $('payPreview').open = false;
     renderPayMethods();
     openModal('payOverlay');
   }
@@ -664,6 +669,10 @@ Boot.ready(function () {
     if (method === 'Cash') {
       received = parseFloat(tendered) || 0;
       if (Math.round(received * 100) < Math.round(t.total * 100)) { showToast('Cash received is less than the amount due.', 'danger'); return; }
+    } else if (method === 'GCash') {
+      const gRef = $('payRef') ? $('payRef').value.trim() : '';
+      if (gRef.length < 4) { showToast('Enter a valid GCash reference number (at least 4 characters).', 'danger'); return; }
+      if ($('gcashConfirmed') && !$('gcashConfirmed').checked) { showToast('Please confirm that the GCash payment was received in the store wallet.', 'danger'); return; }
     }
     isSubmitting = true; renderPayAmounts();
     const btn = $('confirmPayBtn'), label = btn.textContent;
@@ -926,12 +935,13 @@ Boot.ready(function () {
     // payment modal
     $('payMethods').addEventListener('click', function (e) {
       const b = e.target.closest('[data-method]'); if (!b) return;
-      method = b.dataset.method; tendered = ''; $('payRef').value = ''; renderPayMethods();
+      method = b.dataset.method; tendered = ''; $('payRef').value = ''; if ($('gcashConfirmed')) $('gcashConfirmed').checked = false; renderPayMethods();
     });
     $('keypad').addEventListener('click', function (e) { const k = e.target.closest('[data-key]'); if (k) pressKey(k.dataset.key); });
     $('quickBtns').addEventListener('click', function (e) { const q = e.target.closest('button'); if (q) quickCash(q); });
     $('payPreview').addEventListener('toggle', renderPreview);
-    $('payRef').addEventListener('input', renderPreview);
+    $('payRef').addEventListener('input', function () { renderPayAmounts(); renderPreview(); });
+    if ($('gcashConfirmed')) $('gcashConfirmed').addEventListener('change', renderPayAmounts);
     $('confirmPayBtn').addEventListener('click', completeSale);
 
     // receipt screen

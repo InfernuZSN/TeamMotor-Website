@@ -244,9 +244,15 @@ const NAV_ITEMS = {
   ]
 };
 
+let currentActiveKey = '';
+let topbarDocClickBound = false;
+let shellEventsBound = false;
+let idlePrefetchScheduled = false;
+
 function renderSidebar(activeKey) {
   const sidebar = document.getElementById('sidebar');
   if (!sidebar) return;
+  if (activeKey) currentActiveKey = activeKey;
   const session = requireSession();
   if (!session) return;
   const items = NAV_ITEMS[session.role] || NAV_ITEMS.Staff;
@@ -287,9 +293,12 @@ function renderSidebar(activeKey) {
   try {
     const savedScroll = parseInt(sessionStorage.getItem('teammotor:sidebar_scroll') || '0', 10);
     if (savedScroll > 0) sidebar.scrollTop = savedScroll;
-    sidebar.addEventListener('scroll', function () {
-      try { sessionStorage.setItem('teammotor:sidebar_scroll', String(sidebar.scrollTop)); } catch (e) {}
-    }, { passive: true });
+    if (!sidebar.dataset.scrollBound) {
+      sidebar.dataset.scrollBound = '1';
+      sidebar.addEventListener('scroll', function () {
+        try { sessionStorage.setItem('teammotor:sidebar_scroll', String(sidebar.scrollTop)); } catch (e) {}
+      }, { passive: true });
+    }
   } catch (e) {}
 
   initInstantNavPrefetch(sidebar);
@@ -324,6 +333,7 @@ function prefetchResource(url, asType) {
 
 function initInstantNavPrefetch(container) {
   if (!container) return;
+  const triggers = [];
   container.querySelectorAll('a[href]').forEach(function (a) {
     const href = a.getAttribute('href');
     if (!href || href.indexOf('#') === 0 || a.classList.contains('active')) return;
@@ -333,9 +343,20 @@ function initInstantNavPrefetch(container) {
         prefetchResource(src, 'script');
       });
     };
+    triggers.push(trigger);
     a.addEventListener('mouseenter', trigger, { once: true, passive: true });
     a.addEventListener('touchstart', trigger, { once: true, passive: true });
   });
+  try {
+    if (!idlePrefetchScheduled && triggers.length && window.sessionStorage.getItem('teammotor:menus_prefetched') !== '1') {
+      idlePrefetchScheduled = true;
+      const scheduleIdle = window.requestIdleCallback || function (cb) { return setTimeout(cb, 180); };
+      scheduleIdle(function () {
+        try { window.sessionStorage.setItem('teammotor:menus_prefetched', '1'); } catch (e) {}
+        triggers.forEach(function (fn) { fn(); });
+      });
+    }
+  } catch (e) {}
 }
 
 function openMobileSidebar() {
@@ -375,16 +396,22 @@ function renderTopbarActions() {
 
   document.getElementById('accountTrigger').addEventListener('click', (e) => {
     e.stopPropagation();
-    document.getElementById('accountDropdown').classList.toggle('open');
-    document.getElementById('notifPanel').classList.remove('open');
+    const dd = document.getElementById('accountDropdown');
+    const np = document.getElementById('notifPanel');
+    if (dd) dd.classList.toggle('open');
+    if (np) np.classList.remove('open');
   });
   document.getElementById('myProfileBtn').addEventListener('click', () => {
     window.location.href = 'profile.html';
   });
   document.getElementById('logoutBtn').addEventListener('click', logout);
-  document.addEventListener('click', () => {
-    document.getElementById('accountDropdown').classList.remove('open');
-  });
+  if (!topbarDocClickBound) {
+    topbarDocClickBound = true;
+    document.addEventListener('click', () => {
+      const dd = document.getElementById('accountDropdown');
+      if (dd) dd.classList.remove('open');
+    });
+  }
 }
 
 function requireRole(role) {
@@ -420,6 +447,31 @@ const SIDEBAR_COLLAPSED_KEY = 'motoshop:sidebarCollapsed';
     if (shell && localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === '1') {
       shell.classList.add('is-collapsed');
     }
+  } catch (e) {}
+})();
+
+// Render sidebar & topbar synchronously on script parse (before Store.hydrate resolves) so menu switches paint immediately
+(function applyImmediateShellRender() {
+  try {
+    if (!document.body || document.body.hasAttribute('data-public')) return;
+    if (!getSession()) return;
+    const PAGE_KEYS = {
+      'index': 'dashboard', 'index.html': 'dashboard', '': 'dashboard',
+      'inventory': 'inventory', 'inventory.html': 'inventory',
+      'pos': 'pos', 'pos.html': 'pos',
+      'sales': 'sales', 'sales.html': 'sales',
+      'customers': 'customers', 'customers.html': 'customers',
+      'warranty': 'warranty', 'warranty.html': 'warranty',
+      'users': 'users', 'users.html': 'users',
+      'audit': 'audit', 'audit.html': 'audit',
+      'settings': 'settings', 'settings.html': 'settings',
+      'profile': 'profile', 'profile.html': 'profile'
+    };
+    const file = (location.pathname.split('/').pop() || 'index.html').toLowerCase();
+    const key = PAGE_KEYS[file] || PAGE_KEYS[file.replace(/\.html$/, '')] || '';
+    initSidebarToggle();
+    renderSidebar(key);
+    renderTopbarActions();
   } catch (e) {}
 })();
 
@@ -475,12 +527,20 @@ function initShell(activeKey) {
   initSidebarToggle();
   renderSidebar(activeKey);
   renderTopbarActions();
-  bindProfileAvatarSync();
+  if (!shellEventsBound) {
+    shellEventsBound = true;
+    bindProfileAvatarSync();
+    const hamburger = document.getElementById('hamburgerBtn');
+    if (hamburger) hamburger.addEventListener('click', openMobileSidebar);
+    const scrim = document.getElementById('sidebarScrim');
+    if (scrim) scrim.addEventListener('click', closeMobileSidebar);
+    window.addEventListener('store:refreshed', function () {
+      renderSidebar(currentActiveKey || activeKey);
+      syncProfileAvatars();
+      if (window.Notifications) Notifications.render();
+    });
+  }
   bindEscapeToCloseModals();
-  const hamburger = document.getElementById('hamburgerBtn');
-  if (hamburger) hamburger.addEventListener('click', openMobileSidebar);
-  const scrim = document.getElementById('sidebarScrim');
-  if (scrim) scrim.addEventListener('click', closeMobileSidebar);
   if (window.Notifications) Notifications.init();
   initMobileEnhancements();
   try {                                   // message left by an action that reloaded the page
@@ -514,6 +574,7 @@ function syncMobileTableLabels() {
     const thead = table.querySelector('thead');
     const tbody = table.querySelector('tbody');
     if (!thead || !tbody) return;
+    if (!tbody.querySelector('tr:not([data-m-synced="1"]), tr.mobile-empty-row')) return;
     const headers = Array.from(thead.querySelectorAll('th')).map(function (th) {
       return (th.textContent || '').trim();
     });
@@ -530,13 +591,21 @@ function syncMobileTableLabels() {
     }
 
     Array.from(tbody.children).forEach(function (tr) {
-      if (tr.tagName !== 'TR' || tr.dataset.mSynced === '1') return;
-      tr.dataset.mSynced = '1';
+      if (tr.tagName !== 'TR') return;
       const cells = Array.from(tr.children);
       if (cells.length === 1 && cells[0].hasAttribute('colspan')) {
         tr.classList.add('mobile-empty-row');
+        tr.dataset.mSynced = '1';
+        const visCols = Array.from(thead.querySelectorAll('th')).filter(function (th) {
+          return window.getComputedStyle(th).display !== 'none';
+        }).length;
+        if (visCols > 0 && cells[0].colSpan !== visCols) {
+          cells[0].colSpan = visCols;
+        }
         return;
       }
+      if (tr.dataset.mSynced === '1') return;
+      tr.dataset.mSynced = '1';
       cells.forEach(function (td, idx) {
         const lbl = headers[idx] || '';
         if (lbl) td.setAttribute('data-label', lbl);
@@ -814,15 +883,33 @@ function initMobileEnhancements() {
     setTimeout(runAll, 0);
   }
   let rafPending = false;
-  const obs = new MutationObserver(function () {
+  const scheduleSync = function () {
     if (rafPending) return;
     rafPending = true;
     requestAnimationFrame(function () {
       rafPending = false;
-      if (window.innerWidth <= 900) syncMobileTableLabels();
+      syncMobileTableLabels();
     });
+  };
+  const obs = new MutationObserver(function (mutations) {
+    for (let i = 0; i < mutations.length; i++) {
+      const m = mutations[i];
+      const t = m.target;
+      if (t && (t.tagName === 'TBODY' || t.tagName === 'TABLE' || t.tagName === 'TR' || (t.closest && t.closest('table')))) {
+        scheduleSync();
+        return;
+      }
+      for (let j = 0; j < m.addedNodes.length; j++) {
+        const n = m.addedNodes[j];
+        if (n.nodeType === 1 && (n.tagName === 'TABLE' || n.tagName === 'TR' || (n.querySelector && n.querySelector('table, tr')))) {
+          scheduleSync();
+          return;
+        }
+      }
+    }
   });
   obs.observe(document.body, { childList: true, subtree: true });
+  window.addEventListener('resize', scheduleSync);
 }
 
 /* ---------- Shared confirm dialog (pages without their own confirm modal) ---------- */

@@ -8,11 +8,11 @@ Boot.ready(function () {
   const rowEl = document.getElementById('analysisRange');
   if (!chartEl || !rowEl || typeof Store === 'undefined') return;
 
-  const sales = Store.get('sales', []).filter(Utils.isCountable);
-  const now = Utils.demoNow();
   const titles = { week: 'Sales Trend — Last 7 Days', month: 'Sales Trend — Last 30 Days', year: 'Sales Trend — Last 12 Months' };
 
   function render(range) {
+    const sales = Store.get('sales', []).filter(Utils.isCountable);
+    const now = Utils.demoNow();
     let buckets, dense = false, yearly = false;
     if (range === 'year') { buckets = Analytics.monthlyTotals(sales, now, 12); yearly = true; }
     else if (range === 'month') { buckets = Analytics.dailyTotals(sales, now, 30); dense = true; }
@@ -49,4 +49,8 @@ Boot.ready(function () {
   });
 
   render('week');
+  window.addEventListener('store:refreshed', function () {
+    const active = rowEl.querySelector('.chip.active');
+    render((active && active.dataset.range) || 'week');
+  });
 });

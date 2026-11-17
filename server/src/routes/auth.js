@@ -95,12 +95,12 @@ router.get('/google/config', (req, res) => {
 
 router.post('/google', loginLimiter, wrap(async (req, res) => {
   const { accessToken, idToken } = req.body || {};
-  let email = String(req.body.email || '').trim().toLowerCase();
-
-  if (accessToken || idToken) {
-    const googleUser = await verifyGoogleToken({ accessToken, idToken });
-    email = googleUser.email;
+  if (!accessToken && !idToken) {
+    throw bad('Google access token or ID token is required.');
   }
+
+  const googleUser = await verifyGoogleToken({ accessToken, idToken });
+  const email = googleUser.email;
   if (!email) throw bad('Google email could not be determined.');
 
   const user = await User.findOne({
@@ -127,8 +127,7 @@ router.post('/google', loginLimiter, wrap(async (req, res) => {
 }));
 
 router.get('/me', authenticate, wrap(async (req, res) => {
-  const user = await User.findOne({ id: req.user.id });
-  res.json({ user: user.toJSON() });
+  res.json({ user: req.userDoc || (await User.findOne({ id: req.user.id })).toJSON() });
 }));
 
 router.post('/logout', authenticate, wrap(async (req, res) => {
@@ -166,8 +165,6 @@ router.post('/forgot-password', loginLimiter, wrap(async (req, res) => {
   user.resetOtpAttempts = 0;
   user.resetOtpVerified = false;
   await user.save();
-
-  console.log(`[auth] 🔑 Password reset OTP for ${user.email} (${user.username}): ${otp}`);
 
   await sendPasswordResetOtpEmail({
     to: user.email,
@@ -292,4 +289,5 @@ router.post('/reset-password', loginLimiter, wrap(async (req, res) => {
   });
 }));
 
+router.verifyGoogleToken = verifyGoogleToken;
 module.exports = router;

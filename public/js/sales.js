@@ -4,32 +4,33 @@
 Boot.ready(function () {
   if (!initShell('sales')) return;
 
-  const products = Store.get('products', []).filter(function (p) { return !p.archived; });
-  const allSales = Store.get('sales', []);                     // every sale, including voided / cancelled / refunded
-  const sales = allSales.filter(Utils.isCountable);           // only Completed sales count towards revenue and analytics
   const isAdmin = (getSession() || {}).role === 'Admin';
-  const now = Utils.demoNow();
 
   /* ---------- Sales Analysis: KPI cards (completed sales only; all figures come from the live POS data) ---------- */
-  const today = Analytics.salesToday(sales, now);
-  const week = Analytics.salesInLastDays(sales, now, 7);
-  const month = Analytics.salesInCurrentMonth(sales, now);
-  const stats = [
-    { label: "Today's Sales", value: Utils.formatPHP(Analytics.sumTotal(today)), sub: today.length + ' transaction' + (today.length === 1 ? '' : 's'), iconName: 'trendUp', tone: 'ok' },
-    { label: 'Weekly Sales', value: Utils.formatPHP(Analytics.sumTotal(week)), sub: week.length + ' transactions', iconName: 'sales', tone: 'accent' },
-    { label: 'Monthly Sales', value: Utils.formatPHP(Analytics.sumTotal(month)), sub: month.length + ' transactions', iconName: 'sales', tone: 'accent' },
-    { label: 'Total Transactions', value: sales.length, sub: 'All-time (completed sales)', iconName: 'cart', tone: 'warn' },
-    { label: 'Average Transaction', value: Utils.formatPHP(sales.length ? Analytics.sumTotal(sales) / sales.length : 0), sub: 'Per completed sale', iconName: 'trendUp', tone: 'accent' }
-  ];
-  document.getElementById('salesStatGrid').className = 'stat-grid stat-grid-5';
-  document.getElementById('salesStatGrid').innerHTML = stats.map(s =>
-    '<div class="stat-card tone-' + s.tone + '">' +
-      '<div class="stat-icon tone-' + s.tone + '">' + icon(s.iconName) + '</div>' +
-      '<div class="stat-label">' + s.label + '</div>' +
-      '<div class="stat-value">' + s.value + '</div>' +
-      '<div class="stat-sub">' + s.sub + '</div>' +
-    '</div>'
-  ).join('');
+  function renderKpiCards() {
+    const sales = Store.get('sales', []).filter(Utils.isCountable);
+    const now = Utils.demoNow();
+    const today = Analytics.salesToday(sales, now);
+    const week = Analytics.salesInLastDays(sales, now, 7);
+    const month = Analytics.salesInCurrentMonth(sales, now);
+    const stats = [
+      { label: "Today's Sales", value: Utils.formatPHP(Analytics.sumTotal(today)), sub: today.length + ' transaction' + (today.length === 1 ? '' : 's'), iconName: 'trendUp', tone: 'ok' },
+      { label: 'Weekly Sales', value: Utils.formatPHP(Analytics.sumTotal(week)), sub: week.length + ' transactions', iconName: 'sales', tone: 'accent' },
+      { label: 'Monthly Sales', value: Utils.formatPHP(Analytics.sumTotal(month)), sub: month.length + ' transactions', iconName: 'sales', tone: 'accent' },
+      { label: 'Total Transactions', value: sales.length, sub: 'All-time (completed sales)', iconName: 'cart', tone: 'warn' },
+      { label: 'Average Transaction', value: Utils.formatPHP(sales.length ? Analytics.sumTotal(sales) / sales.length : 0), sub: 'Per completed sale', iconName: 'trendUp', tone: 'accent' }
+    ];
+    document.getElementById('salesStatGrid').className = 'stat-grid stat-grid-5';
+    document.getElementById('salesStatGrid').innerHTML = stats.map(s =>
+      '<div class="stat-card tone-' + s.tone + '">' +
+        '<div class="stat-icon tone-' + s.tone + '">' + icon(s.iconName) + '</div>' +
+        '<div class="stat-label">' + s.label + '</div>' +
+        '<div class="stat-value">' + s.value + '</div>' +
+        '<div class="stat-sub">' + s.sub + '</div>' +
+      '</div>'
+    ).join('');
+  }
+  renderKpiCards();
 
   /* ---------- Today's sales summary (read-only, live from the same sales data the POS writes — online and offline) ----------
      Completed = sales rung up today that are still Completed. Voided = anything voided / cancelled / refunded TODAY (even if the sale
@@ -148,11 +149,12 @@ Boot.ready(function () {
   async function reprintSale(saleId, btn) {
     await Utils.withBusy(btn, async function () {
       try {
-        await Receipt.reprint(saleId, 'sales-page');
-        await Store.refresh();
+        const r = await Receipt.reprint(saleId, 'sales-page');
+        if (r && r.sale) Store.upsertItem('sales', r.sale);
         showToast('Duplicate receipt logged in audit trail and print preview opened.', 'ok');
         renderOrders();
         if (openSaleId === saleId && document.getElementById('saleModalOverlay').classList.contains('open')) openSaleModal(saleId);
+        if (Store.syncInBackground) Store.syncInBackground();
       } catch (err) { showToast(err.message, 'danger'); }
     });
   }
@@ -178,10 +180,26 @@ Boot.ready(function () {
     await Utils.withBusy(document.getElementById('voidConfirmBtn'), async function () {
       try {
         const r = await Api.post('/sales/' + encodeURIComponent(openSaleId) + '/void', { type: type, reason: reason });
+        if (r && r.sale) Store.upsertItem('sales', r.sale);
+        (r.restocked || []).forEach(function (x) {
+          if (x && x.productId && x.newStock !== undefined) {
+            Store.upsertItem('products', { id: x.productId, stock: x.newStock });
+          }
+        });
         const skipped = (r.restockSkipped || []).length;
-        sessionStorage.setItem('tm:flash', r.sale.id + ' marked ' + r.sale.status + '. Stock restored for ' + r.restocked.length + ' item' + (r.restocked.length === 1 ? '' : 's') + '.' +
-          (skipped ? ' ' + skipped + ' retired item' + (skipped === 1 ? ' was' : 's were') + ' not restocked (logged in the audit trail).' : ''));
-        window.location.reload();
+        document.getElementById('voidOverlay').classList.remove('open');
+        document.getElementById('saleModalOverlay').classList.remove('open');
+        renderKpiCards();
+        renderDaySummary();
+        renderOrders();
+        renderPaymentSummary();
+        updateMovementTables();
+        if (Store.syncInBackground) Store.syncInBackground();
+        showToast(
+          r.sale.id + ' marked ' + r.sale.status + '. Stock restored for ' + r.restocked.length + ' item' + (r.restocked.length === 1 ? '' : 's') + '.' +
+          (skipped ? ' ' + skipped + ' retired item' + (skipped === 1 ? ' was' : 's were') + ' not restocked (logged in the audit trail).' : ''),
+          'ok'
+        );
       } catch (err) { document.getElementById('voidError').textContent = err.message; }
     });
   }
@@ -304,7 +322,13 @@ Boot.ready(function () {
     renderMovementTable('slowMovingTbody', slowList, categories);
   }
   updateMovementTables();
-  window.addEventListener('store:refreshed', updateMovementTables);
+  window.addEventListener('store:refreshed', function () {
+    renderKpiCards();
+    renderDaySummary();
+    renderOrders();
+    renderPaymentSummary();
+    updateMovementTables();
+  });
 
   /* ---------- Tabs ---------- */
   document.querySelectorAll('.tabs .tab-btn').forEach(btn => {

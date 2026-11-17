@@ -2,12 +2,14 @@ const { Counter } = require('../models');
 
 /* Atomic, gap-tolerant sequence: nextId('SALE', 4) -> 'SALE-0001'.
    Uses findOneAndUpdate+$inc so two cashiers can never get the same number. */
-async function nextSeq(name) {
-  const doc = await Counter.findOneAndUpdate({ _id: name }, { $inc: { seq: 1 } }, { new: true, upsert: true });
+async function nextSeq(name, session) {
+  const opts = { new: true, upsert: true };
+  if (session) opts.session = session;
+  const doc = await Counter.findOneAndUpdate({ _id: name }, { $inc: { seq: 1 } }, opts);
   return doc.seq;
 }
-async function nextId(prefix, pad, counterName) {
-  const n = await nextSeq(counterName || prefix);
+async function nextId(prefix, pad, counterName, session) {
+  const n = await nextSeq(counterName || prefix, session);
   return prefix + '-' + String(n).padStart(pad || 4, '0');
 }
 /* Make sure a counter is at least `min` (used by the seed script after inserting fixtures). */

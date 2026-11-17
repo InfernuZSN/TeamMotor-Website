@@ -21,6 +21,7 @@ const authenticate = wrap(async (req, res, next) => {
   if (!user || user.status !== 'Active') throw new HttpError(401, 'This account is inactive or no longer exists.');
   if ((user.tokenVersion || 0) !== (payload.tv || 0)) throw new HttpError(401, 'Session no longer valid. Please log in again.');
   req.user = { id: user.id, username: user.username, name: user.name, role: user.role };
+  req.userDoc = user.toJSON();
   next();
 });
 

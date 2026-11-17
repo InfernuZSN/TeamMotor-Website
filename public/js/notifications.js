@@ -46,9 +46,13 @@ const Notifications = (function () {
     panel.querySelectorAll('.notif-item[data-link]').forEach(function (item) {
       item.addEventListener('click', function () {
         const link = item.dataset.link;
-        Api.post('/notifications/' + encodeURIComponent(item.dataset.notifId) + '/read').catch(function () {}).then(function () {
-          if (link) window.location.href = link;
-        });
+        const notifId = item.dataset.notifId;
+        Store.set('notifications', Store.get('notifications', []).map(function (n) {
+          return n.id === notifId ? Object.assign({}, n, { read: true }) : n;
+        }));
+        Api.post('/notifications/' + encodeURIComponent(notifId) + '/read', {}, { keepalive: true }).catch(function () {});
+        if (link) window.location.href = link;
+        else render();
       });
     });
 

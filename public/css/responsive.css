@@ -527,6 +527,11 @@
     padding: 1.5rem 1rem;
     text-align: center;
   }
+  table:not(.rcpt-items):not(.order-table) tbody tr.mobile-empty-row > td {
+    align-items: center;
+    text-align: center !important;
+    width: 100% !important;
+  }
 
   table:not(.rcpt-items):not(.order-table) tbody td {
     display: flex;
@@ -565,6 +570,13 @@
   }
   table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-primary::before {
     display: none;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.row-status-bar > td:first-child {
+    padding-left: .75rem !important;
+  }
+  table:not(.rcpt-items):not(.order-table) tbody tr.row-status-bar > td:first-child .stock-flag {
+    top: .125rem;
+    bottom: .625rem;
   }
 
   /* Status badge cell sits right below primary header or prominent top area */
@@ -1062,6 +1074,55 @@
   table:not(.rcpt-items):not(.order-table) tbody tr {
     padding: .75rem;
     gap: .4rem .6rem;
+  }
+}
+
+/* ---------- Ultra-Narrow Phones (<= 390px / 360px / 320px) ---------- */
+@media (max-width: 390px) {
+  .page,
+  .page-sales,
+  .page-inventory {
+    padding: .5rem;
+  }
+  .topbar {
+    padding: .5rem .65rem;
+    gap: .5rem;
+  }
+  .topbar-title h1 {
+    font-size: 1.05rem;
+  }
+  .modal {
+    width: 100%;
+    max-width: 96vw;
+    margin: 0 auto;
+  }
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding-left: .85rem;
+    padding-right: .85rem;
+  }
+  .filter-bar {
+    gap: .5rem;
+  }
+  .search-input,
+  .select-filter {
+    max-width: 100% !important;
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+  .page-header .actions .btn {
+    flex: 1 1 100%;
+  }
+  .hbar-row,
+  .page-sales .hbar-row {
+    grid-template-columns: 4.5rem 1fr 2.1rem;
   }
 }
 

@@ -19,6 +19,7 @@ async function expiryReport(settings, preloadedProducts) {
     const exp = String(p.expirationDate).slice(0, 10);
     const daysLeft = Math.round((new Date(exp) - new Date(t)) / 86400000);
     const row = Object.assign({}, p.toJSON ? p.toJSON() : p, { daysLeft });
+    if (Array.isArray(preloadedProducts)) delete row.image;
     if (exp < t) expired.push(row);
     else if (exp <= cutoff) expiring.push(row);
   });

@@ -290,14 +290,16 @@ const Api = (function () {
 
   function detect() { return Promise.resolve('server'); }
 
-  async function request(method, path, body) {
+  async function request(method, path, body, opts) {
     const headers = { 'Accept': 'application/json' };
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const token = getToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
     let res;
     try {
-      res = await fetch(base + path, { method: method, headers: headers, body: body !== undefined ? JSON.stringify(body) : undefined });
+      const fetchOpts = { method: method, headers: headers, body: body !== undefined ? JSON.stringify(body) : undefined };
+      if (opts && opts.keepalive) fetchOpts.keepalive = true;
+      res = await fetch(base + path, fetchOpts);
     } catch (netErr) {
       const e = new Error('Cannot reach the TeamMotor server. Check your internet connection.');
       e.status = 0; e.network = true; throw e;
@@ -309,8 +311,8 @@ const Api = (function () {
       const e = new Error((data && data.error) || ('Request failed (' + res.status + ')'));
       e.status = res.status; e.details = data && data.details; throw e;
     }
-    // Automatically invalidate bootstrap session cache on any data mutation
-    if (method !== 'GET' && path.indexOf('/auth/') !== 0 && typeof Store !== 'undefined' && Store.invalidate) {
+    // Automatically invalidate bootstrap session cache on any data mutation (except read-state endpoints)
+    if (method !== 'GET' && path.indexOf('/auth/') !== 0 && path.indexOf('/notifications/') !== 0 && typeof Store !== 'undefined' && Store.invalidate) {
       Store.invalidate();
     }
     return data;
@@ -318,9 +320,9 @@ const Api = (function () {
 
   return {
     get: function (p) { return request('GET', p); },
-    post: function (p, b) { return request('POST', p, b === undefined ? {} : b); },
-    put: function (p, b) { return request('PUT', p, b === undefined ? {} : b); },
-    del: function (p) { return request('DELETE', p); },
+    post: function (p, b, opts) { return request('POST', p, b === undefined ? {} : b, opts); },
+    put: function (p, b, opts) { return request('PUT', p, b === undefined ? {} : b, opts); },
+    del: function (p, opts) { return request('DELETE', p, undefined, opts); },
     detect: detect,
     mode: function () { return 'server'; },
     getToken: getToken,
@@ -339,45 +341,123 @@ const Store = (function () {
   let inflight = null;
   const CACHE_KEY = 'teammotor:bootstrap';
   const CACHE_TIME_KEY = 'teammotor:bootstrap_time';
-  const CACHE_MAX_AGE = 45 * 1000; // 45s fresh TTL for zero-latency menu transitions
+  const CACHE_MAX_AGE = 60 * 1000;        // 60s fresh window — zero network calls on rapid menu switching
+  const SWR_MAX_AGE = 30 * 60 * 1000;     // 30m stale-while-revalidate window — instant menu paint + background refresh
+
+  function stripHeavyImages(d) {
+    if (!d || typeof d !== 'object') return d;
+    const copy = Object.assign({}, d);
+    if (Array.isArray(d.products)) {
+      copy.products = d.products.map(function (p) {
+        return p && /^data:image\//.test(p.image || '') ? Object.assign({}, p, { image: '' }) : p;
+      });
+    }
+    if (d.expiry && typeof d.expiry === 'object') {
+      const expCopy = Object.assign({}, d.expiry);
+      if (Array.isArray(d.expiry.expired)) {
+        expCopy.expired = d.expiry.expired.map(function (p) {
+          return p && /^data:image\//.test(p.image || '') ? Object.assign({}, p, { image: '' }) : p;
+        });
+      }
+      if (Array.isArray(d.expiry.expiring)) {
+        expCopy.expiring = d.expiry.expiring.map(function (p) {
+          return p && /^data:image\//.test(p.image || '') ? Object.assign({}, p, { image: '' }) : p;
+        });
+      }
+      copy.expiry = expCopy;
+    }
+    return copy;
+  }
+
+  function writeCache(d, ts) {
+    const stamp = String(ts || Date.now());
+    try {
+      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(d));
+      window.sessionStorage.setItem(CACHE_TIME_KEY, stamp);
+    } catch (e) {
+      try {
+        window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(stripHeavyImages(d)));
+        window.sessionStorage.setItem(CACHE_TIME_KEY, stamp);
+      } catch (_) {}
+    }
+  }
+
+  function payloadChanged(prev, next) {
+    try {
+      return JSON.stringify(Object.assign({}, prev, { serverTime: null })) !==
+        JSON.stringify(Object.assign({}, next, { serverTime: null }));
+    } catch (e) {
+      return true;
+    }
+  }
+
+  // Synchronously pre-populate in-memory Store from sessionStorage so immediate shell renders have alert counts & settings
+  try {
+    const initialStr = window.sessionStorage.getItem(CACHE_KEY);
+    if (initialStr) {
+      const parsed = JSON.parse(initialStr);
+      if (parsed && typeof parsed === 'object') {
+        data = parsed;
+        loaded = true;
+        if (parsed.me) Api.setUser(parsed.me);
+      }
+    }
+  } catch (e) {}
 
   function invalidate() {
     try { window.sessionStorage.removeItem(CACHE_TIME_KEY); } catch (e) {}
   }
 
-  async function hydrate(forceFresh = false) {
-    if (!forceFresh) {
-      try {
-        const cachedStr = window.sessionStorage.getItem(CACHE_KEY);
-        const cachedTime = parseInt(window.sessionStorage.getItem(CACHE_TIME_KEY) || '0', 10);
-        if (cachedStr && cachedTime && (Date.now() - cachedTime < CACHE_MAX_AGE)) {
-          const d = JSON.parse(cachedStr);
-          data = d;
-          loaded = true;
-          if (d.me) Api.setUser(d.me);
-          return d;
-        }
-      } catch (e) {}
-    }
-
+  function fetchBootstrap(notifyOnlyIfChanged) {
     if (inflight) return inflight;
     inflight = (async function () {
       try {
         const d = await Api.get('/bootstrap');
+        const changed = !loaded || payloadChanged(data, d);
         data = d;
         loaded = true;
-        try {
-          window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(d));
-          window.sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
-        } catch (e) {}
+        writeCache(d);
         if (d.me) Api.setUser(d.me);
-        try { window.dispatchEvent(new CustomEvent('store:refreshed')); } catch (e) {}
+        if (!notifyOnlyIfChanged || changed) {
+          try { window.dispatchEvent(new CustomEvent('store:refreshed')); } catch (e) {}
+        }
         return d;
       } finally {
         inflight = null;
       }
     })();
     return inflight;
+  }
+
+  async function hydrate(forceFresh = false) {
+    if (!forceFresh) {
+      try {
+        const cachedTime = parseInt(window.sessionStorage.getItem(CACHE_TIME_KEY) || '0', 10);
+        if (!loaded) {
+          const cachedStr = window.sessionStorage.getItem(CACHE_KEY);
+          if (cachedStr) {
+            const d = JSON.parse(cachedStr);
+            if (d && typeof d === 'object') {
+              data = d;
+              loaded = true;
+              if (d.me) Api.setUser(d.me);
+            }
+          }
+        }
+        if (loaded && cachedTime > 0) {
+          const age = Date.now() - cachedTime;
+          if (age < CACHE_MAX_AGE) {
+            return data;
+          }
+          if (age < SWR_MAX_AGE) {
+            fetchBootstrap(true).catch(function () {});
+            return data;
+          }
+        }
+      } catch (e) {}
+    }
+
+    return fetchBootstrap(false);
   }
 
   function get(key, fallback) {
@@ -387,16 +467,42 @@ const Store = (function () {
 
   function set(key, value) {
     data[key] = value;
-    try {
-      window.sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-      window.sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()));
-    } catch (e) {}
+    writeCache(data);
     return value;
+  }
+
+  function upsertItem(key, item, opts) {
+    if (!item) return item;
+    const idField = (opts && opts.idField) || 'id';
+    const prepend = !!(opts && opts.prepend);
+    const list = Array.isArray(data[key]) ? data[key].slice() : [];
+    const idx = list.findIndex(function (x) { return x && x[idField] === item[idField]; });
+    if (idx !== -1) {
+      list[idx] = Object.assign({}, list[idx], item);
+    } else if (prepend) {
+      list.unshift(item);
+    } else {
+      list.push(item);
+    }
+    return set(key, list);
+  }
+
+  function removeItem(key, id, idField) {
+    const field = idField || 'id';
+    const list = Array.isArray(data[key]) ? data[key] : [];
+    return set(key, list.filter(function (x) { return !x || x[field] !== id; }));
+  }
+
+  function syncInBackground() {
+    fetchBootstrap(true).catch(function () {});
   }
 
   return {
     get: get,
     set: set,
+    upsertItem: upsertItem,
+    removeItem: removeItem,
+    syncInBackground: syncInBackground,
     hydrate: hydrate,
     refresh: function () { return hydrate(true); },
     invalidate: invalidate,
