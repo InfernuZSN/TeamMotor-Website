@@ -1271,6 +1271,42 @@ test('Staff Shift Clock-In Constraint: blocks off-duty Staff from Inventory, POS
   );
 });
 
+/* ------------------------------------------------------------------------------
+   55. INVENTORY TABLE TYPOGRAPHY & RESPONSIVENESS
+   ------------------------------------------------------------------------------ */
+test('Inventory Table Typography & Responsiveness: Full visibility for product names, word wrapping, alignment, and responsive card labels', () => {
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(
+    styleCss.includes('.page-inventory .cell-product .name') &&
+    styleCss.includes('white-space: normal !important;') &&
+    styleCss.includes('word-break: break-word;') &&
+    styleCss.includes('overflow-wrap: break-word;'),
+    'style.css must allow product names to wrap naturally with word-break and overflow-wrap'
+  );
+  assert.ok(
+    !styleCss.includes('.page-inventory .cell-product .name, .page-inventory .cell-product .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }'),
+    'style.css must not force product names into single-line ellipsis truncation'
+  );
+  assert.ok(
+    styleCss.includes('#tab-products table { width: 100%; min-width: 64rem; table-layout: fixed; }'),
+    'style.css must enforce min-width 64rem on inventory products table to prevent horizontal crushing'
+  );
+  assert.ok(
+    styleCss.includes('#tab-products th:nth-child(1), #tab-products td:nth-child(1) { width: 16.5rem; min-width: 14rem; }'),
+    'style.css must allocate at least 16.5rem width for Product column'
+  );
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('data-label="Product"'), 'renderProductsTable must label Product cell');
+  assert.ok(invJs.includes('mobile-cell-primary'), 'renderProductsTable must assign mobile-cell-primary to Product cell');
+  assert.ok(invJs.includes('mobile-cell-actions'), 'renderProductsTable must assign mobile-cell-actions to Actions cell');
+  assert.ok(invJs.includes('data-label="Brand"'), 'renderProductsTable must label Brand cell');
+  assert.ok(invJs.includes('data-label="Category"'), 'renderProductsTable must label Category cell');
+  assert.ok(invJs.includes('data-label="Price"'), 'renderProductsTable must label Price cell');
+  assert.ok(invJs.includes('data-label="Stock"'), 'renderProductsTable must label Stock cell');
+  assert.ok(invJs.includes('data-label="Status"'), 'renderProductsTable must label Status cell');
+});
+
 
 
 

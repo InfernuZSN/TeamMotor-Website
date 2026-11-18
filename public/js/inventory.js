@@ -207,27 +207,27 @@ Boot.ready(function () {
       const status = Utils.getStockStatus(p.stock, p.reorderLevel);
       const archivedRow = p.archived ? ' style="opacity:.6;"' : '';
       return '<tr' + archivedRow + '>' +
-        '<td><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' +
+        '<td class="mobile-cell-primary" data-label="Product"><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' +
           '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
           '<div><div class="name" title="' + Utils.escapeHtml(p.name) + '">' + Utils.escapeHtml(p.name) + (p.archived ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</div><div class="sub">' + p.id + '</div></div></div></td>' +
-        '<td><span class="cell-trunc" title="' + Utils.escapeHtml(p.brand || '') + '">' + Utils.escapeHtml(p.brand || '\u2014') + '</span></td>' +
-        '<td><span class="cell-trunc" title="' + Utils.escapeHtml(cat ? cat.name : p.category) + '">' + Utils.escapeHtml(cat ? cat.name : p.category) + '</span></td>' +
-        '<td><span class="cell-clamp" title="' + Utils.escapeHtml((p.compatibility || []).join(', ')) + '">' + Utils.escapeHtml(compatSummary(p.compatibility || [])) + '</span></td>' +
-        '<td><span class="cell-clamp" title="' + Utils.escapeHtml(sup ? sup.name : '') + '">' + (sup ? Utils.escapeHtml(sup.name) : '\u2014') + '</span></td>' +
-        '<td class="text-right mono-num">' + Utils.formatPHP(p.sellingPrice) + '</td>' +
-        '<td class="text-right mono-num">' + p.stock + '</td>' +
-        '<td class="col-status"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span> ' + Utils.expiryBadge(p, expiryMonths()) + '</td>' +
-        '<td class="text-muted" style="font-size:.78rem;">' + Utils.timeAgo(p.lastUpdated) + '</td>' +
-        '<td class="col-actions"><div class="flex gap-8">' +
-          '<button class="icon-btn" title="View" data-view="' + p.id + '">' + icon('eye') + '</button>' +
-          (isAdmin ? '<button class="icon-btn" title="Edit" data-edit="' + p.id + '">' + icon('edit') + '</button>' : '') +
+        '<td data-label="Brand"><span class="cell-trunc" title="' + Utils.escapeHtml(p.brand || '') + '">' + Utils.escapeHtml(p.brand || '\u2014') + '</span></td>' +
+        '<td data-label="Category"><span class="cell-trunc" title="' + Utils.escapeHtml(cat ? cat.name : p.category) + '">' + Utils.escapeHtml(cat ? cat.name : p.category) + '</span></td>' +
+        '<td class="mobile-cell-wide" data-label="Compatibility"><span class="cell-clamp" title="' + Utils.escapeHtml((p.compatibility || []).join(', ')) + '">' + Utils.escapeHtml(compatSummary(p.compatibility || [])) + '</span></td>' +
+        '<td class="mobile-cell-wide" data-label="Supplier"><span class="cell-clamp" title="' + Utils.escapeHtml(sup ? sup.name : '') + '">' + (sup ? Utils.escapeHtml(sup.name) : '\u2014') + '</span></td>' +
+        '<td class="text-right mono-num" data-label="Price">' + Utils.formatPHP(p.sellingPrice) + '</td>' +
+        '<td class="text-right mono-num" data-label="Stock">' + p.stock + '</td>' +
+        '<td class="col-status" data-label="Status"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span> ' + Utils.expiryBadge(p, expiryMonths()) + '</td>' +
+        '<td class="text-muted" data-label="Last Updated" style="font-size:.78rem;">' + Utils.timeAgo(p.lastUpdated) + '</td>' +
+        '<td class="col-actions mobile-cell-actions" data-label="Actions"><div class="flex gap-8">' +
+          '<button class="icon-btn" title="View" data-mobile-label="View" data-view="' + p.id + '">' + icon('eye') + '</button>' +
+          (isAdmin ? '<button class="icon-btn" title="Edit" data-mobile-label="Edit" data-edit="' + p.id + '">' + icon('edit') + '</button>' : '') +
           (p.archived
-            ? (isAdmin ? '<button class="icon-btn" title="Unarchive" data-unarchive="' + p.id + '">' + icon('refresh') + '</button>' : '')
-            : '<button class="icon-btn" title="Stock In" data-stockin="' + p.id + '">' + icon('stockIn') + '</button>' +
-              '<button class="icon-btn" title="Stock Out" data-stockout="' + p.id + '">' + icon('stockOut') + '</button>' +
-              (isAdmin ? '<button class="icon-btn" title="Adjust stock (set counted quantity)" data-adjust="' + p.id + '">' + icon('checkCircle') + '</button>' +
-              '<button class="icon-btn" title="Archive" data-archive="' + p.id + '">' + icon('archive') + '</button>' : '')) +
-          (isAdmin ? '<button class="icon-btn" title="Delete product" data-delete-prod="' + p.id + '" style="color:var(--danger);">' + icon('trash') + '</button>' : '') +
+            ? (isAdmin ? '<button class="icon-btn" title="Unarchive" data-mobile-label="Unarchive" data-unarchive="' + p.id + '">' + icon('refresh') + '</button>' : '')
+            : '<button class="icon-btn" title="Stock In" data-mobile-label="Stock In" data-stockin="' + p.id + '">' + icon('stockIn') + '</button>' +
+              '<button class="icon-btn" title="Stock Out" data-mobile-label="Stock Out" data-stockout="' + p.id + '">' + icon('stockOut') + '</button>' +
+              (isAdmin ? '<button class="icon-btn" title="Adjust stock (set counted quantity)" data-mobile-label="Adjust" data-adjust="' + p.id + '">' + icon('checkCircle') + '</button>' +
+              '<button class="icon-btn" title="Archive" data-mobile-label="Archive" data-archive="' + p.id + '">' + icon('archive') + '</button>' : '')) +
+          (isAdmin ? '<button class="icon-btn" title="Delete product" data-mobile-label="Delete" data-delete-prod="' + p.id + '" style="color:var(--danger);">' + icon('trash') + '</button>' : '') +
         '</div></td>' +
       '</tr>';
     }).join('');
