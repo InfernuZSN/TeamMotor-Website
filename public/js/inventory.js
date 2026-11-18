@@ -217,8 +217,7 @@ Boot.ready(function () {
         '<td class="text-right mono-num" data-label="Price">' + Utils.formatPHP(p.sellingPrice) + '</td>' +
         '<td class="text-right mono-num" data-label="Stock">' + p.stock + '</td>' +
         '<td class="col-status" data-label="Status"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span> ' + Utils.expiryBadge(p, expiryMonths()) + '</td>' +
-        '<td class="text-muted" data-label="Last Updated" style="font-size:.78rem;">' + Utils.timeAgo(p.lastUpdated) + '</td>' +
-        '<td class="col-actions mobile-cell-actions" data-label="Actions"><div class="flex gap-8">' +
+        '<td class="col-actions mobile-cell-actions text-left" data-label="Actions"><div class="flex actions-flex">' +
           '<button class="icon-btn" title="View" data-mobile-label="View" data-view="' + p.id + '">' + icon('eye') + '</button>' +
           (isAdmin ? '<button class="icon-btn" title="Edit" data-mobile-label="Edit" data-edit="' + p.id + '">' + icon('edit') + '</button>' : '') +
           (p.archived

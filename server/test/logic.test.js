@@ -1288,18 +1288,32 @@ test('Inventory Table Typography & Responsiveness: Full visibility for product n
     'style.css must not force product names into single-line ellipsis truncation'
   );
   assert.ok(
-    styleCss.includes('#tab-products table { width: 100%; min-width: 64rem; table-layout: fixed; }'),
-    'style.css must enforce min-width 64rem on inventory products table to prevent horizontal crushing'
+    styleCss.includes('#tab-products table { width: 100%; min-width: 0; table-layout: fixed; }'),
+    'style.css must fit inventory products table to 100% width with min-width: 0 to prevent horizontal scroll'
   );
   assert.ok(
-    styleCss.includes('#tab-products th:nth-child(1), #tab-products td:nth-child(1) { width: 16.5rem; min-width: 14rem; }'),
-    'style.css must allocate at least 16.5rem width for Product column'
+    styleCss.includes('#tab-products .table-wrap { overflow-x: hidden; }'),
+    'style.css must disable horizontal scrollbar on #tab-products .table-wrap'
+  );
+  assert.ok(
+    styleCss.includes('#tab-products th:nth-child(1), #tab-products td:nth-child(1) { width: auto; min-width: 0; }'),
+    'style.css must allow Product column to flex and fill remaining card width'
+  );
+  assert.ok(
+    styleCss.includes('#tab-products th.col-actions, #tab-products th:nth-child(9) { width: 13.25rem; text-align: left; padding-left: 0.5rem; }'),
+    'style.css must align Actions header to the left over the action buttons'
+  );
+
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(
+    invHtml.includes('<th class="col-actions text-left">Actions</th>'),
+    'inventory.html Actions header must use text-left alignment'
   );
 
   const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
   assert.ok(invJs.includes('data-label="Product"'), 'renderProductsTable must label Product cell');
   assert.ok(invJs.includes('mobile-cell-primary'), 'renderProductsTable must assign mobile-cell-primary to Product cell');
-  assert.ok(invJs.includes('mobile-cell-actions'), 'renderProductsTable must assign mobile-cell-actions to Actions cell');
+  assert.ok(invJs.includes('mobile-cell-actions text-left'), 'renderProductsTable must assign mobile-cell-actions text-left to Actions cell');
   assert.ok(invJs.includes('data-label="Brand"'), 'renderProductsTable must label Brand cell');
   assert.ok(invJs.includes('data-label="Category"'), 'renderProductsTable must label Category cell');
   assert.ok(invJs.includes('data-label="Price"'), 'renderProductsTable must label Price cell');
