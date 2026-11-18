@@ -21,7 +21,7 @@ Boot.ready(function () {
     });
   }
 
-  const pg = createPager($('custPager'), function () { render(); });
+  const pg = createPager($('custPager'), function () { render(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function render() {
     const list = pg.slice(rows(), $('custSearch').value + '|' + $('custStatus').value);
     $('custTbody').innerHTML = list.length ? list.map(function (c) {
@@ -98,7 +98,7 @@ Boot.ready(function () {
           }).join('') + '</tbody></table></div>' : '<p class="text-muted">No warranties linked.</p>');
     } catch (err) { $('custViewBody').innerHTML = '<p class="form-error">' + Utils.escapeHtml(err.message) + '</p>'; }
   }
-  function kv(label, value) { return '<div><div class="hint" style="margin:0 0 3px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">' + label + '</div><div style="font-weight:600;color:var(--ink);">' + value + '</div></div>'; }
+  function kv(label, value) { return '<div class="kv-item"><div class="hint kv-lbl" style="margin:0 0 3px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">' + label + '</div><div class="kv-val" style="font-weight:600;color:var(--ink);overflow-wrap:anywhere;word-break:break-word;">' + value + '</div></div>'; }
 
   Boot.dom(function () {
     render();

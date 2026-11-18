@@ -25,7 +25,7 @@ const Icons = {
   plus: '<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
   minus: '<line x1="5" y1="12" x2="19" y2="12"/>',
   edit: '<polygon points="3,17.5 3,21 6.5,21 17,10.5 13.5,7 3,17.5"/><line x1="16" y1="4" x2="20" y2="8"/><line x1="13.5" y1="7" x2="17" y2="10.5"/>',
-  eye: '<polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/>',
+  eye: '<g stroke-linecap="round" stroke-linejoin="round"><line x1="2.5" y1="12" x2="0.6" y2="9.8"/><line x1="5.2" y1="8.8" x2="3.2" y2="6"/><line x1="8.8" y1="6.8" x2="7.6" y2="3.4"/><line x1="12" y1="6" x2="12" y2="2.2"/><line x1="15.2" y1="6.8" x2="16.4" y2="3.4"/><line x1="18.8" y1="8.8" x2="20.8" y2="6"/><line x1="21.5" y1="12" x2="23.4" y2="9.8"/><path d="M1.5 13.5 C4.5 7.5 19.5 7.5 22.5 13.5 C19.5 19.5 4.5 19.5 1.5 13.5 Z"/><circle cx="12" cy="13.5" r="4.2"/><path d="M12 11.2 A2.3 2.3 0 1 0 14.3 13.5 A1.1 1.1 0 0 1 12 11.2 Z" style="fill:currentColor;stroke:none;"/></g>',
   stockIn: '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="6,11 12,5 18,11"/>',
   stockOut: '<line x1="12" y1="5" x2="12" y2="19"/><polyline points="6,13 12,19 18,13"/>',
   history: '<circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 16,14"/>',
@@ -56,8 +56,9 @@ const Icons = {
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/>',
   lock: '<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8,11 L8,8 C8,5.8 9.8,4 12,4 C14.2,4 16,5.8 16,8 L16,11"/>',
   key: '<circle cx="8" cy="15" r="4"/><line x1="11" y1="12" x2="20" y2="3"/><line x1="16" y1="7" x2="19" y2="10"/>',
-  eyeOff: '<polygon points="12,5 22,12 12,19 2,12"/><circle cx="12" cy="12" r="3"/><line x1="3" y1="3" x2="21" y2="21"/>',
-  trash: '<polyline points="3,6 5,6 21,6"/><path d="M19,6 L18,20 C18,21.1 17.1,22 16,22 L8,22 C6.9,22 6,21.1 6,20 L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9,6 L9,4 C9,3.4 9.4,3 10,3 L14,3 C14.6,3 15,3.4 15,4 L15,6"/>'
+  eyeOff: '<g stroke-linecap="round" stroke-linejoin="round"><line x1="2.5" y1="12" x2="0.6" y2="9.8"/><line x1="5.2" y1="8.8" x2="3.2" y2="6"/><line x1="8.8" y1="6.8" x2="7.6" y2="3.4"/><line x1="12" y1="6" x2="12" y2="2.2"/><line x1="15.2" y1="6.8" x2="16.4" y2="3.4"/><line x1="18.8" y1="8.8" x2="20.8" y2="6"/><line x1="21.5" y1="12" x2="23.4" y2="9.8"/><path d="M1.5 13.5 C4.5 7.5 19.5 7.5 22.5 13.5 C19.5 19.5 4.5 19.5 1.5 13.5 Z"/><circle cx="12" cy="13.5" r="4.2"/><path d="M12 11.2 A2.3 2.3 0 1 0 14.3 13.5 A1.1 1.1 0 0 1 12 11.2 Z" style="fill:currentColor;stroke:none;"/><line x1="2" y1="2" x2="22" y2="22"/></g>',
+  trash: '<polyline points="3,6 5,6 21,6"/><path d="M19,6 L18,20 C18,21.1 17.1,22 16,22 L8,22 C6.9,22 6,21.1 6,20 L5,6"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/><path d="M9,6 L9,4 C9,3.4 9.4,3 10,3 L14,3 C14.6,3 15,3.4 15,4 L15,6"/>',
+  book: '<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>'
 };
 function icon(name, cls) {
   return '<svg class="' + (cls || '') + '" viewBox="0 0 24 24">' + (Icons[name] || '') + '</svg>';
@@ -249,16 +250,48 @@ let topbarDocClickBound = false;
 let shellEventsBound = false;
 let idlePrefetchScheduled = false;
 
+const SHIFT_REQUIRED_KEYS = ['inventory', 'pos', 'sales', 'customers', 'warranty'];
+const SHIFT_REQUIRED_PAGES = {
+  'inventory': 'Inventory',
+  'inventory.html': 'Inventory',
+  'pos': 'POS',
+  'pos.html': 'POS',
+  'sales': 'Sales',
+  'sales.html': 'Sales',
+  'customers': 'Customers',
+  'customers.html': 'Customers',
+  'warranty': 'Warranty',
+  'warranty.html': 'Warranty'
+};
+
+function isShiftRequiredKey(key) {
+  return SHIFT_REQUIRED_KEYS.indexOf(String(key || '').toLowerCase().replace(/\.html$/, '')) !== -1;
+}
+
+function isStaffClockedIn(session) {
+  const u = session || getSession();
+  if (!u) return false;
+  if (u.role === 'Admin') return true;
+  if (typeof Store === 'undefined' || !Store.get) return false;
+  const shifts = Store.get('shifts', []);
+  return Array.isArray(shifts) && shifts.some(function (s) {
+    return s && s.username === u.username && !s.clockOut;
+  });
+}
+
 function renderSidebar(activeKey) {
   const sidebar = document.getElementById('sidebar');
   if (!sidebar) return;
   if (activeKey) currentActiveKey = activeKey;
+  else activeKey = currentActiveKey;
   const session = requireSession();
   if (!session) return;
   const items = NAV_ITEMS[session.role] || NAV_ITEMS.Staff;
   const products = Store.get('products', []);
   const expiryMonths = (Store.get('settings', {}).expiryWarningMonths) || 3;
   const invAlertCount = Analytics.inventoryAlertCount(products, expiryMonths);
+  const storeLoaded = typeof Store !== 'undefined' && Store.isLoaded && Store.isLoaded();
+  const staffOffDuty = session.role === 'Staff' && storeLoaded && !isStaffClockedIn(session);
   // Profile photo (saved on the user record by profile.js as a resized data URL). The strict pattern
   // keeps anything unexpected out of the markup below.
   const mePhoto = profilePhotoFor(session);
@@ -269,16 +302,20 @@ function renderSidebar(activeKey) {
       '<div class="brand-text">TeamMotor<span>Parts &amp; Accessories</span></div>' +
     '</div>' +
     '<div class="nav-group-label">Menu</div>' +
-    items.map(item =>
-      '<a class="nav-item' + (item.key === activeKey ? ' active' : '') + '" href="' + item.href + '" title="' + item.label + '">' +
+    items.map(item => {
+      const locked = staffOffDuty && isShiftRequiredKey(item.key);
+      return '<a class="nav-item' + (item.key === activeKey ? ' active' : '') + (locked ? ' is-locked' : '') + '" href="' + item.href + '"' +
+        (locked ? ' data-locked-menu="' + item.label + '" aria-disabled="true" title="' + item.label + ' \u2014 Clock in on My Profile to unlock"' : ' title="' + item.label + '"') + '>' +
         icon(item.iconName) + '<span>' + item.label + '</span>' +
-        (item.key === 'inventory' && invAlertCount > 0 ? '<span class="nav-badge">' + invAlertCount + '</span>' : '') +
-      '</a>'
-    ).join('') +
+        (locked
+          ? '<span class="nav-lock-badge" aria-label="Locked until clocked in">' + icon('lock') + '</span>'
+          : (item.key === 'inventory' && invAlertCount > 0 ? '<span class="nav-badge">' + invAlertCount + '</span>' : '')) +
+      '</a>';
+    }).join('') +
     '<div class="sidebar-footer">' +
       '<a class="sidebar-user' + (activeKey === 'profile' ? ' active' : '') + '" href="profile.html" title="My profile">' +
         '<div class="avatar">' + (mePhoto ? '<img src="' + mePhoto + '" alt="">' : initials(session.name)) + '</div>' +
-        '<div class="who"><strong>' + Utils.escapeHtml(session.name) + '</strong><span>' + session.role + '</span></div>' +
+        '<div class="who"><strong>' + Utils.escapeHtml(session.name) + '</strong><span>' + (session.role === 'Staff' && storeLoaded ? (staffOffDuty ? 'Staff \u2022 Off Duty' : 'Staff \u2022 Clocked In') : session.role) + '</span></div>' +
       '</a>' +
     '</div>';
 
@@ -336,7 +373,7 @@ function initInstantNavPrefetch(container) {
   const triggers = [];
   container.querySelectorAll('a[href]').forEach(function (a) {
     const href = a.getAttribute('href');
-    if (!href || href.indexOf('#') === 0 || a.classList.contains('active')) return;
+    if (!href || href.indexOf('#') === 0 || a.classList.contains('active') || a.classList.contains('is-locked')) return;
     const trigger = function () {
       prefetchResource(href, 'document');
       (PAGE_SCRIPTS[href] || []).forEach(function (src) {
@@ -372,12 +409,22 @@ function closeMobileSidebar() {
   if (scrim) scrim.classList.remove('open');
 }
 
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+
 function renderTopbarActions() {
   const mount = document.getElementById('topbarActions');
   if (!mount) return;
   const session = getSession();
   if (!session) return;
   mount.innerHTML =
+    '<button class="icon-btn" id="guideBtn" title="User Guidelines & Navigation" aria-label="User Guide">' + icon('book') + '</button>' +
     '<div class="notif-btn account-menu" id="notifWrap">' +
       '<button class="icon-btn" id="notifBell" aria-label="Notifications">' + icon('bell') + '<span id="notifDot"></span></button>' +
       '<div class="notif-panel" id="notifPanel"></div>' +
@@ -433,6 +480,51 @@ function requireRole(role) {
   return true;
 }
 
+function renderShiftLockedView(activeKey) {
+  const session = getSession();
+  const normKey = String(activeKey || '').toLowerCase().replace(/\.html$/, '');
+  const label = SHIFT_REQUIRED_PAGES[normKey] || 'this menu';
+  const lockCardHtml =
+    '<div class="empty-state card shift-lock-card" style="max-width:460px;margin:60px auto;padding:2rem 1.75rem;">' +
+      '<div class="shift-lock-icon">' + icon('lock') + '</div>' +
+      '<h3>Shift Clock-In Required</h3>' +
+      '<p>You&rsquo;re signed in as <strong>' + Utils.escapeHtml(session ? session.name : 'Staff') + '</strong> (Staff), but you are currently <strong>Off Duty</strong>.</p>' +
+      '<p class="text-muted" style="font-size:.84rem;margin-top:-.25rem;">You cannot access <strong>' + Utils.escapeHtml(label) + '</strong> (or Inventory, POS, Sales, Customers, and Warranty) while off duty. Please clock in to your shift on <strong>My Profile</strong> first.</p>' +
+      '<div class="flex gap-8 justify-center" style="margin-top:.85rem;flex-wrap:wrap;">' +
+        '<a class="btn btn-primary" href="profile.html">' + icon('clock') + ' Go to My Profile &amp; Clock In</a>' +
+        '<a class="btn btn-secondary" href="index.html">Back to Dashboard</a>' +
+      '</div>' +
+    '</div>';
+
+  // Remove page-specific modals so restricted dialogs cannot be opened via DOM inspection
+  document.querySelectorAll('.modal-overlay:not(#guideModalOverlay), .pt-overlay').forEach(function (el) {
+    el.remove();
+  });
+
+  const page = document.querySelector('.page');
+  if (page) {
+    page.innerHTML = lockCardHtml;
+  }
+  const ptMain = document.querySelector('.pt-main');
+  if (ptMain) {
+    ptMain.style.display = 'block';
+    ptMain.style.overflowY = 'auto';
+    ptMain.innerHTML = lockCardHtml;
+    const heldBtn = document.getElementById('heldBtn');
+    if (heldBtn) heldBtn.style.display = 'none';
+  }
+}
+
+function requireShiftClockIn(activeKey) {
+  const session = getSession();
+  if (!session) return false;
+  if (session.role === 'Admin') return true;
+  if (!isShiftRequiredKey(activeKey)) return true;
+  if (isStaffClockedIn(session)) return true;
+  renderShiftLockedView(activeKey);
+  return false;
+}
+
 /* ---------- Sidebar collapse: grey round arrow button on the sidebar's right edge ----------
    Points left while the sidebar is open (click to minimize) and right while it is
    minimized (click to maximize). The choice is remembered per browser so moving
@@ -472,6 +564,9 @@ const SIDEBAR_COLLAPSED_KEY = 'motoshop:sidebarCollapsed';
     initSidebarToggle();
     renderSidebar(key);
     renderTopbarActions();
+    if (typeof Store !== 'undefined' && Store.isLoaded && Store.isLoaded() && isShiftRequiredKey(key) && !isStaffClockedIn(getSession())) {
+      renderShiftLockedView(key);
+    }
   } catch (e) {}
 })();
 
@@ -534,10 +629,27 @@ function initShell(activeKey) {
     if (hamburger) hamburger.addEventListener('click', openMobileSidebar);
     const scrim = document.getElementById('sidebarScrim');
     if (scrim) scrim.addEventListener('click', closeMobileSidebar);
+    document.addEventListener('click', function (e) {
+      const a = e.target.closest('a[href]');
+      if (!a) return;
+      const session = getSession();
+      if (!session || session.role === 'Admin') return;
+      if (typeof Store !== 'undefined' && Store.isLoaded && !Store.isLoaded()) return;
+      if (isStaffClockedIn(session)) return;
+      const rawHref = (a.getAttribute('href') || '').split('?')[0].split('#')[0].split('/').pop().toLowerCase();
+      if (SHIFT_REQUIRED_PAGES[rawHref]) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeMobileSidebar();
+        showToast('Clock-in required: Please clock in to your shift on My Profile before accessing ' + SHIFT_REQUIRED_PAGES[rawHref] + '.', 'warning');
+      }
+    }, true);
     window.addEventListener('store:refreshed', function () {
-      renderSidebar(currentActiveKey || activeKey);
+      const curKey = currentActiveKey || activeKey;
+      renderSidebar(curKey);
       syncProfileAvatars();
       if (window.Notifications) Notifications.render();
+      requireShiftClockIn(curKey);
     });
   }
   bindEscapeToCloseModals();
@@ -547,6 +659,7 @@ function initShell(activeKey) {
     const flash = sessionStorage.getItem('tm:flash');
     if (flash) { sessionStorage.removeItem('tm:flash'); showToast(flash, 'ok'); }
   } catch (e) { /* ignore */ }
+  if (!requireShiftClockIn(activeKey)) return false;
   return true;
 }
 
@@ -919,6 +1032,7 @@ function confirmDialog(title, message, onConfirm, okLabel) {
   overlay = document.createElement('div');
   overlay.className = 'modal-overlay open';
   overlay.id = 'sharedConfirmOverlay';
+  overlay.style.zIndex = '350';
   overlay.innerHTML = '<div class="modal" role="dialog" aria-modal="true"><div class="modal-body" style="text-align:center;padding:1.75rem 1.5rem 1rem;">' +
     '<h2 style="margin-bottom:.4rem;"></h2><p class="text-muted" style="margin:0;"></p></div>' +
     '<div class="modal-footer" style="justify-content:center;border-top:none;"><button type="button" class="btn btn-secondary" data-act="no">Cancel</button>' +
@@ -927,6 +1041,7 @@ function confirmDialog(title, message, onConfirm, okLabel) {
   overlay.querySelector('p').textContent = message;
   overlay.querySelector('[data-act="yes"]').textContent = okLabel || 'Confirm';
   overlay.addEventListener('click', function (e) {
+    e.stopPropagation();
     const act = e.target.closest('[data-act]');
     if (act || e.target === overlay) {
       overlay.remove();
@@ -937,13 +1052,15 @@ function confirmDialog(title, message, onConfirm, okLabel) {
 }
 
 /* ---------- Shared pagination bar ----------
-   const pg = createPager(document.getElementById('xPager'), rerenderFn);
+   const pg = createPager(document.getElementById('xPager'), rerenderFn, { size: 5, sizes: [5, 10, 25, 50] });
    Client-side lists:  rows = pg.slice(filteredList, signatureOfFilters)  -> current page only (resets to page 1 when the signature changes)
    Server-paged lists: pg.update(total)  and read pg.page / pg.size to build the query.
-   The bar shows "Showing 1–25 of 53", Previous / page numbers / Next, and a rows-per-page selector (25 / 50). */
+   The bar shows "Showing 1–5 of 53", Previous / page numbers / Next, and a rows-per-page selector (5 / 10 / 25 / 50). */
 function createPager(el, onChange, opts) {
   opts = opts || {};
-  const st = { page: 1, size: opts.size || 25, total: 0, sig: null };
+  const defaultSizes = [5, 10, 25, 50];
+  const st = { page: 1, size: opts.size || 5, total: 0, sig: null };
+  const pagerSizes = opts.sizes || defaultSizes;
   const pages = function () { return Math.max(1, Math.ceil(st.total / st.size)); };
   function numbers() {
     const n = pages(), cur = st.page, out = [];
@@ -957,7 +1074,7 @@ function createPager(el, onChange, opts) {
     el.classList.add('pg-bar');
     el.innerHTML = '<span class="pg-info">' + (st.total ? 'Showing ' + from + '\u2013' + to + ' of ' + st.total : 'No entries') + '</span>' +
       '<span class="pg-ctrl" role="navigation" aria-label="Pagination">' +
-        (opts.sizes === false ? '' : '<label class="pg-size">Show <select data-pg-size aria-label="Rows per page">' + (opts.sizes || [25, 50]).map(function (s) { return '<option value="' + s + '"' + (s === st.size ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></label>') +
+        (opts.sizes === false ? '' : '<label class="pg-size">Show <select data-pg-size aria-label="Rows per page">' + pagerSizes.map(function (s) { return '<option value="' + s + '"' + (s === st.size ? ' selected' : '') + '>' + s + '</option>'; }).join('') + '</select></label>') +
         '<button type="button" class="pg-btn" data-pg="prev"' + (st.page <= 1 ? ' disabled' : '') + '>Previous</button>' +
         (st.total ? numbers().map(function (v) { return v === '\u2026' ? '<span class="pg-gap">\u2026</span>' : '<button type="button" class="pg-btn pg-num' + (v === st.page ? ' is-on' : '') + '" data-pg="' + v + '"' + (v === st.page ? ' aria-current="page"' : '') + '>' + v + '</button>'; }).join('') : '') +
         '<button type="button" class="pg-btn" data-pg="next"' + (st.page >= n ? ' disabled' : '') + '>Next</button>' +
@@ -972,7 +1089,7 @@ function createPager(el, onChange, opts) {
     });
     el.addEventListener('change', function (e) {
       if (!e.target.matches('[data-pg-size]')) return;
-      st.size = parseInt(e.target.value, 10) || 25; st.page = 1; onChange();
+      st.size = parseInt(e.target.value, 10) || 5; st.page = 1; onChange();
     });
   }
   return {

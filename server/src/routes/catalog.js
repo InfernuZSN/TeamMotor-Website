@@ -6,8 +6,9 @@ const { wrap, bad, notFound, conflict } = require('../utils/errors');
 const { nextId, nextSeq } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
 const { changeStock } = require('../services/inventory');
-const { refreshNotifications } = require('../services/notifications');
+const { refreshNotifications, createActivityNotification } = require('../services/notifications');
 const { UNIVERSAL_FIT } = require('../services/filters');
+const { calculateWarrantyExpiry, today } = require('../utils/dates');
 
 const categories = express.Router();
 const suppliers = express.Router();
@@ -201,19 +202,49 @@ motoBrands.delete('/:id/models/:model', adminOnly, wrap(async (req, res) => {
 
 /* ---------------- products ---------------- */
 const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'description',
-  'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'expirationDate', 'image', 'storageLocation'];
+  'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'shelfLifeDuration', 'shelfLifeUnit', 'expirationDate', 'image', 'storageLocation'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
-function cleanProduct(body) {
+function cleanProduct(body, isUpdate = false) {
   const out = {};
   PRODUCT_FIELDS.forEach(k => { if (body[k] !== undefined) out[k] = body[k]; });
   if (out.expirationDate !== undefined) {
     if (!out.expirationDate) out.expirationDate = null;
     else if (!DATE_RE.test(out.expirationDate)) throw bad('Expiration date must be YYYY-MM-DD.');
   }
+  if (out.shelfLifeDuration !== undefined) {
+    const sDur = Number(out.shelfLifeDuration);
+    if (!Number.isFinite(sDur) || sDur <= 0) {
+      out.shelfLifeDuration = null;
+      out.shelfLifeUnit = null;
+    } else {
+      out.shelfLifeDuration = Math.floor(sDur);
+      const u = String(out.shelfLifeUnit || 'days').toLowerCase();
+      out.shelfLifeUnit = ['days', 'months', 'years'].includes(u) ? u : 'days';
+    }
+  }
+  if (!isUpdate && out.shelfLifeDuration && !out.expirationDate) {
+    out.expirationDate = calculateWarrantyExpiry(today(), out.shelfLifeDuration, out.shelfLifeUnit || 'days');
+  }
   ['costPrice', 'sellingPrice', 'reorderLevel'].forEach(k => {
     if (out[k] !== undefined && (!Number.isFinite(Number(out[k])) || Number(out[k]) < 0)) throw bad(k + ' must be a non-negative number.');
   });
+  if (out.warrantyDuration !== undefined) {
+    const dur = Number(out.warrantyDuration);
+    if (!Number.isFinite(dur) || dur <= 0) {
+      out.warrantyDuration = null;
+      out.warrantyUnit = null;
+      out.warrantyType = null;
+      out.warrantyDays = null;
+      out.rubber = false;
+    } else {
+      out.warrantyDuration = Math.floor(dur);
+      out.warrantyUnit = ['days', 'months', 'years'].includes(out.warrantyUnit) ? out.warrantyUnit : 'months';
+      out.warrantyType = out.warrantyType ? String(out.warrantyType).trim() : null;
+      out.warrantyDays = out.warrantyDuration * ({ days: 1, months: 30, years: 365 }[out.warrantyUnit] || 1);
+      out.rubber = false;
+    }
+  }
   if (out.image && out.image.length > 600000) throw bad('Product image is too large — resize it first.');
   return out;
 }
@@ -322,7 +353,8 @@ products.post('/', wrap(async (req, res) => {
       supplierId: product.supplier || null,
       reference: 'Initial stock',
       reason: null,
-      notes: 'Initial stock on product creation'
+      notes: 'Initial stock on product creation',
+      expirationDate: product.expirationDate || null
     }));
   }
   await Promise.all(postOps);
@@ -333,7 +365,7 @@ products.post('/', wrap(async (req, res) => {
 products.put('/:id', adminOnly, wrap(async (req, res) => {
   const before = await Product.findOne({ id: req.params.id });
   if (!before) throw notFound('Product not found.');
-  const data = cleanProduct(req.body);            // stock is NOT editable here — use stock-in/out or an adjustment
+  const data = cleanProduct(req.body, true);            // stock & batch expiry are NOT editable here — use stock-in/out or an adjustment
   await checkFilterValues(data, before);
   data.lastUpdated = new Date().toISOString();
   const updated = await Product.findOneAndUpdate({ id: req.params.id }, { $set: data }, { new: true, runValidators: true });
@@ -352,8 +384,16 @@ products.post('/:id/archive', adminOnly, wrap(async (req, res) => {
   const p = await Product.findOneAndUpdate({ id: req.params.id }, { $set: { archived, lastUpdated: new Date().toISOString() } }, { new: true });
   if (!p) throw notFound('Product not found.');
   await audit(req, archived ? 'product.archive' : 'product.unarchive', 'product', p.id, { name: p.name });
-  refreshNotifications().catch(() => {});
-  res.json(p);
+  const notification = await createActivityNotification({
+    key: 'event:product-' + (archived ? 'archive' : 'unarchive') + ':' + p.id + ':' + Date.now(),
+    type: archived ? 'product-archive' : 'product-unarchive',
+    productId: p.id,
+    title: archived ? 'Product Archived' : 'Product Unarchived',
+    message: p.name + ' (' + p.id + ') was ' + (archived ? 'archived' : 'unarchived') + ' by ' + (req.user.name || 'Admin') + '.',
+    link: 'inventory.html'
+  }).catch(() => null);
+  await refreshNotifications().catch(() => {});
+  res.json(Object.assign({}, p.toJSON ? p.toJSON() : p, { _notification: notification }));
 }));
 
 products.delete('/:id', adminOnly, wrap(async (req, res) => {
@@ -363,8 +403,16 @@ products.delete('/:id', adminOnly, wrap(async (req, res) => {
     p.deleteOne(),
     audit(req, 'product.delete', 'product', p.id, { name: p.name, category: p.category })
   ]);
-  refreshNotifications().catch(() => {});
-  res.json({ ok: true });
+  const notification = await createActivityNotification({
+    key: 'event:product-delete:' + p.id + ':' + Date.now(),
+    type: 'product-delete',
+    productId: p.id,
+    title: 'Product Deleted',
+    message: p.name + ' (' + p.id + ') was permanently deleted by ' + (req.user.name || 'Admin') + '.',
+    link: 'inventory.html'
+  }).catch(() => null);
+  await refreshNotifications().catch(() => {});
+  res.json({ ok: true, notification });
 }));
 
 module.exports = { categories, suppliers, brands, motoBrands, products };

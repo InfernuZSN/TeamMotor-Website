@@ -179,8 +179,8 @@ Boot.ready(function () {
     rows.sort(sorters[sortBy] || sorters['name-asc']);
     return rows;
   }
-  const pgProducts = createPager(document.getElementById('invPager'), function () { renderProductsTable(); });
-  const pgHistory = createPager(document.getElementById('histPager'), function () { renderHistoryTable(); });
+  const pgProducts = createPager(document.getElementById('invPager'), function () { renderProductsTable(); }, { size: 5, sizes: [5, 10, 25, 50] });
+  const pgHistory = createPager(document.getElementById('histPager'), function () { renderHistoryTable(); }, { size: 5, sizes: [5, 10, 25, 50] });
   const filterSig = function (ids) { return ids.map(function (id) { return document.getElementById(id).value; }).join('|'); };
 
   function visibleColSpan(tbody, fallback) {
@@ -205,10 +205,9 @@ Boot.ready(function () {
       const cat = categories.find(c => c.id === p.category);
       const sup = suppliers.find(s => s.id === p.supplier);
       const status = Utils.getStockStatus(p.stock, p.reorderLevel);
-      const flagClass = status === 'Out of Stock' ? 'danger' : status === 'Low Stock' ? 'warn' : 'ok';
       const archivedRow = p.archived ? ' style="opacity:.6;"' : '';
-      return '<tr class="row-status-bar"' + archivedRow + '>' +
-        '<td><span class="stock-flag ' + flagClass + '"></span><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' +
+      return '<tr' + archivedRow + '>' +
+        '<td><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' +
           '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
           '<div><div class="name" title="' + Utils.escapeHtml(p.name) + '">' + Utils.escapeHtml(p.name) + (p.archived ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</div><div class="sub">' + p.id + '</div></div></div></td>' +
         '<td><span class="cell-trunc" title="' + Utils.escapeHtml(p.brand || '') + '">' + Utils.escapeHtml(p.brand || '\u2014') + '</span></td>' +
@@ -240,11 +239,92 @@ Boot.ready(function () {
      and Adjusted (manual count correction, with the typed reason in Reference / Notes). */
   function movementReason(t) {
     if (t.type === 'Sale') return { label: 'Sold', tone: 'badge-neutral' };
-    if (t.type === 'Void Restock') return { label: 'Returned', tone: 'badge-info' };
+    if (t.type === 'Void Restock') return { label: 'Returned', tone: 'badge-neutral' };
     if (t.type === 'Stock In') return { label: 'Received', tone: 'badge-ok' };
     if (t.type === 'Adjustment') return { label: 'Adjusted', tone: 'badge-neutral' };
     const r = t.reason || 'Other';
-    return { label: r, tone: r === 'Returned' ? 'badge-info' : (r === 'Damaged' || r === 'Lost' || r === 'Expired') ? 'badge-danger' : 'badge-warn' };
+    return { label: r, tone: r === 'Returned' ? 'badge-neutral' : (r === 'Damaged' || r === 'Lost' || r === 'Expired') ? 'badge-danger' : 'badge-warn' };
+  }
+
+  function extractRefNotesList(t) {
+    const ref = String(t.reference || '').trim();
+    const notes = String(t.notes || '').trim();
+    const rawParts = [];
+
+    if (ref && notes) {
+      const refLower = ref.toLowerCase();
+      const notesLower = notes.toLowerCase();
+      if (notesLower.includes(refLower)) {
+        rawParts.push(notes);
+      } else if (refLower.includes(notesLower)) {
+        rawParts.push(ref);
+      } else {
+        rawParts.push(ref);
+        rawParts.push(notes);
+      }
+    } else if (ref) {
+      rawParts.push(ref);
+    } else if (notes) {
+      rawParts.push(notes);
+    }
+
+    const items = [];
+    const seen = new Set();
+    function formatNoteText(str) {
+      return String(str || '')
+        .replace(/\b(Void(?:ed)?|Refund(?:ed)?|Cancel(?:led)?)\s+sale\s+(?!\()([A-Za-z0-9\-]+)\b/gi, '$1 sale ($2)')
+        .replace(/\bSold via POS\s+(?!\()([A-Za-z0-9\-]+)\b/gi, 'Sold via POS ($1)');
+    }
+
+    rawParts.forEach(function (part) {
+      const adjMatch = part.match(/^(Adjusted\s+\d+\s*(?:→|->)\s*\d+(?:\s*\([^)]*\))?)\.\s*(.+)$/i);
+      if (adjMatch) {
+        [adjMatch[1], adjMatch[2]].forEach(function (sub) {
+          let s = formatNoteText(sub.trim().replace(/^[•\-\*]\s*/, '').trim());
+          if (!s || s === '—' || s === '-') return;
+          const key = s.toLowerCase();
+          if (!seen.has(key)) {
+            seen.add(key);
+            items.push(s);
+          }
+        });
+        return;
+      }
+
+      const colonIdx = part.indexOf(':');
+      if (colonIdx > 0) {
+        let prefix = part.slice(0, colonIdx).trim();
+        let suffix = part.slice(colonIdx + 1).trim();
+        if (prefix && suffix && (
+          (ref && prefix.toLowerCase().includes(ref.toLowerCase())) ||
+          /^(void(?:ed)? sale|refund(?:ed)? sale|cancel(?:led)? sale|manual adjustment|initial stock)/i.test(prefix)
+        )) {
+          prefix = formatNoteText(prefix);
+          [prefix, suffix].forEach(function (sub) {
+            let s = formatNoteText(sub.trim().replace(/^[•\-\*]\s*/, '').trim());
+            if (!s || s === '—' || s === '-') return;
+            const key = s.toLowerCase();
+            if (!seen.has(key)) {
+              seen.add(key);
+              items.push(s);
+            }
+          });
+          return;
+        }
+      }
+
+      part.split(/\r?\n|\s+\u00B7\s+/).forEach(function (sub) {
+        let s = formatNoteText(sub.trim().replace(/^[•\-\*]\s*/, '').trim());
+        if (!s || s === '—' || s === '-') return;
+        const key = s.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          items.push(s);
+        }
+      });
+    });
+
+    return items;
   }
 
   function renderHistoryTable() {
@@ -253,6 +333,7 @@ Boot.ready(function () {
     const reasonFilter = document.getElementById('filterHistReason').value;
     const transactions = Store.get('inventoryTransactions', []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
     const filtered = transactions.filter(t => {
+      if (t.type === 'Product Edit') return false;
       if (q && [t.productName, t.productId, t.reference, t.notes, t.user].join(' ').toLowerCase().indexOf(q) === -1) return false;
       if (type && t.type !== type) return false;
       if (reasonFilter && movementReason(t).label !== reasonFilter) return false;
@@ -268,17 +349,20 @@ Boot.ready(function () {
       const qtyDisplay = (t.quantity > 0 ? '+' : '') + t.quantity;
       const typeTone = t.type === 'Stock In' ? 'badge-ok' : t.type === 'Sale' ? 'badge-neutral' : 'badge-danger';
       const why = movementReason(t);
-      const refNotes = [t.reference, t.notes].filter(x => x && x !== why.label).join(' \u00B7 ') || '\u2014';
+      const noteItems = extractRefNotesList(t);
+      const refNotesHtml = noteItems.length
+        ? '<ul class="ref-notes-list">' + noteItems.map(function (it) { return '<li>' + Utils.escapeHtml(it) + '</li>'; }).join('') + '</ul>'
+        : '<span class="text-muted">\u2014</span>';
       return '<tr>' +
-        '<td class="text-muted">' + Utils.formatDateTime(t.date) + '</td>' +
-        '<td style="font-weight:600;color:var(--ink);"><span class="cell-clamp" title="' + Utils.escapeHtml(t.productName) + '">' + Utils.escapeHtml(t.productName) + '</span></td>' +
-        '<td><span class="badge ' + typeTone + '">' + t.type + '</span></td>' +
-        '<td class="text-right mono-num" style="font-weight:700;color:' + (t.quantity < 0 ? 'var(--danger)' : 'var(--ok)') + ';">' + qtyDisplay + '</td>' +
-        '<td class="text-right mono-num text-muted">' + t.previousStock + '</td>' +
-        '<td class="text-right mono-num" style="font-weight:700;">' + t.newStock + '</td>' +
-        '<td><span class="badge ' + why.tone + '">' + Utils.escapeHtml(why.label) + '</span></td>' +
-        '<td class="text-muted"><span class="cell-clamp" title="' + Utils.escapeHtml(refNotes) + '">' + Utils.escapeHtml(refNotes) + '</span></td>' +
-        '<td><span class="cell-trunc" title="' + Utils.escapeHtml(t.user) + '">' + Utils.escapeHtml(t.user) + '</span></td>' +
+        '<td class="text-muted" data-label="Date">' + Utils.formatDateTime(t.date) + '</td>' +
+        '<td class="mobile-cell-primary" data-label="Product" style="font-weight:600;color:var(--ink);"><span class="cell-clamp" title="' + Utils.escapeHtml(t.productName) + '">' + Utils.escapeHtml(t.productName) + '</span></td>' +
+        '<td class="col-type" data-label="Type"><span class="badge ' + typeTone + '">' + Utils.escapeHtml(t.type) + '</span></td>' +
+        '<td class="text-right mono-num" data-label="Qty" style="font-weight:700;color:' + (t.quantity < 0 ? 'var(--danger)' : 'var(--ok)') + ';">' + qtyDisplay + '</td>' +
+        '<td class="text-right mono-num text-muted" data-label="Previous">' + t.previousStock + '</td>' +
+        '<td class="text-right mono-num" data-label="New" style="font-weight:700;">' + t.newStock + '</td>' +
+        '<td class="col-reason" data-label="Reason"><span class="badge ' + why.tone + '">' + Utils.escapeHtml(why.label) + '</span></td>' +
+        '<td class="mobile-cell-wide" data-label="Reference / Notes">' + refNotesHtml + '</td>' +
+        '<td class="col-staff" data-label="Staff"><span class="cell-trunc" title="' + Utils.escapeHtml(t.user) + '">' + Utils.escapeHtml(t.user || '\u2014') + '</span></td>' +
       '</tr>';
     }).join('');
   }
@@ -351,6 +435,18 @@ Boot.ready(function () {
     document.getElementById('pWarrantyDuration').required = on;
   }
 
+  function syncShelfLifeExpiry() {
+    if (editingProductId) return;
+    const durEl = document.getElementById('pShelfLifeDuration');
+    const unitEl = document.getElementById('pShelfLifeUnit');
+    const expEl = document.getElementById('pExpiry');
+    if (!durEl || !unitEl || !expEl) return;
+    const dur = parseInt(durEl.value, 10);
+    if (dur > 0) {
+      expEl.value = Utils.calculateWarrantyExpiry(Utils.todayStr(), dur, unitEl.value || 'days');
+    }
+  }
+
   function warrantyLabel(p) {
     const n = p.warrantyDuration || p.warrantyDays;   // warrantyDays: older records only stored days
     if (!n) return 'No warranty';
@@ -374,8 +470,32 @@ Boot.ready(function () {
 
     const stockInput = document.getElementById('pStock');
     const stockHint = document.getElementById('stockEditHint');
+    const stockField = document.getElementById('pStockField');
+    const expiryField = document.getElementById('pExpiryField');
+    const shelfLifeField = document.getElementById('pShelfLifeField');
+    const shelfLifeLabel = document.getElementById('pShelfLifeLabel');
+    const shelfLifeHint = document.getElementById('pShelfLifeHint');
 
     if (mode === 'edit' && product) {
+      if (stockField) stockField.style.display = 'none';
+      if (stockInput) {
+        stockInput.value = product.stock;
+        stockInput.disabled = true;
+        stockInput.removeAttribute('required');
+      }
+      if (stockHint) stockHint.style.display = 'none';
+
+      if (expiryField) expiryField.style.display = 'none';
+      const expiryInput = document.getElementById('pExpiry');
+      if (expiryInput) {
+        expiryInput.value = product.expirationDate ? String(product.expirationDate).slice(0, 10) : '';
+        expiryInput.disabled = true;
+      }
+
+      if (shelfLifeField) shelfLifeField.classList.add('span-2');
+      if (shelfLifeLabel) shelfLifeLabel.textContent = 'Product Shelf Life (Default for new Stock-Ins)';
+      if (shelfLifeHint) shelfLifeHint.textContent = 'Sets the default duration used to auto-calculate expiration dates on future deliveries. Does not rewrite past batches.';
+
       document.getElementById('pName').value = product.name;
       const pBrandEl = document.getElementById('pBrand');
       if (product.brand && !Array.from(pBrandEl.options).some(o => o.value === product.brand)) {
@@ -397,14 +517,12 @@ Boot.ready(function () {
       pSupEl.value = product.supplier;
       document.getElementById('pSupplierRef').value = product.supplierRef || '';
       document.getElementById('pCompatYears').value = product.compatYears || '';
-      stockInput.value = product.stock;
-      stockInput.disabled = true;
-      stockHint.style.display = 'block';
       document.getElementById('pCost').value = product.costPrice;
       document.getElementById('pPrice').value = product.sellingPrice;
       document.getElementById('pReorder').value = product.reorderLevel;
       document.getElementById('pDescription').value = product.description || '';
-      document.getElementById('pExpiry').value = product.expirationDate ? String(product.expirationDate).slice(0, 10) : '';
+      if (document.getElementById('pShelfLifeDuration')) document.getElementById('pShelfLifeDuration').value = product.shelfLifeDuration || '';
+      if (document.getElementById('pShelfLifeUnit')) document.getElementById('pShelfLifeUnit').value = product.shelfLifeUnit || 'days';
       document.getElementById('pStorageLocation').value = product.storageLocation || '';
       const warrantyN = product.warrantyDuration || product.warrantyDays;
       if (warrantyN) {
@@ -432,9 +550,27 @@ Boot.ready(function () {
         document.getElementById('pUniversal').checked = false;
       }
     } else {
-      stockInput.disabled = false;
-      stockInput.value = 0;
-      stockHint.style.display = 'none';
+      if (stockField) stockField.style.display = '';
+      if (stockInput) {
+        stockInput.disabled = false;
+        stockInput.setAttribute('required', '');
+        stockInput.value = 0;
+      }
+      if (stockHint) stockHint.style.display = 'none';
+
+      if (expiryField) expiryField.style.display = '';
+      const expiryInput = document.getElementById('pExpiry');
+      if (expiryInput) {
+        expiryInput.value = '';
+        expiryInput.disabled = false;
+      }
+
+      if (shelfLifeField) shelfLifeField.classList.remove('span-2');
+      if (shelfLifeLabel) shelfLifeLabel.textContent = 'Product Shelf Life (optional)';
+      if (shelfLifeHint) shelfLifeHint.textContent = 'Shelf-life duration per batch — counts down relative to when each stock batch is added.';
+
+      if (document.getElementById('pShelfLifeDuration')) document.getElementById('pShelfLifeDuration').value = '';
+      if (document.getElementById('pShelfLifeUnit')) document.getElementById('pShelfLifeUnit').value = 'days';
       document.getElementById('pStorageLocation').value = '';
       const pIdEl = document.getElementById('pId');
       const pIdHint = document.getElementById('pIdHint');
@@ -530,6 +666,12 @@ Boot.ready(function () {
     const hasWarranty = document.getElementById('pHasWarranty').checked;
     const warrantyDuration = hasWarranty ? (parseInt(document.getElementById('pWarrantyDuration').value, 10) || null) : null;
     const warrantyUnit = hasWarranty ? document.getElementById('pWarrantyUnit').value : null;
+    const shelfDurEl = document.getElementById('pShelfLifeDuration');
+    const shelfUnitEl = document.getElementById('pShelfLifeUnit');
+    const shelfDurRaw = shelfDurEl ? parseInt(shelfDurEl.value, 10) : 0;
+    const shelfLifeDuration = (shelfDurRaw && shelfDurRaw > 0) ? shelfDurRaw : null;
+    const shelfLifeUnit = shelfLifeDuration ? ((shelfUnitEl && shelfUnitEl.value) || 'days') : null;
+    const expInputVal = document.getElementById('pExpiry').value || null;
     const payload = {
       name: document.getElementById('pName').value.trim(),
       brand: document.getElementById('pBrand').value.trim(),
@@ -541,17 +683,27 @@ Boot.ready(function () {
       costPrice: parseFloat(document.getElementById('pCost').value) || 0,
       sellingPrice: parseFloat(document.getElementById('pPrice').value) || 0,
       reorderLevel: parseInt(document.getElementById('pReorder').value, 10) || 0,
-      expirationDate: document.getElementById('pExpiry').value || null,     // optional
+      shelfLifeDuration: shelfLifeDuration,
+      shelfLifeUnit: shelfLifeUnit,
       storageLocation: document.getElementById('pStorageLocation').value.trim() || '',
       warrantyDuration: warrantyDuration,
       warrantyUnit: warrantyDuration ? warrantyUnit : null,
       warrantyType: warrantyDuration ? (document.getElementById('pWarrantyCoverage').value.trim() || null) : null,
       /* warrantyDays is the older day-count field; keep it in step (months = 30 days, years = 365) */
       warrantyDays: warrantyDuration ? warrantyDuration * ({ days: 1, months: 30, years: 365 }[warrantyUnit] || 1) : null,
+      rubber: false,
       compatibility: compatibility,
       compatYears: document.getElementById('pCompatYears').value.trim() || 'All Years',
       image: pendingImage || Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) || categoryId
     };
+    if (editingProductId) {
+      const existing = Store.get('products', []).find(p => p.id === editingProductId);
+      if (existing && existing.expirationDate) {
+        payload.expirationDate = existing.expirationDate;
+      }
+    } else {
+      payload.expirationDate = expInputVal || (shelfLifeDuration ? Utils.calculateWarrantyExpiry(Utils.todayStr(), shelfLifeDuration, shelfLifeUnit) : null);
+    }
     if (!editingProductId && customId) payload.id = customId;
     await Utils.withBusy(document.getElementById('saveProductBtn'), async function () {
       try {
@@ -563,6 +715,12 @@ Boot.ready(function () {
           payload.stock = parseInt(document.getElementById('pStock').value, 10) || 0;   // opening stock (recorded as a Stock In transaction)
           const created = await Api.post('/products', payload);
           Store.upsertItem('products', created);
+          if (payload.stock > 0) {
+            try {
+              const txns = await Api.get('/inventory/transactions?productId=' + encodeURIComponent(created.id));
+              if (Array.isArray(txns)) txns.slice().reverse().forEach(t => Store.upsertItem('inventoryTransactions', t, { prepend: true }));
+            } catch (e) { /* background sync will pick it up */ }
+          }
           showToast('Added ' + created.name + ' (' + created.id + ').', 'ok');
         }
         closeModal('productModalOverlay');
@@ -576,9 +734,10 @@ Boot.ready(function () {
     return '<div><div class="hint" style="margin:0 0 3px;text-transform:uppercase;letter-spacing:.04em;font-weight:700;">' + label + '</div><div style="font-weight:600;color:var(--ink);font-size:.9rem;">' + value + '</div></div>';
   }
   /* ---------- Product View: Sales + Activity tabs (10 rows per page, independent page state; both reset to page 1 each time a product is opened) ---------- */
+  let viewingProductId = null;
   let viewSalesRows = [], viewActRows = [];
-  const pgVSales = createPager(document.getElementById('vSalesPager'), function () { renderViewSales(); }, { size: 10, sizes: false });
-  const pgVAct = createPager(document.getElementById('vActPager'), function () { renderViewActivity(); }, { size: 10, sizes: false });
+  const pgVSales = createPager(document.getElementById('vSalesPager'), function () { renderViewSales(); }, { size: 5, sizes: [5, 10, 25, 50] });
+  const pgVAct = createPager(document.getElementById('vActPager'), function () { renderViewActivity(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function renderViewSales() {
     const rows = pgVSales.slice(viewSalesRows);
     document.getElementById('vSalesList').innerHTML = rows.length
@@ -590,18 +749,68 @@ Boot.ready(function () {
   }
   function renderViewActivity() {
     const rows = pgVAct.slice(viewActRows);
+    const vp = Store.get('products', []).find(function (x) { return x.id === viewingProductId; }) || null;
     document.getElementById('vActList').innerHTML = rows.length
-      ? '<div class="table-wrap vt-scroll"><table class="vt-table vt-activity"><thead><tr><th>Date</th><th>Reason</th><th>Type</th><th class="text-right">Qty</th><th>Notes</th><th>Staff</th></tr></thead><tbody>' +
+      ? '<div class="table-wrap vt-scroll"><table class="vt-table vt-activity"><thead><tr><th>Date</th><th>Type</th><th class="text-right">Qty</th><th>Expiration Date</th><th>Notes</th><th>Staff</th></tr></thead><tbody>' +
         rows.map(function (t) {
           const typeTone = t.type === 'Stock In' ? 'badge-ok' : t.type === 'Sale' ? 'badge-neutral' : 'badge-danger';
-          const why = movementReason(t);
-          const note = [t.reference, t.notes].filter(function (x) { return x && x !== why.label; }).join(' \u00B7 ') || '\u2014';
-          return '<tr><td class="text-muted">' + Utils.formatDateTime(t.date) + '</td>' +
-            '<td><span class="badge ' + why.tone + '">' + Utils.escapeHtml(why.label) + '</span></td>' +
-            '<td><span class="badge ' + typeTone + '">' + Utils.escapeHtml(t.type) + '</span></td>' +
-            '<td class="text-right mono-num" style="font-weight:700;color:' + (t.quantity < 0 ? 'var(--danger)' : 'var(--ok)') + ';">' + (t.quantity > 0 ? '+' : '') + t.quantity + '</td>' +
-            '<td class="text-muted" style="font-size:.8rem;"><span class="cell-clamp" title="' + Utils.escapeHtml(note) + '">' + Utils.escapeHtml(note) + '</span></td>' +
-            '<td><span class="cell-trunc" title="' + Utils.escapeHtml(t.user) + '">' + Utils.escapeHtml(t.user) + '</span></td></tr>';
+          const expStr = Utils.txnBatchExpiry(t, vp);
+          const expCell = expStr ? Utils.batchExpiryHtml(expStr, expiryMonths()) : '<span class="text-muted">\u2014</span>';
+          const ref = String(t.reference || '').trim();
+          const reason = String(t.reason || '').trim();
+          const notes = String(t.notes || '').trim();
+          const notesLower = notes.toLowerCase();
+          const refLower = ref.toLowerCase();
+          const reasonLower = reason.toLowerCase();
+          const typeLower = String(t.type || '').trim().toLowerCase();
+
+          const parts = [];
+          if (ref && (!notes || !notesLower.includes(refLower))) {
+            parts.push(ref);
+          }
+          if (reason) {
+            const isRedundantWithType = (typeLower === 'sale' && reasonLower === 'sold') || (reasonLower === typeLower);
+            const inNotes = notes && notesLower.includes(reasonLower);
+            const inRef = ref && refLower.includes(reasonLower);
+            const inParts = parts.some(function (p) { return p.toLowerCase().includes(reasonLower); });
+            if (!isRedundantWithType && !inNotes && !inRef && !inParts) {
+              parts.push(reason);
+            }
+          }
+          if (notes) {
+            const adjMatch = notes.match(/^(Adjusted\s+\d+\s*(?:→|->)\s*\d+(?:\s*\([^)]*\))?)\.\s*(.+)$/i);
+            const colonIdx = notes.indexOf(':');
+            if (adjMatch) {
+              const p1 = adjMatch[1].trim();
+              const p2 = adjMatch[2].trim();
+              if (p1 && !parts.some(function (p) { return p.toLowerCase().includes(p1.toLowerCase()); })) parts.push(p1);
+              if (p2 && !parts.some(function (p) { return p.toLowerCase().includes(p2.toLowerCase()); })) parts.push(p2);
+            } else if (colonIdx > 0 && (
+              (ref && notes.slice(0, colonIdx).toLowerCase().includes(refLower)) ||
+              /^(void(?:ed)? sale|refund(?:ed)? sale|cancel(?:led)? sale|manual adjustment|initial stock)/i.test(notes.slice(0, colonIdx))
+            )) {
+              let p1 = notes.slice(0, colonIdx).trim().replace(/\b(Void(?:ed)?|Refund(?:ed)?|Cancel(?:led)?)\s+sale\s+(?!\()([A-Za-z0-9\-]+)\b/gi, '$1 sale ($2)');
+              let p2 = notes.slice(colonIdx + 1).trim();
+              if (p1 && !parts.some(function (p) { return p.toLowerCase().includes(p1.toLowerCase()); })) parts.push(p1);
+              if (p2 && !parts.some(function (p) { return p.toLowerCase().includes(p2.toLowerCase()); })) parts.push(p2);
+            } else {
+              const inParts = parts.some(function (p) { return p.toLowerCase().includes(notesLower); });
+              if (!inParts) {
+                parts.push(notes.replace(/\b(Void(?:ed)?|Refund(?:ed)?|Cancel(?:led)?)\s+sale\s+(?!\()([A-Za-z0-9\-]+)\b/gi, '$1 sale ($2)'));
+              }
+            }
+          }
+          const noteHtml = parts.length > 1
+            ? '<ul class="ref-notes-list">' + parts.map(function (it) { return '<li>' + Utils.escapeHtml(it) + '</li>'; }).join('') + '</ul>'
+            : (parts[0] ? Utils.escapeHtml(parts[0]) : '\u2014');
+          return '<tr>' +
+            '<td class="text-muted cell-nowrap">' + Utils.formatDateTime(t.date) + '</td>' +
+            '<td class="cell-nowrap"><span class="badge ' + typeTone + '">' + Utils.escapeHtml(t.type) + '</span></td>' +
+            '<td class="text-right mono-num cell-nowrap" style="font-weight:700;color:' + (t.quantity < 0 ? 'var(--danger)' : 'var(--ok)') + ';">' + (t.quantity > 0 ? '+' : '') + t.quantity + '</td>' +
+            '<td class="cell-nowrap">' + expCell + '</td>' +
+            '<td class="text-muted cell-notes">' + noteHtml + '</td>' +
+            '<td class="cell-nowrap" style="font-weight:500;">' + Utils.escapeHtml(t.user || '\u2014') + '</td>' +
+          '</tr>';
         }).join('') + '</tbody></table></div>'
       : '<div class="empty-state">' + icon('history') + '<h3>No activity yet</h3></div>';
   }
@@ -614,6 +823,7 @@ Boot.ready(function () {
     const transactions = Store.get('inventoryTransactions', []);
     const p = products.find(x => x.id === productId);
     if (!p) return;
+    viewingProductId = p.id;
     const cat = categories.find(c => c.id === p.category);
     const sup = suppliers.find(s => s.id === p.supplier);
     const status = Utils.getStockStatus(p.stock, p.reorderLevel);
@@ -629,6 +839,7 @@ Boot.ready(function () {
         '</div>' +
         '<div class="vp-head-info"><h2>' + Utils.escapeHtml(p.name) + '</h2>' +
         '<div class="flex gap-8" style="flex-wrap:wrap;"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span>' +
+        (Utils.expiryBadge(p, expiryMonths()) ? ' ' + Utils.expiryBadge(p, expiryMonths()) : '') +
         (p.archived ? '<span class="badge badge-neutral">Archived</span>' : '') + '</div></div>' +
       '</div>';
 
@@ -652,7 +863,7 @@ Boot.ready(function () {
     document.getElementById('vtab-inventory').innerHTML =
       '<div class="form-grid">' +
         viewField('Current Stock', p.stock + ' units') +
-        viewField('Reorder Level', p.reorderLevel + ' units') +
+        viewField('Low Stock Indicator', p.reorderLevel + ' units') +
         viewField('Storage Location', Utils.escapeHtml(p.storageLocation || 'Not assigned')) +
         viewField('Status', status) +
         viewField('Last Updated', Utils.formatDateTime(p.lastUpdated)) +
@@ -681,11 +892,16 @@ Boot.ready(function () {
         '</div>'
       : '<div class="empty-state">' + icon('suppliers') + '<h3>No supplier on file</h3></div>';
 
-    viewActRows = transactions.filter(function (t) { return t.productId === p.id; }).sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
+    viewActRows = transactions.filter(function (t) { return t.productId === p.id && t.type !== 'Product Edit'; }).sort(function (a, b) { return new Date(b.date) - new Date(a.date); });
     pgVAct.reset(); renderViewActivity();
 
     document.querySelectorAll('#viewTabs .tab-btn').forEach(function (b) { b.classList.remove('active'); });
     document.querySelector('#viewTabs .tab-btn[data-tab="overview"]').classList.add('active');
+    const vt = document.getElementById('viewTabs');
+    if (vt) {
+      vt.scrollLeft = 0;
+      setTimeout(updateViewTabArrows, 50);
+    }
     document.querySelectorAll('#viewModalOverlay .tab-panel').forEach(function (tp) { tp.classList.remove('active'); });
     document.getElementById('vtab-overview').classList.add('active');
 
@@ -704,7 +920,15 @@ Boot.ready(function () {
     document.getElementById('currentStockHint').textContent = p ? ('Current stock: ' + p.stock + ' units') : '';
     if (stockModalType === 'in' && p) {
       document.getElementById('sCostPrice').value = (p.costPrice !== undefined && p.costPrice !== null) ? p.costPrice : '';
-      document.getElementById('sExpirationDate').value = p.expirationDate ? String(p.expirationDate).slice(0, 10) : '';
+      const sDateEl = document.getElementById('sDate');
+      const sDateVal = (sDateEl && sDateEl.value) ? sDateEl.value : Utils.todayStr();
+      let defaultExp = '';
+      if (Number(p.shelfLifeDuration) > 0) {
+        defaultExp = Utils.calculateWarrantyExpiry(sDateVal, p.shelfLifeDuration, p.shelfLifeUnit || 'days');
+      } else if (p.expirationDate) {
+        defaultExp = String(p.expirationDate).slice(0, 10);
+      }
+      document.getElementById('sExpirationDate').value = defaultExp;
       document.getElementById('sStorageLocation').value = p.storageLocation || '';
     }
   }
@@ -725,8 +949,8 @@ Boot.ready(function () {
     const sp = Store.get('products', []).find(x => x.id === productId);
     document.getElementById('sProduct').value = sp ? sp.id : '';
     document.getElementById('sProductLabel').textContent = sp ? sp.name + ' (' + sp.id + ')' : '\u2014';
-    updateStockHint();
     document.getElementById('sDate').value = Analytics.dateKey(Utils.demoNow().toISOString());
+    updateStockHint();
     openModal('stockModalOverlay');
   }
   async function saveStock() {
@@ -737,7 +961,10 @@ Boot.ready(function () {
     const qty = parseInt(document.getElementById('sQty').value, 10);
     if (isNaN(qty) || qty < 1) { showToast('Quantity must be a positive whole number (at least 1).', 'danger'); return; }
     if (stockModalType === 'out' && !document.getElementById('sReason').value) { showToast('Please specify a reason for Stock Out.', 'danger'); return; }
-    const body = { productId: productId, quantity: qty, date: document.getElementById('sDate').value || undefined, notes: document.getElementById('sNotes').value.trim() };
+    const sDateVal = document.getElementById('sDate').value;
+    const isToday = !sDateVal || sDateVal === Utils.todayStr() || (typeof Analytics !== 'undefined' && sDateVal === Analytics.dateKey(new Date().toISOString()));
+    const body = { productId: productId, quantity: qty, notes: document.getElementById('sNotes').value.trim() };
+    if (!isToday && sDateVal) body.date = sDateVal;
     if (stockModalType === 'in') {
       body.supplierId = document.getElementById('sSupplier').value || undefined;
       body.reference = document.getElementById('sReference').value.trim() || undefined;
@@ -754,11 +981,13 @@ Boot.ready(function () {
         const r = await Api.post(stockModalType === 'in' ? '/inventory/stock-in' : '/inventory/stock-out', body);
         if (r && r.product) Store.upsertItem('products', r.product);
         if (r && r.transaction) Store.upsertItem('inventoryTransactions', r.transaction, { prepend: true });
+        if (r && r.notification) Store.upsertItem('notifications', r.notification, { prepend: true });
         if (stockModalType === 'in' && body.supplierId) {
           Store.upsertItem('suppliers', { id: body.supplierId, lastDelivery: String(body.date || Utils.todayStr()).slice(0, 10) });
         }
         closeModal('stockModalOverlay');
         afterChange('products');
+        if (window.Notifications && Notifications.poll) Notifications.poll();
         showToast((stockModalType === 'in' ? 'Stocked in ' : 'Stocked out ') + qty + ' units of ' + r.product.name + '. (' + r.transaction.previousStock + ' \u2192 ' + r.transaction.newStock + ')', 'ok');
       } catch (err) { showToast(err.message, 'danger'); }    // e.g. someone sold the stock a moment ago
     });
@@ -770,6 +999,25 @@ Boot.ready(function () {
     if (!p) return;
     document.getElementById('adjProductId').value = p.id;
     document.getElementById('adjProductName').textContent = p.name + ' (' + p.id + ') \u2014 system stock: ' + p.stock;
+    const batchField = document.getElementById('adjBatchField');
+    const batchSelect = document.getElementById('adjBatch');
+    if (batchField && batchSelect) {
+      const batches = Utils.computeProductBatches(p, Store.get('inventoryTransactions', []))
+        .filter(function (b) { return b.expirationDate && b.remainingQty > 0; })
+        .sort(function (a, b) { return String(a.expirationDate).localeCompare(String(b.expirationDate)); });
+      if (batches.length > 0) {
+        batchSelect.innerHTML = '<option value="">Auto FEFO (Earliest Expiring Batch)</option>' +
+          batches.map(function (b) {
+            return '<option value="' + Utils.escapeHtml(b.expirationDate) + '">Expires ' + Utils.formatDate(b.expirationDate + 'T00:00:00') + ' (' + b.remainingQty + ' unit' + (b.remainingQty === 1 ? '' : 's') + ')</option>';
+          }).join('');
+        batchSelect.value = '';
+        batchField.style.display = 'block';
+      } else {
+        batchSelect.innerHTML = '<option value="">Auto FEFO (Earliest Expiring Batch)</option>';
+        batchSelect.value = '';
+        batchField.style.display = 'none';
+      }
+    }
     document.getElementById('adjQty').value = p.stock;
     document.getElementById('adjQty').dataset.expectedStock = String(p.stock);
     document.getElementById('adjReason').value = '';
@@ -784,13 +1032,17 @@ Boot.ready(function () {
     await Utils.withBusy(document.getElementById('adjSaveBtn'), async function () {
       try {
         const expectedStockVal = parseInt(document.getElementById('adjQty').dataset.expectedStock, 10);
+        const batchExp = document.getElementById('adjBatch') ? document.getElementById('adjBatch').value : '';
         const payload = { productId: document.getElementById('adjProductId').value, newQuantity: newQuantity, reason: reason };
         if (!isNaN(expectedStockVal) && expectedStockVal >= 0) payload.expectedStock = expectedStockVal;
+        if (batchExp) payload.batchExpirationDate = batchExp;
         const r = await Api.post('/inventory/adjust', payload);
         if (r && r.product) Store.upsertItem('products', r.product);
         if (r && r.transaction) Store.upsertItem('inventoryTransactions', r.transaction, { prepend: true });
+        if (r && r.notification) Store.upsertItem('notifications', r.notification, { prepend: true });
         closeModal('adjustModalOverlay');
         afterChange('products');
+        if (window.Notifications && Notifications.poll) Notifications.poll();
         showToast('Stock adjusted: ' + r.transaction.previousStock + ' \u2192 ' + r.transaction.newStock + '. Logged in history and audit trail.', 'ok');
       } catch (err) { document.getElementById('adjError').textContent = err.message; }
     });
@@ -833,10 +1085,12 @@ Boot.ready(function () {
     if (!product) return;
     showConfirm('Delete "' + product.name + '"?', 'Are you sure you want to permanently delete this product from the inventory? This cannot be undone.', async function () {
       try {
-        await Api.del('/products/' + encodeURIComponent(productId));
+        const r = await Api.del('/products/' + encodeURIComponent(productId));
         Store.removeItem('products', productId);
+        if (r && r.notification) Store.upsertItem('notifications', r.notification, { prepend: true });
         closeModal('productModalOverlay');
         afterChange('products');
+        if (window.Notifications && Notifications.poll) Notifications.poll();
         showToast('Deleted ' + product.name + '.', 'ok');
       } catch (err) {
         showToast(err.message, 'danger');
@@ -849,8 +1103,13 @@ Boot.ready(function () {
     showConfirm('Archive ' + product.name + '?', 'Archived products are hidden from POS, the storefront, and default reports, but their history is kept. You can unarchive anytime.', async function () {
       try {
         const p = await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: true });
-        Store.upsertItem('products', p);
+        const notif = p && p._notification;
+        const cleanProd = p ? Object.assign({}, p) : p;
+        if (cleanProd) delete cleanProd._notification;
+        Store.upsertItem('products', cleanProd);
+        if (notif) Store.upsertItem('notifications', notif, { prepend: true });
         afterChange('products');
+        if (window.Notifications && Notifications.poll) Notifications.poll();
         showToast(product.name + ' archived.', 'ok');
       }
       catch (err) { showToast(err.message, 'danger'); }
@@ -861,8 +1120,13 @@ Boot.ready(function () {
     if (!product) return;
     try {
       const p = await Api.post('/products/' + encodeURIComponent(productId) + '/archive', { archived: false });
-      Store.upsertItem('products', p);
+      const notif = p && p._notification;
+      const cleanProd = p ? Object.assign({}, p) : p;
+      if (cleanProd) delete cleanProd._notification;
+      Store.upsertItem('products', cleanProd);
+      if (notif) Store.upsertItem('notifications', notif, { prepend: true });
       afterChange('products');
+      if (window.Notifications && Notifications.poll) Notifications.poll();
       showToast(product.name + ' unarchived.', 'ok');
     }
     catch (err) { showToast(err.message, 'danger'); }
@@ -1126,7 +1390,7 @@ Boot.ready(function () {
   /* ---------- Suppliers (merged in from the old Suppliers page; Admin only) ---------- */
   let editingSupplierId = null;
   function productsSuppliedBy(supplierId) { return Store.get('products', []).filter(p => p.supplier === supplierId); }
-  const pgSup = createPager(document.getElementById('supPager'), function () { renderSupplierList(); }, { size: 10, sizes: false });
+  const pgSup = createPager(document.getElementById('supPager'), function () { renderSupplierList(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function renderSupplierList() {
     const badge = document.getElementById('supplierCountBadge');
     const all = Store.get('suppliers', []);
@@ -1319,6 +1583,37 @@ Boot.ready(function () {
       if (target) { compatSelections.splice(parseInt(target.dataset.removeCompat, 10), 1); renderCompatChips(); }
     });
     document.getElementById('pHasWarranty').addEventListener('change', syncWarrantyFields);
+
+    const shelfDurInput = document.getElementById('pShelfLifeDuration');
+    const shelfUnitSelect = document.getElementById('pShelfLifeUnit');
+    const pExpiryInput = document.getElementById('pExpiry');
+    if (shelfDurInput) {
+      shelfDurInput.addEventListener('input', syncShelfLifeExpiry);
+      shelfDurInput.addEventListener('change', syncShelfLifeExpiry);
+    }
+    if (shelfUnitSelect) shelfUnitSelect.addEventListener('change', syncShelfLifeExpiry);
+    if (pExpiryInput) {
+      pExpiryInput.addEventListener('change', function () {
+        if (this.value && shelfDurInput && !shelfDurInput.value) {
+          const diffDays = Math.round((new Date(this.value + 'T00:00:00') - new Date(Utils.todayStr() + 'T00:00:00')) / 86400000);
+          if (diffDays > 0) {
+            shelfDurInput.value = diffDays;
+            if (shelfUnitSelect) shelfUnitSelect.value = 'days';
+          }
+        }
+      });
+    }
+
+    const sDateInput = document.getElementById('sDate');
+    if (sDateInput) {
+      sDateInput.addEventListener('change', function () {
+        if (stockModalType !== 'in') return;
+        const p = Store.get('products', []).find(x => x.id === document.getElementById('sProduct').value);
+        if (p && Number(p.shelfLifeDuration) > 0) {
+          document.getElementById('sExpirationDate').value = Utils.calculateWarrantyExpiry(this.value || Utils.todayStr(), p.shelfLifeDuration, p.shelfLifeUnit || 'days');
+        }
+      });
+    }
 
     document.getElementById('pUniversal').addEventListener('change', function (e) {
       const disabled = e.target.checked;
@@ -1563,9 +1858,54 @@ Boot.ready(function () {
         document.querySelectorAll('#viewModalOverlay .tab-panel').forEach(function (tp) { tp.classList.remove('active'); });
         btn.classList.add('active');
         document.getElementById('vtab-' + btn.dataset.tab).classList.add('active');
+        if (typeof btn.scrollIntoView === 'function') {
+          btn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        }
       });
     });
+
+    const vtPrev = document.getElementById('viewTabsPrev');
+    if (vtPrev) {
+      vtPrev.addEventListener('click', function () {
+        const vt = document.getElementById('viewTabs');
+        if (vt) {
+          vt.scrollBy({ left: -140, behavior: 'smooth' });
+          setTimeout(updateViewTabArrows, 200);
+        }
+      });
+    }
+    const vtNext = document.getElementById('viewTabsNext');
+    if (vtNext) {
+      vtNext.addEventListener('click', function () {
+        const vt = document.getElementById('viewTabs');
+        if (vt) {
+          vt.scrollBy({ left: 140, behavior: 'smooth' });
+          setTimeout(updateViewTabArrows, 200);
+        }
+      });
+    }
+    const vtElem = document.getElementById('viewTabs');
+    if (vtElem) {
+      vtElem.addEventListener('scroll', updateViewTabArrows, { passive: true });
+    }
   });
+
+  function updateViewTabArrows() {
+    const vt = document.getElementById('viewTabs');
+    const prev = document.getElementById('viewTabsPrev');
+    const next = document.getElementById('viewTabsNext');
+    if (!vt || !prev || !next) return;
+    const maxScroll = vt.scrollWidth - vt.clientWidth;
+    if (maxScroll <= 4) {
+      prev.classList.add('is-disabled');
+      next.classList.add('is-disabled');
+    } else {
+      if (vt.scrollLeft <= 4) prev.classList.add('is-disabled');
+      else prev.classList.remove('is-disabled');
+      if (vt.scrollLeft >= maxScroll - 4) next.classList.add('is-disabled');
+      else next.classList.remove('is-disabled');
+    }
+  }
 
   window.addEventListener('store:refreshed', function () {
     const modal = document.getElementById('productModalOverlay');

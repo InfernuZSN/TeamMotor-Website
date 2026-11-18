@@ -14,7 +14,7 @@ const resolveRoot = (...segs) => path.join(ROOT, ...segs);
 
 const { computeTotals, round2 } = require('../src/utils/money');
 const { addMonths, addDays, calculateWarrantyExpiry, today, manilaDate, BUSINESS_TZ } = require('../src/utils/dates');
-const { warrantyStatus } = require('../src/utils/warranty');
+const { warrantyStatus, hasConfiguredWarranty } = require('../src/utils/warranty');
 const { HttpError } = require('../src/utils/errors');
 
 const requireRole = (...roles) => (req, res, next) => {
@@ -409,6 +409,10 @@ test('Inventory & Users: Add Product visible to Staff/Admin, SKU/Product ID in O
   const usersCode = fs.readFileSync(resolveRoot('public/js/users.js'), 'utf8');
   assert.ok(usersCode.includes('data-delete='), 'Users table must render Delete button for staff accounts');
   assert.ok(usersCode.includes("Api.del('/users/'"), 'Users script must call DELETE /users/:id');
+
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('<label for="pReorder">Low Stock Indicator</label>'), 'Add Product modal must rename Reorder Level to Low Stock Indicator');
+  assert.ok(!invHtml.includes('<label for="pReorder">Reorder Level</label>'), 'Add Product modal must not use Reorder Level label');
 });
 
 test('Manage Filters: unifies Manage Categories, Manage Brands, Manage Suppliers, and Manage Motorcycle Compatibility across UI, LocalApi, and MongoDB models', () => {
@@ -809,6 +813,466 @@ test('CRUD & Entity Management Performance: instant Store mutators, connection p
   const salesSvcCode = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
   assert.ok(salesSvcCode.includes('const [dup, products, customer, settings] = await Promise.all(['), 'createSale must parallelize initial lookups');
 });
+
+test('Responsiveness & Font Consistency: unified typography, aligned 768px breakpoints, mobile input selectors, and POS tab contrast', () => {
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(!styleCss.includes('@media (min-width: 721px)'), 'style.css must not use stale 721px breakpoint');
+  assert.ok(styleCss.includes('@media (min-width: 769px)'), 'style.css must align desktop-only breakpoints at min-width: 769px');
+  assert.ok(/h1,\s*h2,\s*h3,\s*h4\s*\{[^}]*font-family:\s*var\(--font-label\)/.test(styleCss), 'style.css must unify h1-h4 to var(--font-label)');
+  assert.ok(styleCss.includes('.au-pre') && styleCss.includes('font-family: var(--font-display);'), 'style.css must style .au-pre with var(--font-display)');
+  assert.ok(styleCss.includes('font-family: var(--font-display) !important;'), 'style.css must style .fp-otp-input with var(--font-display)');
+  assert.ok(!styleCss.includes("'Courier New', Courier, monospace !important"), 'style.css must not hardcode Courier New on OTP input');
+
+  const respCss = fs.readFileSync(resolveRoot('public/css/responsive.css'), 'utf8');
+  const mobileBlock = respCss.slice(respCss.indexOf('@media (max-width: 768px)'));
+  assert.ok(mobileBlock.includes('input[type="text"]') && mobileBlock.includes('.search-input input'), 'responsive.css must target real form/search inputs on mobile');
+  assert.ok(mobileBlock.includes('.modal-body .table-wrap.is-scroll'), 'responsive.css must uncap nested scrollable tables inside mobile modals');
+  assert.ok(mobileBlock.includes('bottom: calc(0.75rem + var(--safe-bottom, 0px));'), 'responsive.css must anchor .profile-actions cleanly near the bottom');
+
+  const posCss = fs.readFileSync(resolveRoot('public/css/pos.css'), 'utf8');
+  assert.ok(posCss.includes('--pt-ink: var(--ink);'), 'pos.css must define --pt-ink on .pos-terminal for mobile switcher active tab contrast');
+
+  const settingsHtml = fs.readFileSync(resolveRoot('public/settings.html'), 'utf8');
+  assert.ok(settingsHtml.includes('class="grid-2 settings-grid"') && !settingsHtml.includes('minmax(320px,1fr)'), 'settings.html must use responsive .settings-grid instead of inline grid-template-columns');
+
+  const htmlFiles = ['audit.html', 'customers.html', 'index.html', 'inventory.html', 'login.html', 'pos.html', 'profile.html', 'sales.html', 'settings.html', 'users.html', 'warranty.html'];
+  for (const name of htmlFiles) {
+    const html = fs.readFileSync(resolveRoot('public/' + name), 'utf8');
+    assert.ok(html.includes('family=Poppins:wght@400;500;600;700;800'), name + ' must load Poppins weights');
+    assert.ok(html.includes('family=Inter:wght@300;400;500;600;700'), name + ' must load Inter weights');
+    assert.ok(!html.includes('Space+Mono') && !html.includes('Montserrat'), name + ' must only load Poppins and Inter');
+  }
+  assert.ok(styleCss.includes("--font-display: 'Poppins', sans-serif;"), 'style.css must define Poppins for --font-display');
+  assert.ok(styleCss.includes("--font-label: 'Poppins', sans-serif;"), 'style.css must define Poppins for --font-label');
+  assert.ok(styleCss.includes("--font-body: 'Inter', sans-serif;"), 'style.css must define Inter for --font-body');
+
+  const salesJs = fs.readFileSync(resolveRoot('public/js/sales.js'), 'utf8');
+  assert.ok(salesJs.includes('class="flex gap-8"') && salesJs.includes('data-view-sale='), 'sales.js action buttons must be wrapped in flex gap-8 so they do not touch');
+  assert.ok(styleCss.includes('.page-sales #tab-overview td > .icon-btn + .icon-btn { margin-left: 0.5rem; }'), 'style.css must space adjacent sales action buttons');
+});
+
+test('Product Warranty vs. Product Expiration: user-controlled warranties only, independent shelf-life expiration, and Product Details Overview expiration display', () => {
+  const salesSvcCode = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
+  assert.ok(salesSvcCode.includes('if (!hasConfiguredWarranty(p)) continue;'), 'createSale must gate warranty creation strictly on hasConfiguredWarranty(p)');
+  assert.ok(!salesSvcCode.includes('isRubber') && !salesSvcCode.includes('tires?|tyres?|rubber'), 'createSale must not infer warranties from product name regex or rubber flag');
+
+  assert.strictEqual(hasConfiguredWarranty({ id: 'TLS-002', name: 'Tire Pressure Gauge', rubber: true, warrantyDuration: null }), false, 'Product without configured warrantyDuration/warrantyDays must not have warranty even if named Tire or flagged rubber');
+  assert.strictEqual(hasConfiguredWarranty({ id: 'OTH-001', warrantyDuration: 7, warrantyUnit: 'days' }), true, 'Product with configured warrantyDuration must report configured warranty');
+  assert.strictEqual(hasConfiguredWarranty({ id: 'OTH-002', expirationDate: '2027-01-01', warrantyDuration: 6, warrantyUnit: 'months' }), true, 'Product can have both expirationDate and warranty simultaneously');
+
+  // Short 7-day warranty should be Active on purchase day and Expiring Soon near end of period
+  const t = today();
+  assert.strictEqual(warrantyStatus({ warrantyStart: t, warrantyExpiration: addDays(t, 7) }, []), 'Active', 'Newly purchased 7-day warranty must be Active on purchase day');
+  assert.strictEqual(warrantyStatus({ warrantyStart: addDays(t, -5), warrantyExpiration: addDays(t, 2) }, []), 'Expiring Soon', '7-day warranty on day 6 (2 days left) must be Expiring Soon');
+
+  const storeCode = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  const ctx = {
+    URLSearchParams,
+    CustomEvent: function (name) { this.type = name; },
+    fetch: () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+    location: { pathname: '/inventory.html', replace() {} },
+    document: { readyState: 'complete', addEventListener() {}, body: {} },
+    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp, Promise
+  };
+  ctx.window = {
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    dispatchEvent() {},
+    TEAMMOTOR_API_BASE: ''
+  };
+  vm.runInNewContext(storeCode + '; this.Utils = Utils;', ctx);
+
+  assert.strictEqual(typeof ctx.Utils.hasProductWarranty, 'function', 'store.js must define Utils.hasProductWarranty');
+  assert.strictEqual(typeof ctx.Utils.productExpiryDetail, 'function', 'store.js must define Utils.productExpiryDetail');
+  assert.strictEqual(ctx.Utils.isRubberItem({ name: 'Tire Pressure Gauge', rubber: true }), false, 'Utils.isRubberItem must never auto-classify items as warranted');
+  assert.strictEqual(ctx.Utils.hasProductWarranty({ id: 'TLS-002', name: 'Tire Pressure Gauge', warrantyDuration: null }), false);
+  assert.strictEqual(ctx.Utils.hasProductWarranty({ id: 'OTH-002', expirationDate: '2027-01-01', warrantyDuration: 6, warrantyUnit: 'months' }), true);
+
+  const expiredDetail = ctx.Utils.productExpiryDetail({ expirationDate: '2020-01-01' }, 3);
+  assert.ok(expiredDetail.includes('Expired') && expiredDetail.includes('days ago'), 'productExpiryDetail must show Expired badge and elapsed days');
+  const soonDetail = ctx.Utils.productExpiryDetail({ expirationDate: addDays(t, 10) }, 3);
+  assert.ok(soonDetail.includes('Expiring Soon') && soonDetail.includes('10 days left'), 'productExpiryDetail must show Expiring Soon badge and remaining days');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('Utils.txnBatchExpiry') && invJs.includes('Utils.batchExpiryHtml'), 'inventory.js must render batch expiration dates in Product Details Activity');
+});
+
+test('Batch-Relative Expiration Tracking, Activity Layout, and FEFO Stock Adjustment', () => {
+  const modelsCode = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(modelsCode.includes('shelfLifeDuration: { type: Number, default: null }'), 'Product model must include shelfLifeDuration');
+  assert.ok(modelsCode.includes('shelfLifeUnit: { type: String, default: null }'), 'Product model must include shelfLifeUnit');
+  assert.ok(/const InventoryTransaction = make\([^)]+\{[\s\S]*?expirationDate:\s*\{\s*type:\s*String,\s*default:\s*null\s*\}/.test(modelsCode), 'InventoryTransaction model must include expirationDate');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  const overviewMatch = invJs.match(/document\.getElementById\('vtab-overview'\)\.innerHTML\s*=[\s\S]*?document\.getElementById\('vtab-inventory'\)\.innerHTML\s*=[\s\S]*?viewField\('Last Updated'[^;]+;/);
+  assert.ok(overviewMatch, 'inventory.js must populate vtab-overview and vtab-inventory');
+  assert.ok(!overviewMatch[0].includes("viewField('Expiration Date'"), 'vtab-overview and vtab-inventory must not display static Expiration Date');
+
+  const actMatch = invJs.match(/function renderViewActivity\(\)\s*\{[\s\S]*?\n\s*\}\n\n\s*function openViewModal/);
+  assert.ok(actMatch, 'inventory.js must define renderViewActivity');
+  assert.ok(actMatch[0].includes('<th>Expiration Date</th>'), 'renderViewActivity must include Expiration Date column');
+  assert.ok(!actMatch[0].includes('<th>Reason</th>'), 'renderViewActivity must not include Reason column');
+  assert.ok(actMatch[0].includes('notesLower.includes(refLower)'), 'renderViewActivity must avoid repeating reference in notes');
+  assert.ok(actMatch[0].includes('notesLower.includes(reasonLower)'), 'renderViewActivity must avoid repeating reason in notes');
+
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('id="pShelfLifeDuration"') && invHtml.includes('id="pShelfLifeUnit"'), 'inventory.html must provide Product Shelf Life fields');
+  assert.ok(invHtml.includes('id="adjBatchField"') && invHtml.includes('id="adjBatch"'), 'inventory.html Adjust Stock modal must include optional Batch to Adjust selector');
+
+  // Relative batch expiration calculation (Nov 2 + 8 days = Nov 10; Nov 7 restock + 8 days = Nov 15)
+  assert.strictEqual(calculateWarrantyExpiry('2026-11-02', 8, 'days'), '2026-11-10');
+  assert.strictEqual(calculateWarrantyExpiry('2026-11-07', 8, 'days'), '2026-11-15');
+
+  const { computeActiveBatches, resolveEarliestBatchExpiry } = require('../src/services/inventory');
+  const sampleProduct = { id: 'OTH-002', stock: 15, shelfLifeDuration: 8, shelfLifeUnit: 'days', expirationDate: '2026-11-10' };
+  const initialAndRestock = [
+    { id: 'TRX-0001', productId: 'OTH-002', type: 'Stock In', quantity: 5, date: '2026-11-02T08:00:00Z', expirationDate: '2026-11-10' },
+    { id: 'TRX-0002', productId: 'OTH-002', type: 'Stock In', quantity: 10, date: '2026-11-07T08:00:00Z', expirationDate: '2026-11-15' }
+  ];
+
+  // Auto FEFO deducts from earliest expiring batch (Nov 10) first and spills over to Nov 15
+  const afterFefoPartial = computeActiveBatches(sampleProduct, initialAndRestock.concat([
+    { id: 'TRX-0003', productId: 'OTH-002', type: 'Adjustment', quantity: -3, date: '2026-11-08T08:00:00Z', expirationDate: null }
+  ]));
+  assert.deepStrictEqual(afterFefoPartial.map(b => [b.expirationDate, b.remainingQty]), [
+    ['2026-11-10', 2],
+    ['2026-11-15', 10]
+  ]);
+  assert.strictEqual(resolveEarliestBatchExpiry(sampleProduct, initialAndRestock.concat([
+    { id: 'TRX-0003', productId: 'OTH-002', type: 'Adjustment', quantity: -5, date: '2026-11-08T08:00:00Z', expirationDate: null }
+  ])), '2026-11-15', 'When Nov 10 batch is depleted, earliest active batch shifts to Nov 15');
+
+  // Targeted batch adjustment deducts directly from specified batch (Nov 15) while leaving Nov 10 intact
+  const afterTargeted = computeActiveBatches(sampleProduct, initialAndRestock.concat([
+    { id: 'TRX-0004', productId: 'OTH-002', type: 'Adjustment', quantity: -4, date: '2026-11-08T09:00:00Z', expirationDate: '2026-11-15' }
+  ]));
+  assert.deepStrictEqual(afterTargeted.map(b => [b.expirationDate, b.remainingQty]), [
+    ['2026-11-10', 5],
+    ['2026-11-15', 6]
+  ]);
+
+  // Verify frontend Utils.computeProductBatches & Utils.txnBatchExpiry in VM
+  const storeCode = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  const ctx = {
+    URLSearchParams,
+    CustomEvent: function (name) { this.type = name; },
+    fetch: () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) }),
+    location: { pathname: '/inventory.html', replace() {} },
+    document: { readyState: 'complete', addEventListener() {}, body: {} },
+    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp, Promise
+  };
+  ctx.window = {
+    localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    sessionStorage: { getItem: () => null, setItem() {}, removeItem() {} },
+    dispatchEvent() {},
+    TEAMMOTOR_API_BASE: ''
+  };
+  vm.runInNewContext(storeCode + '; this.Utils = Utils;', ctx);
+
+  assert.strictEqual(ctx.Utils.txnBatchExpiry({ type: 'Stock In', date: '2026-11-07T08:00:00Z' }, { shelfLifeDuration: 8, shelfLifeUnit: 'days' }), '2026-11-15');
+  const fefoBatches = ctx.Utils.computeProductBatches(sampleProduct, initialAndRestock.concat([
+    { id: 'TRX-0003', productId: 'OTH-002', type: 'Adjustment', quantity: -6, date: '2026-11-08T08:00:00Z', expirationDate: null }
+  ]));
+  assert.strictEqual(fefoBatches[0].remainingQty, 0);
+  assert.strictEqual(fefoBatches[1].remainingQty, 9);
+
+  // Stock In / Out uses current system time rather than defaulting to UTC midnight (8:00 AM in PH)
+  const invRouteCode = fs.readFileSync(resolveRoot('server/src/routes/inventory.js'), 'utf8');
+  assert.ok(invRouteCode.includes('if (vDate === today())') && invRouteCode.includes('return now.toISOString()'), 'parseDate must return current system timestamp when stocking in/out today');
+});
+
+test('Inventory Activity Notifications, Individual Delete (x), and Clear All with Confirmation', async () => {
+  const modelsCode = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(modelsCode.includes('dismissed: { type: Boolean, default: false }'), 'Notification schema must track dismissed state');
+
+  const notifService = require('../src/services/notifications');
+  assert.strictEqual(typeof notifService.createActivityNotification, 'function', 'notifications service must export createActivityNotification');
+  const notifServiceCode = fs.readFileSync(resolveRoot('server/src/services/notifications.js'), 'utf8');
+  assert.ok(notifServiceCode.includes('EVENT_TYPES') && notifServiceCode.includes('stock-in') && notifServiceCode.includes('stock-out') && notifServiceCode.includes('stock-adjust') && notifServiceCode.includes('product-archive') && notifServiceCode.includes('product-delete'), 'notifications service must preserve inventory activity event types');
+
+  const miscCode = fs.readFileSync(resolveRoot('server/src/routes/misc.js'), 'utf8');
+  assert.ok(miscCode.includes("notifications.delete('/clear-all'"), 'misc routes must expose DELETE /notifications/clear-all');
+  assert.ok(miscCode.includes("notifications.delete('/:id'"), 'misc routes must expose DELETE /notifications/:id');
+  assert.ok(miscCode.includes('dismissed: { $ne: true }'), 'notification queries must filter out dismissed notifications');
+
+  const invRouteCode = fs.readFileSync(resolveRoot('server/src/routes/inventory.js'), 'utf8');
+  assert.ok(invRouteCode.includes("type: 'stock-in'") && invRouteCode.includes("type: 'stock-out'") && invRouteCode.includes("type: 'stock-adjust'"), 'inventory routes must create notifications for stock-in, stock-out, and stock-adjust');
+
+  const catalogRouteCode = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogRouteCode.includes('createActivityNotification') && catalogRouteCode.includes("archived ? 'product-archive' : 'product-unarchive'") && catalogRouteCode.includes("type: 'product-delete'"), 'catalog routes must create notifications for archive/unarchive and product deletion');
+
+  const notifClientCode = fs.readFileSync(resolveRoot('public/js/notifications.js'), 'utf8');
+  assert.ok(notifClientCode.includes('data-del-notif') && notifClientCode.includes('&times;'), 'notifications UI must render x button to delete single notifications');
+  assert.ok(notifClientCode.indexOf('markAllReadBtn') < notifClientCode.indexOf('clearAllNotifsBtn'), 'Clear all button must be placed to the right of Mark all read button');
+  assert.ok(notifClientCode.includes("confirmDialog(") && notifClientCode.includes("clearAll()"), 'Clear all button must prompt confirmation before deleting all notifications');
+
+  const invClientCode = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invClientCode.includes("Store.upsertItem('notifications'") && invClientCode.includes('Notifications.poll()'), 'inventory client actions must immediately update notifications');
+
+  // Behavioral check of Notifications UI & Actions in VM
+  let storeNotifs = [
+    { id: 'NTF-0001', type: 'stock-in', title: 'Stock In', message: 'Chain +5', link: 'inventory.html', date: new Date().toISOString(), read: false },
+    { id: 'NTF-0002', type: 'product-delete', title: 'Product Deleted', message: 'Helmet deleted', link: 'inventory.html', date: new Date().toISOString(), read: false }
+  ];
+  const deletedCalls = [];
+  let confirmPrompted = null;
+  let renderedPanelHtml = '';
+  const panelEl = {
+    classList: { toggle() {}, remove() {} },
+    addEventListener() {},
+    querySelectorAll() { return []; },
+    get innerHTML() { return renderedPanelHtml; },
+    set innerHTML(v) { renderedPanelHtml = v; }
+  };
+  const ctx = {
+    window: {},
+    Utils: { escapeHtml: s => String(s), timeAgo: () => 'just now' },
+    icon: () => '<svg></svg>',
+    showToast() {},
+    confirmDialog(title, msg, onConfirm) {
+      confirmPrompted = { title, msg, onConfirm };
+    },
+    Store: {
+      get: (k, fb) => (k === 'notifications' ? storeNotifs : fb),
+      set: (k, v) => { if (k === 'notifications') storeNotifs = v; return v; }
+    },
+    Api: {
+      del: async (path) => { deletedCalls.push(path); return { ok: true }; },
+      post: async () => ({ ok: true }),
+      get: async () => storeNotifs
+    },
+    document: {
+      getElementById: (id) => (id === 'notifPanel' ? panelEl : id === 'notifDot' ? { className: '', textContent: '', style: {} } : null),
+      addEventListener() {}
+    },
+    setInterval() {},
+    Date, Array, Object, String, Number, Promise, encodeURIComponent
+  };
+  ctx.window = ctx;
+  vm.runInNewContext(notifClientCode, ctx);
+
+  ctx.Notifications.render();
+  assert.ok(renderedPanelHtml.includes('id="markAllReadBtn"') && renderedPanelHtml.includes('id="clearAllNotifsBtn"'));
+  assert.ok(renderedPanelHtml.includes('data-del-notif="NTF-0001"') && renderedPanelHtml.includes('data-del-notif="NTF-0002"'));
+
+  await ctx.Notifications.deleteOne('NTF-0001');
+  assert.strictEqual(storeNotifs.length, 1);
+  assert.strictEqual(storeNotifs[0].id, 'NTF-0002');
+  assert.ok(deletedCalls.includes('/notifications/NTF-0001'));
+
+  await ctx.Notifications.clearAll();
+  assert.strictEqual(storeNotifs.length, 0);
+  assert.ok(deletedCalls.includes('/notifications/clear-all'));
+});
+
+test('Eye Icon Modernization: Updated to radiating eyelashes, almond eyelid, and iris pupil', () => {
+  const appJs = fs.readFileSync(path.join(__dirname, '../../public/js/app.js'), 'utf8');
+  const loginHtml = fs.readFileSync(path.join(__dirname, '../../public/login.html'), 'utf8');
+
+  // Must not have old diamond polygon icon
+  assert.ok(!appJs.includes('<polygon points="12,5 22,12 12,19 2,12"/>'), 'app.js must not use old diamond eye');
+  assert.ok(!loginHtml.includes('points="12,5 22,12 12,19 2,12"'), 'login.html must not use old diamond eye');
+
+  // Must have 7 radiating upper eyelashes, almond path, and iris circle
+  assert.ok(appJs.includes('<line x1="12" y1="6" x2="12" y2="2.2"/>'), 'app.js eye must have center vertical eyelash');
+  assert.ok(appJs.includes('<circle cx="12" cy="13.5" r="4.2"/>'), 'app.js eye must have circular iris');
+  assert.ok(appJs.includes('stroke-linecap="round"'), 'app.js eye must have rounded line caps');
+
+  // eyeOff must match with slash
+  assert.ok(appJs.includes('eyeOff:') && appJs.includes('<line x1="2" y1="2" x2="22" y2="22"/>'), 'eyeOff must have slash line');
+});
+
+test('Dashboard Panel: Unconstrained natural height, chip status tones, and visual divider', () => {
+  const styleCss = fs.readFileSync(path.join(__dirname, '../../public/css/style.css'), 'utf8');
+  const dashJs = fs.readFileSync(path.join(__dirname, '../../public/js/dashboard.js'), 'utf8');
+
+  // No constrained viewport height on dash-panel
+  assert.ok(!styleCss.includes('height: max(19rem, calc(100vh - 21.5rem))'), 'dash-panel must not be constrained by viewport height');
+  assert.ok(styleCss.includes('.dash-panel { display: flex; flex-direction: column; gap: .75rem; padding: 1rem 1.125rem; height: auto; min-height: auto; }'), 'dash-panel must have natural height');
+  assert.ok(styleCss.includes('.dash-body { flex: 1; min-height: 0; overflow-y: visible; overflow-x: auto; }'), 'dash-body must not force internal vertical scrolling');
+
+  // Divider line under chip tabs
+  assert.ok(styleCss.includes('.dash-views { flex-shrink: 0; border-bottom: 1px solid var(--border); padding-bottom: .75rem; }'), 'dash-views must have border-bottom divider');
+
+  // Chip status colors
+  assert.ok(styleCss.includes('.chip-count.is-warn'), 'style.css must have warning chip count color');
+  assert.ok(styleCss.includes('.chip-count.is-danger') || styleCss.includes('.chip-count.is-bad'), 'style.css must have danger chip count color');
+  assert.ok(dashJs.includes("tone: 'warn'") && dashJs.includes("tone: 'danger'"), 'dashboard.js must assign warn and danger tones to low and out of stock chips');
+});
+
+test('Dashboard & Sales Analysis: Mobile horizontal sales trend bars with visible income values', () => {
+  const responsiveCss = fs.readFileSync(path.join(__dirname, '../../public/css/responsive.css'), 'utf8');
+  const styleCss = fs.readFileSync(path.join(__dirname, '../../public/css/style.css'), 'utf8');
+  const dashJs = fs.readFileSync(path.join(__dirname, '../../public/js/dashboard.js'), 'utf8');
+  const trendJs = fs.readFileSync(path.join(__dirname, '../../public/js/sales-trend.js'), 'utf8');
+
+  // Desktop preservation in style.css
+  assert.ok(styleCss.includes('.bar-chart .bar-track { display: contents; }'), 'Desktop must treat bar-track as display: contents');
+  assert.ok(styleCss.includes('.bar-chart .bar-val-mobile { display: none; }'), 'Desktop must hide bar-val-mobile');
+
+  // JS generates track, mobile value label, and proportional width variable
+  assert.ok(dashJs.includes('class="bar-track"') && dashJs.includes('bar-val-mobile'), 'dashboard.js must render bar-track and bar-val-mobile');
+  assert.ok(dashJs.includes('--bar-w:'), 'dashboard.js must calculate horizontal bar width style');
+  assert.ok(trendJs.includes('class="bar-track"') && trendJs.includes('bar-val-mobile'), 'sales-trend.js must render bar-track and bar-val-mobile');
+  assert.ok(trendJs.includes('--bar-w:'), 'sales-trend.js must calculate horizontal bar width style');
+
+  // Mobile horizontal transformation in responsive.css
+  assert.ok(responsiveCss.includes('.dash-trend.bar-chart') && responsiveCss.includes('flex-direction: column !important'), 'Mobile trend chart must stack rows vertically');
+  assert.ok(responsiveCss.includes('.dash-trend .bar-col') && responsiveCss.includes('display: grid !important'), 'Mobile bar columns must render as horizontal grid rows');
+  assert.ok(responsiveCss.includes('.dash-trend .bar-val-mobile') && responsiveCss.includes('display: block !important'), 'Mobile bar value must be displayed');
+  assert.ok(responsiveCss.includes('.dash-trend .bar .bar-value') && responsiveCss.includes('display: none !important'), 'Mobile desktop tooltip must be hidden');
+});
+
+test('Inventory History UI: Void Restock & Staff column widths, grey Returned badge without dot, and aligned bullet points in Reference / Notes', () => {
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+
+  // Returned reason tone must be badge-neutral (grey and no dot)
+  assert.ok(invJs.includes("if (t.type === 'Void Restock') return { label: 'Returned', tone: 'badge-neutral' };"), 'movementReason must assign badge-neutral to Void Restock');
+  assert.ok(invJs.includes("tone: r === 'Returned' ? 'badge-neutral'"), 'movementReason must assign badge-neutral to Returned reason');
+  assert.ok(styleCss.includes('.badge-neutral::before { display: none; }'), 'badge-neutral must hide dot pseudo-element');
+
+  // Reference / Notes ordered as bullet points
+  assert.ok(invJs.includes('extractRefNotesList(t)'), 'inventory.js must define extractRefNotesList helper');
+  assert.ok(invJs.includes('<ul class="ref-notes-list">'), 'renderHistoryTable must render bullet list for notes');
+  assert.ok(styleCss.includes('.ref-notes-list'), 'style.css must style .ref-notes-list');
+  assert.ok(styleCss.includes('list-style-type: disc;'), 'ref-notes-list must use disc bullets');
+
+  // Separates voided sale action and user note into distinct bullet points and wraps Sales ID in parentheses
+  assert.ok(invJs.includes('part.indexOf(\':\')') && invJs.includes('prefix') && invJs.includes('suffix'), 'extractRefNotesList must split event prefix from note text');
+  assert.ok(invJs.includes("'$1 sale ($2)'"), 'inventory.js must wrap Sales ID in parentheses for void/cancel/refund');
+  assert.ok(invJs.includes('adjMatch = part.match('), 'extractRefNotesList must split adjustment summary from note text');
+
+  const salesSvcCode = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
+  assert.ok(salesSvcCode.includes("notes: type + ' sale (' + saleId + '): '"), 'voidSale must create transaction notes with Sales ID in parentheses');
+
+  // Unclipped Type and Staff column widths + table min-width
+  assert.ok(styleCss.includes('#tab-history th:nth-child(3) { width: 7.75rem; }'), 'Type column must have expanded width for Void Restock');
+  assert.ok(styleCss.includes('#tab-history th:nth-child(9) { width: 8.5rem; }'), 'Staff column must have expanded width for full names');
+  assert.ok(styleCss.includes('#tab-history table { min-width: 60rem; }'), 'History table must have min-width for responsive scroll');
+});
+
+test('Product Modal: hides Quantity and Initial Batch Expiry in Edit mode, preserves them in Add mode, and clarifies default Shelf Life', () => {
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('id="pStockField"'), 'inventory.html must include id="pStockField"');
+  assert.ok(invHtml.includes('id="pExpiryField"'), 'inventory.html must include id="pExpiryField"');
+  assert.ok(invHtml.includes('id="pShelfLifeField"'), 'inventory.html must include id="pShelfLifeField"');
+  assert.ok(invHtml.includes('id="pShelfLifeLabel"'), 'inventory.html must include id="pShelfLifeLabel"');
+  assert.ok(invHtml.includes('id="pShelfLifeHint"'), 'inventory.html must include id="pShelfLifeHint"');
+
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  // Edit mode hides stock & expiry, and adapts shelf life label/hint
+  assert.ok(invJs.includes("if (stockField) stockField.style.display = 'none';"), 'Edit mode must hide Quantity field');
+  assert.ok(invJs.includes("if (expiryField) expiryField.style.display = 'none';"), 'Edit mode must hide Initial Batch Expiration Date field');
+  assert.ok(invJs.includes("stockInput.removeAttribute('required');"), 'Edit mode must remove required from Quantity input');
+  assert.ok(invJs.includes("shelfLifeField.classList.add('span-2');"), 'Edit mode must expand Shelf Life field across row');
+  assert.ok(invJs.includes("shelfLifeLabel.textContent = 'Product Shelf Life (Default for new Stock-Ins)'"), 'Edit mode must clarify shelf life is default for future deliveries');
+  assert.ok(invJs.includes("shelfLifeHint.textContent = 'Sets the default duration used to auto-calculate expiration dates on future deliveries. Does not rewrite past batches.'"), 'Edit mode must display informative hint about not rewriting past batches');
+
+  // Add mode shows stock & expiry
+  assert.ok(invJs.includes("if (stockField) stockField.style.display = '';"), 'Add mode must display Quantity field');
+  assert.ok(invJs.includes("if (expiryField) expiryField.style.display = '';"), 'Add mode must display Initial Batch Expiration Date field');
+  assert.ok(invJs.includes("stockInput.setAttribute('required', '');"), 'Add mode must make Quantity required');
+  assert.ok(invJs.includes("shelfLifeField.classList.remove('span-2');"), 'Add mode must reset Shelf Life span');
+  assert.ok(invJs.includes("shelfLifeLabel.textContent = 'Product Shelf Life (optional)'"), 'Add mode must restore optional shelf life label');
+
+  // syncShelfLifeExpiry and saveProduct
+  assert.ok(invJs.includes('if (editingProductId) return;'), 'syncShelfLifeExpiry must skip recalculation when editing');
+  assert.ok(invJs.includes('if (existing && existing.expirationDate)'), 'saveProduct must preserve existing expiration date in edit mode');
+
+  // Backend catalog cleanProduct logic
+  const catalogJs = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogJs.includes('cleanProduct(body, isUpdate = false)'), 'cleanProduct must accept isUpdate flag');
+  assert.ok(catalogJs.includes('if (!isUpdate && out.shelfLifeDuration && !out.expirationDate)'), 'cleanProduct must not overwrite expiration date on update');
+  assert.ok(catalogJs.includes('cleanProduct(req.body, true)'), 'PUT /products/:id must call cleanProduct with update flag');
+});
+
+test('Role-Based User Guide & System Navigation Modal: book icon button next to notifications and strict Staff vs Admin filtering', () => {
+  const vm = require('vm');
+  const appJs = fs.readFileSync(resolveRoot('public/js/app.js'), 'utf8');
+  assert.ok(appJs.includes('book:'), 'app.js Icons object must define the book SVG icon');
+  assert.ok(appJs.includes('id="guideBtn"') && appJs.includes("icon('book')"), 'renderTopbarActions must render #guideBtn with the book icon');
+
+  const posHtml = fs.readFileSync(resolveRoot('public/pos.html'), 'utf8');
+  assert.ok(posHtml.includes('id="guideBtn"'), 'pos.html must include #guideBtn in the POS header');
+
+  const pages = ['index.html', 'inventory.html', 'pos.html', 'sales.html', 'customers.html', 'warranty.html', 'users.html', 'audit.html', 'settings.html', 'profile.html'];
+  pages.forEach(page => {
+    const html = fs.readFileSync(resolveRoot('public/' + page), 'utf8');
+    assert.ok(html.includes('js/guide.js'), page + ' must load js/guide.js');
+  });
+
+  const guideJs = fs.readFileSync(resolveRoot('public/js/guide.js'), 'utf8');
+  assert.ok(guideJs.includes('guideModalOverlay'), 'guide.js must inject #guideModalOverlay');
+  assert.ok(guideJs.includes("s.role === 'Admin'") && guideJs.includes("'Staff'"), 'guide.js must check session role for Admin vs Staff');
+
+  // Execute guide.js in an isolated context to verify getTopicsForRole('Staff') vs getTopicsForRole('Admin')
+  const sandbox = {
+    window: {},
+    document: {
+      readyState: 'loading',
+      addEventListener: () => {},
+      getElementById: () => null
+    }
+  };
+  vm.runInNewContext(guideJs, sandbox);
+  assert.ok(sandbox.window.UserGuide && typeof sandbox.window.UserGuide.getTopicsForRole === 'function', 'guide.js must expose window.UserGuide.getTopicsForRole');
+
+  const staffTopics = sandbox.window.UserGuide.getTopicsForRole('Staff');
+  const adminTopics = sandbox.window.UserGuide.getTopicsForRole('Admin');
+
+  assert.ok(staffTopics.length >= 5, 'Staff must receive operational guide topics');
+  assert.ok(adminTopics.length > staffTopics.length, 'Admin must receive additional governance topics beyond Staff view');
+  assert.strictEqual(staffTopics[0].title, 'Getting Started & Staff Duties', 'Staff Topic 1 must be Getting Started & Staff Duties');
+  assert.strictEqual(adminTopics[0].title, 'Getting Started & Administrator Responsibilities', 'Admin Topic 1 must be Getting Started & Administrator Responsibilities');
+
+  const staffSerialized = JSON.stringify(staffTopics);
+  ['Void Sale', 'Adjust Stock', 'Manage Users'].forEach(keyword => {
+    assert.ok(!staffSerialized.includes(keyword), 'Staff view must strictly exclude Admin-only keyword: ' + keyword);
+  });
+
+  const adminSerialized = JSON.stringify(adminTopics);
+  ['Void Sale', 'Adjust Stock', 'Manage Users'].forEach(keyword => {
+    assert.ok(adminSerialized.includes(keyword), 'Admin view must include administrative keyword: ' + keyword);
+  });
+});
+
+test('Staff Shift Clock-In Constraint: blocks off-duty Staff from Inventory, POS, Sales, Customers, and Warranty across UI, direct URLs, and API routes', () => {
+  const appJs = fs.readFileSync(resolveRoot('public/js/app.js'), 'utf8');
+  assert.ok(
+    appJs.includes("const SHIFT_REQUIRED_KEYS = ['inventory', 'pos', 'sales', 'customers', 'warranty']"),
+    'app.js must define SHIFT_REQUIRED_KEYS for inventory, pos, sales, customers, and warranty'
+  );
+  assert.ok(appJs.includes('function isStaffClockedIn('), 'app.js must define isStaffClockedIn helper');
+  assert.ok(appJs.includes('function requireShiftClockIn('), 'app.js must define requireShiftClockIn route gate');
+  assert.ok(appJs.includes('function renderShiftLockedView('), 'app.js must define renderShiftLockedView to block direct URL access');
+  assert.ok(appJs.includes('if (!requireShiftClockIn(activeKey)) return false;'), 'initShell must enforce requireShiftClockIn and abort page scripts when off duty');
+  assert.ok(appJs.includes('nav-lock-badge') && appJs.includes('is-locked'), 'renderSidebar must mark restricted menus as locked when Staff is off duty');
+
+  const shiftsJs = fs.readFileSync(resolveRoot('public/js/shifts.js'), 'utf8');
+  assert.ok(shiftsJs.includes("if (typeof renderSidebar === 'function') renderSidebar();"), 'Shifts.upsert must re-render sidebar immediately on clock-in/out');
+
+  const authMwJs = fs.readFileSync(resolveRoot('server/src/middleware/auth.js'), 'utf8');
+  assert.ok(authMwJs.includes('const requireActiveShift ='), 'auth.js middleware must define requireActiveShift');
+  assert.ok(authMwJs.includes("Shift.findOne({ username: req.user.username, clockOut: null })"), 'requireActiveShift must verify active shift in MongoDB');
+
+  const serverAppJs = fs.readFileSync(resolveRoot('server/src/app.js'), 'utf8');
+  ['/products', '/customers', '/sales', '/inventory', '/warranties'].forEach(route => {
+    assert.ok(
+      serverAppJs.includes("api.use('" + route + "', requireActiveShift"),
+      'server/src/app.js must protect ' + route + ' with requireActiveShift middleware'
+    );
+  });
+
+  const guideJs = fs.readFileSync(resolveRoot('public/js/guide.js'), 'utf8');
+  assert.ok(
+    guideJs.includes('Step 1: Clock In to Unlock Store Menus') && guideJs.includes('Locked While Off Duty'),
+    'Staff User Guide must document mandatory shift clock-in to unlock Inventory, POS, Sales, Customers, and Warranty'
+  );
+});
+
+
+
 
 
 

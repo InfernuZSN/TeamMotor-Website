@@ -1,6 +1,6 @@
 const jwt = require('jsonwebtoken');
 const config = require('../config');
-const { User } = require('../models');
+const { User, Shift } = require('../models');
 const { HttpError, wrap } = require('../utils/errors');
 
 function signToken(user) {
@@ -33,4 +33,17 @@ const requireRole = (...roles) => (req, res, next) => {
 };
 const adminOnly = requireRole('Admin');
 
-module.exports = { signToken, authenticate, requireRole, adminOnly };
+/* Staff Shift Gate — Staff users must have an active (ongoing) shift (clockOut: null) in MongoDB
+   to access or mutate Inventory, POS/Sales, Customers, and Warranties. Admin accounts are exempt. */
+const requireActiveShift = wrap(async (req, res, next) => {
+  if (!req.user) throw new HttpError(401, 'Authentication required.');
+  if (req.user.role === 'Admin') return next();
+  const activeShift = await Shift.findOne({ username: req.user.username, clockOut: null }).lean();
+  if (!activeShift) {
+    throw new HttpError(403, 'Clock-in required: You must clock in to your shift on My Profile before accessing Inventory, POS, Sales, Customers, or Warranty.');
+  }
+  req.activeShift = activeShift;
+  next();
+});
+
+module.exports = { signToken, authenticate, requireRole, adminOnly, requireActiveShift };

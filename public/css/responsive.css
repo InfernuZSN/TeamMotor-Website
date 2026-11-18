@@ -123,6 +123,7 @@
     display: none;
   }
   .topbar-right .icon-btn,
+  .topbar-actions > .icon-btn,
   .notif-btn > .icon-btn {
     width: 2.75rem;
     height: 2.75rem;
@@ -163,6 +164,15 @@
     min-width: 2.75rem;
     min-height: 2.75rem;
   }
+  input[type="text"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="tel"],
+  input[type="date"],
+  input[type="search"],
+  select,
+  textarea,
   .input,
   .select,
   .textarea,
@@ -175,6 +185,7 @@
     width: 100%;
     position: relative;
   }
+  .search-input input,
   .search-input .input {
     padding-right: 2.5rem;
   }
@@ -221,6 +232,7 @@
     display: block !important;
   }
   .page-inventory .table-card > .table-wrap,
+  .page-sales #tab-overview .table-wrap,
   .page-sales #tab-overview .table-wrap.is-scroll {
     max-height: none !important;
     overflow: visible !important;
@@ -274,6 +286,52 @@
   }
   .tab-short {
     display: inline;
+  }
+  .view-tabs-nav {
+    display: flex;
+    align-items: center;
+    gap: .25rem;
+    width: 100%;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+  .view-tabs-nav .tabs {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin-bottom: 0 !important;
+  }
+  .view-tabs-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    flex-shrink: 0;
+    border-radius: var(--radius-full);
+    border: 1.5px solid var(--border-strong);
+    background: var(--surface);
+    color: var(--steel);
+    cursor: pointer;
+    padding: 0;
+    z-index: 2;
+    transition: color .12s ease, border-color .12s ease, background .12s ease, opacity .15s ease;
+  }
+  .view-tabs-arrow svg {
+    width: .9rem;
+    height: .9rem;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    fill: none;
+  }
+  .view-tabs-arrow:hover,
+  .view-tabs-arrow:active {
+    color: var(--ink);
+    border-color: var(--ink);
+    background: var(--paper);
+  }
+  .view-tabs-arrow.is-disabled {
+    opacity: .3;
+    pointer-events: none;
   }
 
   /* ------------------------------------------------------------------
@@ -571,13 +629,6 @@
   table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-primary::before {
     display: none;
   }
-  table:not(.rcpt-items):not(.order-table) tbody tr.row-status-bar > td:first-child {
-    padding-left: .75rem !important;
-  }
-  table:not(.rcpt-items):not(.order-table) tbody tr.row-status-bar > td:first-child .stock-flag {
-    top: .125rem;
-    bottom: .625rem;
-  }
 
   /* Status badge cell sits right below primary header or prominent top area */
   table:not(.rcpt-items):not(.order-table) tbody td.col-status {
@@ -593,11 +644,23 @@
   }
 
   /* Wide detail cells (Compatibility, Supplier, Summary, Reason/Notes) span full card width so nothing is clipped */
-  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-wide {
+  table:not(.rcpt-items):not(.order-table):not(.au-table) tbody td.mobile-cell-wide {
     grid-column: 1 / -1;
     background: var(--paper);
     padding: .45rem .625rem !important;
     border-radius: .45rem;
+  }
+  /* In Customers mobile cards, Email spans full width but aligns flush with card content without a background box */
+  #custTbody td.mobile-cell-wide,
+  #custTbody td[data-label="Email"],
+  .page-customers tbody td.mobile-cell-wide,
+  .page-customers tbody td[data-label="Email"],
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Email"] {
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Un-truncate all text inside mobile cards so 100% of information is readable */
@@ -675,11 +738,12 @@
   }
   .pg-bar .pg-ctrl {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
-    gap: .25rem;
+    gap: .35rem .25rem;
     width: 100%;
+    max-width: 100%;
   }
   .pg-bar .pg-size {
     display: inline-flex;
@@ -763,7 +827,8 @@
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     gap: .375rem;
-    padding-bottom: .25rem;
+    padding-bottom: .625rem;
+    border-bottom: 1px solid var(--border);
   }
   .dash-views::-webkit-scrollbar {
     display: none;
@@ -789,27 +854,97 @@
   .orders-card .card-title-row .flex select {
     width: 100% !important;
   }
-  .bar-chart {
-    gap: .4rem;
-    height: 13rem;
+  /* Horizontal responsive bars for Dashboard Sales Trend & Sales Analysis trend on mobile */
+  .dash-trend.bar-chart,
+  .bar-chart#analysisChart {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    height: auto !important;
+    min-height: 0 !important;
+    padding-top: 0.5rem !important;
+    gap: 0.45rem !important;
   }
-  .bar-chart.is-dense {
-    gap: 2px;
+  .dash-trend .bar-col,
+  .bar-chart#analysisChart .bar-col {
+    display: grid !important;
+    grid-template-columns: minmax(3.8rem, auto) 1fr auto !important;
+    align-items: center !important;
+    gap: 0.625rem !important;
+    width: 100% !important;
+    height: auto !important;
+    padding: 0.15rem 0 !important;
+    cursor: default !important;
   }
-  .bar-chart.is-dense .bar-label small {
-    display: none;
+  .dash-trend .bar-label,
+  .bar-chart#analysisChart .bar-label {
+    order: 1 !important;
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 0.25rem !important;
+    font-size: 0.76rem !important;
+    font-weight: 600 !important;
+    color: var(--ink) !important;
+    text-align: left !important;
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+    visibility: visible !important;
   }
-  .bar-chart.is-dense .bar-col:nth-child(even) .bar-label {
-    visibility: hidden;
+  .dash-trend .bar-label small,
+  .bar-chart#analysisChart .bar-label small {
+    display: inline !important;
+    font-size: 0.7rem !important;
+    color: var(--steel) !important;
+    font-weight: 500 !important;
+    opacity: 0.9 !important;
   }
-  .bar-chart.is-dense .bar-label {
-    font-size: .54rem;
+  .dash-trend .bar-track,
+  .bar-chart#analysisChart .bar-track {
+    order: 2 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 0.6875rem !important;
+    background: var(--paper, #f1f5f9) !important;
+    border-radius: 999px !important;
+    overflow: hidden !important;
+    position: relative !important;
   }
-  .bar-chart.is-yearly {
-    gap: .25rem;
+  .dash-trend .bar,
+  .bar-chart#analysisChart .bar {
+    display: block !important;
+    height: 100% !important;
+    width: var(--bar-w, 2%) !important;
+    max-width: none !important;
+    border-radius: 999px !important;
+    background: var(--accent-light, #fee2e2) !important;
+    transition: width 0.3s ease !important;
+    position: static !important;
   }
-  .bar-chart.is-yearly .bar-value {
-    display: none;
+  .dash-trend .bar.is-peak,
+  .bar-chart#analysisChart .bar.is-peak {
+    background: var(--accent, #ef4444) !important;
+  }
+  .dash-trend .bar .bar-value,
+  .bar-chart#analysisChart .bar .bar-value {
+    display: none !important;
+  }
+  .dash-trend .bar-val-mobile,
+  .bar-chart#analysisChart .bar-val-mobile {
+    order: 3 !important;
+    display: block !important;
+    font-size: 0.78rem !important;
+    font-weight: 700 !important;
+    color: var(--ink) !important;
+    text-align: right !important;
+    font-variant-numeric: tabular-nums !important;
+    min-width: 4rem !important;
+    white-space: nowrap !important;
+  }
+  .dash-trend .bar-val-mobile.is-zero,
+  .bar-chart#analysisChart .bar-val-mobile.is-zero {
+    color: var(--steel) !important;
+    font-weight: 500 !important;
+    opacity: 0.6 !important;
   }
   .hbar-row,
   .page-sales .hbar-row {
@@ -874,9 +1009,14 @@
   }
   #viewModalOverlay .vt-scroll,
   #viewModalOverlay #vtab-activity .vt-scroll,
-  .sup-modal .table-card > .table-wrap {
+  .sup-modal .table-card > .table-wrap,
+  .modal-body .table-wrap.is-scroll {
     max-height: none !important;
     overflow: visible !important;
+  }
+  .kv-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .875rem 1rem !important;
   }
   .vp-head {
     gap: .875rem;
@@ -940,7 +1080,7 @@
   }
   .profile-actions {
     position: sticky;
-    bottom: calc(4.1rem + var(--safe-bottom, 0px));
+    bottom: calc(0.75rem + var(--safe-bottom, 0px));
     z-index: 10;
     background: rgba(255, 255, 255, .95);
     backdrop-filter: blur(6px);
@@ -989,24 +1129,48 @@
    Two-column grid: full-width search + Filters toggle, then a collapsible drawer with
    [Action | Sensitive] and [From | To] rows at a uniform 44px height, then Export CSV. */
 @media (max-width: 768px) {
+  .au-header {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: .5rem !important;
+    margin-bottom: .875rem !important;
+    width: 100% !important;
+  }
   .au-filter-bar {
     display: grid !important;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    gap: .5rem;
-    width: 100%;
-    align-items: end !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: .5rem !important;
+    width: 100% !important;
+    margin: 0 !important;
+    align-items: center !important;
   }
   .au-filter-bar > .search-input,
-  .au-filter-bar > .mobile-filter-btn {
-    grid-column: 1 / -1;
+  .au-filter-bar .search-input,
+  .au-filter-bar > .mobile-filter-btn,
+  .au-filter-bar .mobile-filter-btn {
+    grid-column: 1 / -1 !important;
     max-width: none !important;
-    width: 100%;
+    width: 100% !important;
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    max-height: 2.75rem !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+  .au-filter-bar > .search-input input,
+  .au-filter-bar .search-input input {
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    max-height: 2.75rem !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
   }
   .au-filter-bar > #auAction,
+  .au-filter-bar > select.select-filter,
   .au-filter-bar > .au-sens {
     width: 100%;
     min-width: 0;
-    height: 2.75rem;
+    height: 2.75rem !important;
     min-height: 2.75rem;
     margin: 0;
     box-sizing: border-box;
@@ -1018,39 +1182,194 @@
   }
   .au-filter-bar > .au-sens input { margin: 0; }
   .au-filter-bar > .au-date-group {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: .25rem;
-    height: auto;
+    display: inline-flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between;
+    width: 100%;
     min-width: 0;
+    height: 2.75rem !important;
+    min-height: 2.75rem;
+    padding: 0 .625rem;
+    box-sizing: border-box;
   }
   .au-filter-bar .au-date-label {
-    font-size: .7rem;
+    font-size: .72rem;
     font-weight: 700;
     letter-spacing: .04em;
     text-transform: uppercase;
     color: var(--steel);
+    flex-shrink: 0;
   }
   .au-filter-bar .au-date-input {
     width: 100%;
     min-width: 0;
-    height: 2.75rem;
+    height: 100%;
   }
   /* Collapsed by default — the Filters button reveals the drawer */
   .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > #auAction,
+  .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > select.select-filter,
   .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > .au-sens,
   .au-filter-bar.mobile-collapsible-bar:not(.filters-open) > .au-date-group {
     display: none !important;
   }
+  .au-header .actions,
+  .page-header:has(.au-filter-bar) .actions {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: flex !important;
+  }
+  .au-header .actions #auExport,
   .page-header:has(.au-filter-bar) .actions .btn {
-    flex: 1 1 100%;
-    min-height: 2.75rem;
+    flex: 1 1 100% !important;
+    width: 100% !important;
+    min-height: 2.75rem !important;
+    height: 2.75rem !important;
+    margin: 0 !important;
+  }
+
+  /* ---------- Audit Trail mobile card view & typography ---------- */
+  .au-table tbody tr {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .55rem .75rem !important;
+    padding: .875rem !important;
+    background: var(--surface) !important;
+    border: 1px solid var(--border-strong) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+
+  /* Action (Hero badge at top) */
+  .au-table tbody td:nth-child(3),
+  .au-table tbody td.mobile-cell-primary {
+    grid-column: 1 / -1 !important;
+    order: 1 !important;
+    padding-bottom: .5rem !important;
+    margin-bottom: .15rem !important;
+    border-bottom: 1px solid var(--border) !important;
+  }
+
+  /* When (Row 2, Column 1) */
+  .au-table tbody td:nth-child(1) {
+    grid-column: 1 / 2 !important;
+    order: 2 !important;
+  }
+
+  /* User (Row 2, Column 2) */
+  .au-table tbody td:nth-child(2) {
+    grid-column: 2 / 3 !important;
+    order: 3 !important;
+  }
+
+  /* Record (Row 3, Column 1) */
+  .au-table tbody td:nth-child(4) {
+    grid-column: 1 / 2 !important;
+    order: 4 !important;
+  }
+
+  /* IP (Row 3, Column 2 - next to Record, above Summary) */
+  .au-table tbody td:nth-child(6) {
+    grid-column: 2 / 3 !important;
+    order: 5 !important;
+  }
+
+  /* Summary (Row 4 - spanning full width directly below IP & Record, aligned with card content) */
+  table.au-table tbody td:nth-child(5),
+  table.au-table tbody td.mobile-cell-wide,
+  table.au-table tbody td[data-label="Summary"],
+  .au-table tbody td:nth-child(5),
+  .au-table tbody td.mobile-cell-wide,
+  .au-table tbody td[data-label="Summary"] {
+    grid-column: 1 / -1 !important;
+    order: 6 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    box-sizing: border-box !important;
+  }
+  table.au-table tbody td:nth-child(5)::before,
+  table.au-table tbody td[data-label="Summary"]::before,
+  .au-table tbody td[data-label="Summary"]::before {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+  table.au-table tbody td .au-sum,
+  .au-table tbody td .au-sum {
+    margin-left: 0 !important;
+    padding-left: 0 !important;
+  }
+
+  /* View Action (Bottom full width) */
+  .au-table tbody td:nth-child(7),
+  .au-table tbody td.mobile-cell-actions {
+    grid-column: 1 / -1 !important;
+    order: 7 !important;
+    padding-top: .55rem !important;
+    margin-top: .2rem !important;
+    border-top: 1px solid var(--border) !important;
+  }
+  .au-table tbody td.mobile-cell-actions .au-view-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    min-height: 2.75rem !important;
+    font-size: .84rem !important;
+    font-weight: 600 !important;
+  }
+
+  /* Uniform, orderly labels and message colors */
+  .au-table tbody td {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: .15rem !important;
+    color: var(--ink) !important;
+    font-size: .86rem !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+  }
+  .au-table tbody td[data-label]::before {
+    content: attr(data-label);
+    font: 700 .68rem/1.1 var(--font-label) !important;
+    text-transform: uppercase !important;
+    letter-spacing: .05em !important;
+    color: var(--steel) !important;
+    margin-bottom: .2rem !important;
+  }
+  .au-table tbody td.text-muted,
+  .au-table tbody td span.text-muted {
+    color: var(--ink) !important;
+    font-size: .86rem !important;
+  }
+  .au-table tbody td small.text-muted,
+  .au-table tbody td .text-muted small {
+    color: var(--steel) !important;
+    font-size: .75rem !important;
+    font-weight: 400 !important;
+  }
+  .au-table tbody td .au-sum {
+    color: var(--ink) !important;
+    font-size: .86rem !important;
+    font-weight: 500 !important;
+    line-height: 1.35 !important;
+    white-space: normal !important;
+    word-break: break-word !important;
+  }
+  .au-table tbody td.mono-num {
+    font-variant-numeric: tabular-nums !important;
+    color: var(--ink) !important;
+    font-weight: 500 !important;
   }
 }
 
 /* ---------- Small Phones (<= 480px) ---------- */
 @media (max-width: 480px) {
+  .kv-grid {
+    grid-template-columns: 1fr !important;
+    gap: .75rem !important;
+  }
   .page,
   .page-sales,
   .page-inventory {

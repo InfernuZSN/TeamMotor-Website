@@ -8,15 +8,27 @@ const { getSettings, updateSettings } = require('../services/settings');
 const { refreshNotifications } = require('../services/notifications');
 const { expiryReport } = require('../services/expiry');
 const { withItems, withClaims } = require('../services/serialize');
-const { warrantyStatus } = require('../utils/warranty');
+const { warrantyStatus, hasConfiguredWarranty } = require('../utils/warranty');
 
 const notifications = express.Router();
 notifications.get('/', wrap(async (req, res) => {
   await refreshNotifications({ throttled: true }).catch(e => console.error('[notifications] refresh failed:', e.message));
-  res.json(await Notification.find({}).sort({ date: -1 }).lean());
+  res.json(await Notification.find({ dismissed: { $ne: true } }).sort({ date: -1 }).lean());
 }));
-notifications.post('/read-all', wrap(async (req, res) => { await Notification.updateMany({}, { $set: { read: true } }); res.json({ ok: true }); }));
+notifications.post('/read-all', wrap(async (req, res) => { await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { read: true } }); res.json({ ok: true }); }));
 notifications.post('/:id/read', wrap(async (req, res) => { await Notification.updateOne({ id: req.params.id }, { $set: { read: true } }); res.json({ ok: true }); }));
+notifications.delete('/clear-all', wrap(async (req, res) => {
+  await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { dismissed: true, read: true } });
+  res.json({ ok: true });
+}));
+notifications.delete('/', wrap(async (req, res) => {
+  await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { dismissed: true, read: true } });
+  res.json({ ok: true });
+}));
+notifications.delete('/:id', wrap(async (req, res) => {
+  await Notification.updateOne({ id: req.params.id }, { $set: { dismissed: true, read: true } });
+  res.json({ ok: true });
+}));
 
 const SENSITIVE_ACTIONS = ['user.password_change', 'auth.login_failed', 'auth.login_blocked', 'sale.void', 'sale.voided', 'sale.cancelled', 'sale.refunded', 'sale.refund',
   'stock.adjust', 'stock.out', 'user.create', 'user.update', 'user.delete', 'product.archive', 'product.delete', 'customer.deactivate', 'settings.update'];
@@ -97,9 +109,9 @@ bootstrap.get('/', wrap(async (req, res) => {
     Product.find({}).sort({ id: 1 }).lean(),
     Customer.find({}).sort({ id: 1 }).lean(),
     Sale.find({}).sort({ date: -1 }).limit(300).lean().then(withItems),
-    InventoryTransaction.find({}).sort({ date: -1 }).limit(300).lean(),
+    InventoryTransaction.find({ type: { $ne: 'Product Edit' } }).sort({ date: -1 }).limit(300).lean(),
     Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean().then(withClaims),
-    Notification.find({}).sort({ date: -1 }).lean(),
+    Notification.find({ dismissed: { $ne: true } }).sort({ date: -1 }).lean(),
     isAdmin ? User.find({}).sort({ id: 1 }).lean() : (req.userDoc ? Promise.resolve([req.userDoc]) : User.find({ id: req.user.id }).lean()),
     isAdmin ? Shift.find({}).sort({ clockIn: -1 }).limit(300).lean() : Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(100).lean(),
     Brand.find({}).sort({ name: 1 }).lean(),
@@ -112,7 +124,21 @@ bootstrap.get('/', wrap(async (req, res) => {
 
   const expiry = await expiryReport(settingsDoc, products);
 
-  warrantiesFull.forEach(w => { w.status = warrantyStatus(w, w.claims); });
+  const prodById = new Map(products.map(p => [p.id, p]));
+  const bogusIds = [];
+  const validWarranties = warrantiesFull.filter(w => {
+    const prod = prodById.get(w.productId);
+    if (prod && !hasConfiguredWarranty(prod)) {
+      bogusIds.push(w.id);
+      return false;
+    }
+    return true;
+  });
+  if (bogusIds.length) {
+    Warranty.deleteMany({ id: { $in: bogusIds } }).catch(() => {});
+  }
+  InventoryTransaction.deleteMany({ type: 'Product Edit' }).catch(() => {});
+  validWarranties.forEach(w => { w.status = warrantyStatus(w, w.claims); });
   const sm = new Map(stats.map(s => [s._id, s]));
   const customersFull = customers.map(c => {
     const s = sm.get(c.id) || {};
@@ -136,7 +162,7 @@ bootstrap.get('/', wrap(async (req, res) => {
     customers: customersFull,
     sales: salesFull,
     inventoryTransactions: txns,
-    warranties: warrantiesFull,
+    warranties: validWarranties,
     notifications: notifs,
     users,
     expiry,

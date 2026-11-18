@@ -33,7 +33,11 @@ Boot.ready(function () {
     const allProducts = Store.get('products', []);
     const products = allProducts.filter(function (p) { return !p.archived; });
     const sales = Store.get('sales', []).filter(Utils.isCountable);
-    const warranties = Store.get('warranties', []);
+    const prodById = new Map(allProducts.map(function (p) { return [p.id, p]; }));
+    const warranties = Store.get('warranties', []).filter(function (w) {
+      const prod = prodById.get(w.productId);
+      return !(prod && !Utils.hasProductWarranty(prod));
+    });
     const months = (Store.get('settings', {}).expiryWarningMonths) || 3;
 
     const todaySales = Analytics.salesToday(sales, now);
@@ -93,16 +97,17 @@ Boot.ready(function () {
     const chips = [
       { v: 'recent', label: 'Recent Sales' },
       { v: 'trend', label: 'Sales Trend' },
-      { v: 'low', label: 'Low Stock', n: d.low.length },
-      { v: 'out', label: 'Out of Stock', n: d.out.length },
-      { v: 'expiring', label: 'Expiring', n: d.expired.length + d.expiring.length, bad: d.expired.length > 0 },
-      { v: 'warranty', label: 'Warranties', n: d.warrantySoon.length },
+      { v: 'low', label: 'Low Stock', n: d.low.length, tone: 'warn' },
+      { v: 'out', label: 'Out of Stock', n: d.out.length, tone: 'danger' },
+      { v: 'expiring', label: 'Expiring', n: d.expired.length + d.expiring.length, tone: d.expired.length > 0 ? 'danger' : (d.expiring.length > 0 ? 'warn' : '') },
+      { v: 'warranty', label: 'Warranties', n: d.warrantySoon.length, tone: d.warrantySoon.length > 0 ? 'warn' : '' },
       { v: 'stockin', label: 'Recent Stock-In' },
       { v: 'perf', label: 'Top / Slow Sellers' }
     ];
     $('dashViews').innerHTML = chips.map(function (c) {
+      const toneClass = c.tone ? ' is-' + c.tone : (c.bad ? ' is-bad' : '');
       return '<button type="button" role="tab" class="chip' + (view === c.v ? ' active' : '') + '" data-view="' + c.v + '" aria-selected="' + (view === c.v) + '">' + c.label +
-        (c.n ? '<span class="chip-count' + (c.bad ? ' is-bad' : '') + '">' + c.n + '</span>' : '') + '</button>';
+        (c.n ? '<span class="chip-count' + toneClass + '">' + c.n + '</span>' : '') + '</button>';
     }).join('');
   }
 
@@ -114,7 +119,7 @@ Boot.ready(function () {
   const invLink = '<a href="inventory.html" class="btn btn-ghost btn-sm">Open Inventory</a>';
 
   function viewRecent(d) {
-    const rows = Analytics.recentSales(d.sales, 25);
+    const rows = Analytics.recentSales(d.sales, 10);
     return heading('Recent Sales', 'Latest completed POS transactions', '<a href="sales.html" class="btn btn-ghost btn-sm">View all sales</a>') +
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Transaction</th><th>Items</th><th class="text-right">Amount</th><th>Payment</th><th>Time</th></tr></thead><tbody>' +
         rows.map(function (s) {
@@ -140,11 +145,16 @@ Boot.ready(function () {
     return heading('Sales Trend \u2014 ' + titles[trendRange], 'Total completed sales per ' + (yearly ? 'month' : 'day'), '<div class="chip-row">' + chips + '</div>') +
       '<div class="bar-chart dash-trend' + (dense ? ' is-dense' : '') + (yearly ? ' is-yearly' : '') + '">' + buckets.map(function (b, idx) {
         const pct = Math.round(b.total / max * 100), peak = b.total === max && b.total > 0;
+        const hPct = Math.max(pct, b.total > 0 ? 6 : 2);
         let label = b.label;
-        if (dense) label = b.shortLabel + ((idx === 0 || b.shortLabel === '1') ? '<small>' + b.monthLabel + '</small>' : '');
+        if (dense) label = b.shortLabel + '<small>' + b.monthLabel + '</small>';
         else if (yearly && (idx === 0 || b.month === 0)) label = b.label + '<small>' + b.year + '</small>';
-        return '<div class="bar-col" title="' + b.title + ': ' + Utils.formatPHP(b.total) + '"><div class="bar' + (peak ? ' is-peak' : '') + '" style="height:' + Math.max(pct, b.total > 0 ? 6 : 2) + '%">' +
-          (b.total > 0 && !dense ? '<span class="bar-value">' + Utils.formatPHP(b.total) + '</span>' : '') + '</div><div class="bar-label">' + label + '</div></div>';
+        else if (!yearly) label = b.label + ' ' + b.shortLabel + '<small>' + b.monthLabel + '</small>';
+        return '<div class="bar-col" title="' + b.title + ': ' + Utils.formatPHP(b.total) + '">' +
+          '<div class="bar-track"><div class="bar' + (peak ? ' is-peak' : '') + '" style="height:' + hPct + '%; --bar-w:' + hPct + '%;">' +
+          '<span class="bar-value' + (b.total === 0 ? ' is-zero' : '') + '">' + Utils.formatPHP(b.total) + '</span></div></div>' +
+          '<span class="bar-val-mobile' + (b.total === 0 ? ' is-zero' : '') + '">' + Utils.formatPHP(b.total) + '</span>' +
+          '<div class="bar-label">' + label + '</div></div>';
       }).join('') + '</div>';
   }
 
@@ -193,7 +203,11 @@ Boot.ready(function () {
   }
 
   function viewStockIn() {
-    const rows = Store.get('inventoryTransactions', []).filter(function (t) { return t.type === 'Stock In' && t.reference !== 'Opening count'; }).slice(0, 30);
+    const rows = Store.get('inventoryTransactions', [])
+      .filter(function (t) { return t.type === 'Stock In' && t.reference !== 'Opening count'; })
+      .slice()
+      .sort(function (a, b) { return new Date(b.date) - new Date(a.date); })
+      .slice(0, 10);
     const suppliers = Store.get('suppliers', []);
     return heading('Recent Stock-In', 'Latest deliveries received', invLink) +
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Product</th><th class="text-right">Qty</th><th>Supplier</th><th>Reference</th><th>When</th></tr></thead><tbody>' +

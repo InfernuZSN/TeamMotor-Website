@@ -221,7 +221,7 @@ Boot.ready(function () {
     const g = $('ptGrid'), w = $('ptGridWrap') || document.querySelector('.pt-grid-wrap');
     if (g) g.scrollTop = 0;
     if (w) w.scrollTop = 0;
-  });
+  }, { size: 5, sizes: [5, 10, 25, 50] });
 
   function renderGrid() {
     const q = searchText();

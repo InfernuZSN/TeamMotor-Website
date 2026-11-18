@@ -11,8 +11,36 @@ Boot.ready(function () {
     return 'badge-neutral';
   }
 
+  function validWarranties() {
+    const products = Store.get('products', []);
+    const prodById = new Map(products.map(function (p) { return [p.id, p]; }));
+    return Store.get('warranties', []).filter(function (w) {
+      const prod = prodById.get(w.productId);
+      return !(prod && !Utils.hasProductWarranty(prod));
+    });
+  }
+
+  function warrantyPeriodText(w, p) {
+    if (p && Number(p.warrantyDuration) > 0) {
+      const n = Number(p.warrantyDuration);
+      const u = String(p.warrantyUnit || 'months');
+      return n + ' ' + (n === 1 ? u.replace(/s$/, '') : u);
+    }
+    if (p && Number(p.warrantyDays) > 0) {
+      const d = Number(p.warrantyDays);
+      return d + ' ' + (d === 1 ? 'day' : 'days');
+    }
+    const start = (w.warrantyStart || w.purchaseDate || '').slice(0, 10);
+    const exp = (w.warrantyExpiration || '').slice(0, 10);
+    if (start && exp) {
+      const days = Math.round((new Date(exp) - new Date(start)) / 86400000);
+      if (days > 0) return days + ' ' + (days === 1 ? 'day' : 'days');
+    }
+    return '\u2014';
+  }
+
   function renderStats() {
-    const warranties = Store.get('warranties', []);
+    const warranties = validWarranties();
     const counts = { Active: 0, 'Expiring Soon': 0, Expired: 0, Claimed: 0, Voided: 0 };
     warranties.forEach(function (w) {
       const currentStatus = Utils.getWarrantyStatus(w);
@@ -33,13 +61,13 @@ Boot.ready(function () {
     }).join('');
   }
 
-  const pgW = createPager(document.getElementById('warPager'), function () { renderTable(); });
+  const pgW = createPager(document.getElementById('warPager'), function () { renderTable(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function renderTable() {
     const q = document.getElementById('warSearch').value.trim().toLowerCase();
     const statusFilter = document.getElementById('warFilterStatus').value;
     const customers = Store.get('customers', []);
     const products = Store.get('products', []);
-    let rows = Store.get('warranties', []).map(function (w) {
+    let rows = validWarranties().map(function (w) {
       const status = Utils.getWarrantyStatus(w);
       const cust = customers.find(function (c) { return c.id === w.customerId; });
       const prod = products.find(function (p) { return p.id === w.productId; }) || { name: w.productName || 'Motorcycle' };
@@ -89,8 +117,8 @@ Boot.ready(function () {
         '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Contact</div><div style="font-weight:600;">' + custContact + '</div></div>' +
         '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Purchase Date</div><div style="font-weight:600;">' + Utils.formatDate(w.purchaseDate) + '</div></div>' +
         '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Warranty Start</div><div style="font-weight:600;">' + Utils.formatDate(w.warrantyStart) + '</div></div>' +
-        '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Expiration</div><div style="font-weight:600;">' + Utils.formatDate(w.warrantyExpiration) + '</div></div>' +
-        (Utils.isRubberItem(p) ? '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Warranty Period</div><div style="font-weight:600;">' + RUBBER_WARRANTY_DAYS + ' days \u2014 defects only</div></div>' : '') +
+        '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Warranty Expiration</div><div style="font-weight:600;">' + Utils.formatDate(w.warrantyExpiration) + '</div></div>' +
+        '<div><div class="hint" style="font-weight:700;text-transform:uppercase;">Warranty Period</div><div style="font-weight:600;">' + Utils.escapeHtml(warrantyPeriodText(w, p)) + '</div></div>' +
         '<div class="span-2"><div class="hint" style="font-weight:700;text-transform:uppercase;">Coverage</div><div style="font-weight:600;">' + Utils.escapeHtml(w.coverage) + '</div></div>' +
       '</div>' +
       '<h3 style="font-size:.9rem;margin-top:18px;">Claim History</h3>' +

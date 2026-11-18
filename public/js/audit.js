@@ -2,7 +2,7 @@
    Stored action codes (e.g. stock.adjust) are never changed — they drive filtering and export. The page only adds a friendly
    label, a one-line readable summary, and a full-detail modal with before -> after. */
 let initialAuditPrefetch = (typeof Api !== 'undefined' && Api.getToken() && typeof getSession === 'function' && (getSession() || {}).role === 'Admin')
-  ? Api.get('/audit?page=1&limit=25').catch(function () { return null; })
+  ? Api.get('/audit?page=1&limit=5').catch(function () { return null; })
   : null;
 
 Boot.ready(function () {
@@ -12,8 +12,22 @@ Boot.ready(function () {
   const esc = Utils.escapeHtml;
   let lastRows = [];
 
-  const GROUPS = ['auth', 'sale', 'stock', 'product', 'customer', 'settings', 'user', 'supplier', 'category', 'brand', 'moto', 'warranty', 'shift'];
-  GROUPS.forEach(function (g) { $('auAction').insertAdjacentHTML('beforeend', '<option value="' + g + '">' + g + '.*</option>'); });
+  const GROUPS = [
+    { id: 'auth', label: 'Auth' },
+    { id: 'sale', label: 'Sale' },
+    { id: 'stock', label: 'Stock' },
+    { id: 'product', label: 'Product' },
+    { id: 'customer', label: 'Customer' },
+    { id: 'settings', label: 'Settings' },
+    { id: 'user', label: 'User' },
+    { id: 'supplier', label: 'Supplier' },
+    { id: 'category', label: 'Category' },
+    { id: 'brand', label: 'Brand' },
+    { id: 'moto', label: 'Motorcycle' },
+    { id: 'warranty', label: 'Warranty' },
+    { id: 'shift', label: 'Shift' }
+  ];
+  GROUPS.forEach(function (g) { $('auAction').insertAdjacentHTML('beforeend', '<option value="' + g.id + '">' + g.label + '</option>'); });
 
   const LABELS = {
     'auth.login': 'Login', 'auth.logout': 'Logout', 'auth.login_failed': 'Failed login', 'auth.login_blocked': 'Login blocked',
@@ -123,7 +137,7 @@ Boot.ready(function () {
   }
 
   /* ---------- table ---------- */
-  const pg = createPager($('auPager'), function () { load(); });
+  const pg = createPager($('auPager'), function () { load(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function query() {
     const p = new URLSearchParams({ page: pg.page, limit: pg.size });
     if ($('auSearch').value.trim()) p.set('search', $('auSearch').value.trim());
@@ -137,7 +151,7 @@ Boot.ready(function () {
     try {
       const qs = query();
       let r = null;
-      if (initialAuditPrefetch && qs === 'page=1&limit=25') {
+      if (initialAuditPrefetch && qs === 'page=1&limit=5') {
         const pending = initialAuditPrefetch;
         initialAuditPrefetch = null;
         r = await pending;
@@ -149,10 +163,10 @@ Boot.ready(function () {
         const sens = isSensitive(a.action);
         return '<tr><td class="text-muted" style="white-space:nowrap;">' + Utils.formatDateTime(a.at) + '</td>' +
           '<td>' + esc(a.userName || a.username || '\u2014') + (a.role ? '<br><small class="text-muted">' + esc(a.role) + '</small>' : '') + '</td>' +
-          '<td><span class="badge ' + tone(a.action) + '" title="' + esc(a.action) + '">' + esc(label(a.action)) + '</span>' + (sens ? ' <span class="au-flag" title="Sensitive action">\u25cf</span>' : '') + '<br><small class="text-muted mono-num">' + esc(a.action) + '</small></td>' +
+          '<td><div class="au-action-cell' + (sens ? ' has-flag' : '') + '">' + (sens ? '<span class="au-flag" title="Sensitive action"></span>' : '') + '<span class="badge ' + tone(a.action) + '" title="' + esc(a.action) + '">' + esc(label(a.action)) + '</span></div></td>' +
           '<td class="mono-num">' + esc(a.entityId || '\u2014') + '</td>' +
           '<td><span class="au-sum" title="' + esc(summary(a)) + '">' + esc(summary(a)) + '</span></td>' +
-          '<td class="text-muted" style="font-size:.75rem;">' + esc(a.ip || '') + '</td>' +
+          '<td class="text-muted mono-num">' + esc(a.ip || '') + '</td>' +
           '<td class="text-center"><button type="button" class="btn btn-secondary btn-sm au-view-btn" data-view="' + i + '">' + icon('eye') + ' View</button></td></tr>';
       }).join('') : '<tr><td colspan="7"><div class="empty-state">' + icon('history') + '<h3>No matching entries</h3></div></td></tr>';
     } catch (err) { showToast(err.message, 'danger'); }
@@ -178,13 +192,14 @@ Boot.ready(function () {
     const who = esc(a.userName || a.username || '\u2014') + (a.username ? ' <span class="text-muted" style="font-weight:400;">(@' + esc(a.username) + ')</span>' : '');
     const handled = ['changes', 'changed', 'before', 'after'];
     const rest = a.action === 'settings.update' && !isObj(d.changed) && !isObj(d.changes) ? {} : d;      // legacy settings entries are shown in the change table only
+    const sens = isSensitive(a.action);
     $('auDetailId').textContent = a.id || '';
     $('auDetailBody').innerHTML =
       '<div class="form-grid" style="margin-bottom:1rem;">' +
         field('When', esc(Utils.formatDateTime(a.at)) + '<br><small class="text-muted" style="font-weight:400;">' + esc(new Date(a.at).toLocaleString()) + '</small>') +
         field('Who', who) +
         field('Role', esc(a.role || '\u2014')) +
-        field('Action', '<span class="badge ' + tone(a.action || '') + '">' + esc(label(a.action)) + '</span> <span class="mono-num text-muted" style="font-weight:400;">' + esc(a.action || '') + '</span>') +
+        field('Action', '<div class="au-action-cell' + (sens ? ' has-flag' : '') + '">' + (sens ? '<span class="au-flag" title="Sensitive action"></span>' : '') + '<span class="badge ' + tone(a.action || '') + '">' + esc(label(a.action)) + '</span> <span class="mono-num text-muted" style="font-weight:400;margin-left:.35rem;">' + esc(a.action || '') + '</span></div>') +
         field('Record', esc(a.entity || '\u2014') + ' \u00b7 <span class="mono-num">' + esc(a.entityId || '\u2014') + '</span>') +
         field('IP address', esc(a.ip || '\u2014')) +
       '</div>' +

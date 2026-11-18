@@ -115,7 +115,9 @@ const Product = make('Product', 'products', {
   warrantyType: { type: String, default: null },
   warrantyDays: { type: Number, default: null },
   rubber: { type: Boolean, default: false },
-  expirationDate: { type: String, default: null },                        // optional 'YYYY-MM-DD'
+  shelfLifeDuration: { type: Number, default: null },
+  shelfLifeUnit: { type: String, default: null },
+  expirationDate: { type: String, default: null },                        // optional 'YYYY-MM-DD' (earliest active batch)
   image: { type: String, default: '' },
   storageLocation: { type: String, default: '' },
   archived: { type: Boolean, default: false },
@@ -194,7 +196,8 @@ const InventoryTransaction = make('InventoryTransaction', 'inventory_transaction
   supplierId: { type: String, default: null },
   reference: { type: String, default: null },
   reason: { type: String, default: null },
-  notes: { type: String, default: '' }
+  notes: { type: String, default: '' },
+  expirationDate: { type: String, default: null }
 });
 
 /* ---------- warranties + warranty_claims ---------- */
@@ -233,7 +236,8 @@ const Notification = make('Notification', 'notifications', {
   message: String,
   link: String,
   date: { type: String, index: true },
-  read: { type: Boolean, default: false }
+  read: { type: Boolean, default: false },
+  dismissed: { type: Boolean, default: false }
 });
 
 /* ---------- shifts ---------- */

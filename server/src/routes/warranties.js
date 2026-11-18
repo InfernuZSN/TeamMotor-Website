@@ -1,17 +1,33 @@
 const router = require('express').Router();
-const { Warranty, WarrantyClaim } = require('../models');
+const { Warranty, WarrantyClaim, Product } = require('../models');
 const { wrap, bad, notFound, conflict } = require('../utils/errors');
 const { nextId } = require('../utils/counters');
 const { audit } = require('../utils/audit');
 const { withClaims } = require('../services/serialize');
-const { warrantyStatus } = require('../utils/warranty');
+const { warrantyStatus, hasConfiguredWarranty } = require('../utils/warranty');
 const { refreshNotifications } = require('../services/notifications');
 const { today } = require('../utils/dates');
 
 const ALLOWED_CLAIM_STATUSES = ['Pending', 'Approved', 'Resolved', 'Rejected'];
 
 router.get('/', wrap(async (req, res) => {
-  const list = await withClaims(await Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean());
+  const [rawList, products] = await Promise.all([
+    Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean().then(withClaims),
+    Product.find({}).select('id warrantyDuration warrantyDays').lean()
+  ]);
+  const prodById = new Map(products.map(p => [p.id, p]));
+  const bogusIds = [];
+  const list = rawList.filter(w => {
+    const prod = prodById.get(w.productId);
+    if (prod && !hasConfiguredWarranty(prod)) {
+      bogusIds.push(w.id);
+      return false;
+    }
+    return true;
+  });
+  if (bogusIds.length) {
+    Warranty.deleteMany({ id: { $in: bogusIds } }).catch(() => {});
+  }
   list.forEach(w => { w.status = warrantyStatus(w, w.claims); });
   res.json(list);
 }));

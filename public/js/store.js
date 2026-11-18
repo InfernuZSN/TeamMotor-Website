@@ -113,13 +113,21 @@ const Utils = {
   demoNow() {
     return new Date();
   },
-  isRubberItem(product) {
+  hasProductWarranty(product) {
     if (!product) return false;
-    if (product.rubber === true) return true;
-    return /\b(tires?|tyres?|rubber)\b/i.test(product.name || '');
+    return (Number(product.warrantyDuration) > 0) || (Number(product.warrantyDays) > 0);
+  },
+  isRubberItem(product) {
+    return false;
   },
   warrantyDaysFor(product) {
-    return Utils.isRubberItem(product) ? RUBBER_WARRANTY_DAYS : null;
+    if (!product) return null;
+    if (Number(product.warrantyDuration) > 0) {
+      const unit = String(product.warrantyUnit || 'months').toLowerCase();
+      const mult = unit.startsWith('day') ? 1 : unit.startsWith('year') ? 365 : 30;
+      return Number(product.warrantyDuration) * mult;
+    }
+    return Number(product.warrantyDays) > 0 ? Number(product.warrantyDays) : null;
   },
   addDaysISO(iso, days) {
     const [y, m, d] = iso.split('-').map(Number);
@@ -187,7 +195,15 @@ const Utils = {
     const expDate = new Date(expStr);
     const todayDate = new Date(todayStr);
     const diffDays = Math.round((expDate - todayDate) / (1000 * 60 * 60 * 24));
-    if (diffDays <= 30 && diffDays >= 0) return 'Expiring Soon';
+    let soonDays = 30;
+    const startStr = (w.warrantyStart || w.purchaseDate || '').slice(0, 10);
+    if (startStr && startStr <= expStr) {
+      const totalDays = Math.round((expDate - new Date(startStr)) / (1000 * 60 * 60 * 24));
+      if (totalDays > 0 && totalDays <= 30) {
+        soonDays = Math.max(1, Math.floor(totalDays * 0.3));
+      }
+    }
+    if (diffDays <= soonDays && diffDays >= 0) return 'Expiring Soon';
     return 'Active';
   },
   isCountable(sale) {
@@ -228,6 +244,137 @@ const Utils = {
     const st = Utils.expiryStatus(product, months);
     if (!st) return '';
     return '<span class="badge ' + (st === 'Expired' ? 'badge-danger' : 'badge-warn') + '" title="Expires ' + Utils.formatDate(product.expirationDate + 'T00:00:00') + '">' + st + '</span>';
+  },
+  productExpiryDetail(product, months) {
+    const exp = product && product.expirationDate ? String(product.expirationDate).slice(0, 10) : '';
+    if (!exp) return '';
+    const formatted = Utils.formatDate(exp + 'T00:00:00');
+    const t = Utils.todayStr();
+    const daysLeft = Math.round((new Date(exp + 'T00:00:00') - new Date(t + 'T00:00:00')) / 86400000);
+    const st = Utils.expiryStatus(product, months);
+    let badge = '';
+    let note = '';
+    if (daysLeft < 0) {
+      const ago = Math.abs(daysLeft);
+      badge = ' <span class="badge badge-danger">Expired</span>';
+      note = ' <span class="text-muted" style="font-size:.8rem;font-weight:500;">(' + ago + (ago === 1 ? ' day' : ' days') + ' ago)</span>';
+    } else if (daysLeft === 0) {
+      badge = ' <span class="badge badge-danger">Expires Today</span>';
+    } else if (st === 'Expiring Soon') {
+      badge = ' <span class="badge badge-warn">Expiring Soon</span>';
+      note = ' <span class="text-muted" style="font-size:.8rem;font-weight:500;">(' + daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left)</span>';
+    } else {
+      badge = ' <span class="badge badge-ok">Valid</span>';
+      note = ' <span class="text-muted" style="font-size:.8rem;font-weight:500;">(' + daysLeft + (daysLeft === 1 ? ' day' : ' days') + ' left)</span>';
+    }
+    return formatted + badge + note;
+  },
+  txnBatchExpiry(txn, product) {
+    if (!txn) return null;
+    if (txn.expirationDate) return String(txn.expirationDate).slice(0, 10);
+    if (txn.type === 'Stock In' && product) {
+      if (Number(product.shelfLifeDuration) > 0) {
+        const baseDate = txn.date ? String(txn.date).slice(0, 10) : Utils.todayStr();
+        return Utils.calculateWarrantyExpiry(baseDate, product.shelfLifeDuration, product.shelfLifeUnit || 'days');
+      }
+      if (product.expirationDate && (txn.reference === 'Initial stock' || /initial stock/i.test(txn.notes || ''))) {
+        return String(product.expirationDate).slice(0, 10);
+      }
+    }
+    return null;
+  },
+  batchExpiryHtml(expDateStr, months) {
+    if (!expDateStr) return '\u2014';
+    const exp = String(expDateStr).slice(0, 10);
+    const formatted = Utils.formatDate(exp + 'T00:00:00');
+    const t = Utils.todayStr();
+    const daysLeft = Math.round((new Date(exp + 'T00:00:00') - new Date(t + 'T00:00:00')) / 86400000);
+    const st = Utils.expiryStatus({ expirationDate: exp }, months);
+    let badge = '';
+    if (daysLeft < 0) {
+      badge = '<span class="badge badge-danger">Expired</span>';
+    } else if (daysLeft === 0) {
+      badge = '<span class="badge badge-danger">Expires Today</span>';
+    } else if (st === 'Expiring Soon') {
+      badge = '<span class="badge badge-warn">Expiring Soon</span>';
+    } else {
+      badge = '<span class="badge badge-ok">Valid</span>';
+    }
+    return '<div class="batch-exp-cell"><span class="batch-exp-date">' + formatted + '</span> ' + badge + '</div>';
+  },
+  computeProductBatches(product, transactions) {
+    if (!product) return [];
+    const compareFefo = function (a, b) {
+      if (a.expirationDate && b.expirationDate) {
+        const cmp = String(a.expirationDate).localeCompare(String(b.expirationDate));
+        if (cmp !== 0) return cmp;
+      } else if (a.expirationDate) {
+        return -1;
+      } else if (b.expirationDate) {
+        return 1;
+      }
+      return new Date(a.date) - new Date(b.date);
+    };
+    const ordered = (transactions || [])
+      .filter(function (t) { return t && t.productId === product.id; })
+      .slice()
+      .sort(function (a, b) {
+        const dt = new Date(a.date) - new Date(b.date);
+        if (dt !== 0) return dt;
+        return String(a.id || '').localeCompare(String(b.id || ''));
+      });
+    if (!ordered.length) {
+      if (product.stock > 0 && product.expirationDate) {
+        return [{
+          txnId: 'initial',
+          date: product.lastUpdated || Utils.todayStr(),
+          expirationDate: String(product.expirationDate).slice(0, 10),
+          initialQty: product.stock,
+          remainingQty: product.stock
+        }];
+      }
+      return [];
+    }
+    const batches = [];
+    ordered.forEach(function (t) {
+      const exp = Utils.txnBatchExpiry(t, product);
+      const qty = Number(t.quantity) || 0;
+      if (qty > 0) {
+        if (t.type !== 'Stock In') {
+          const existing = batches.find(function (b) { return (b.expirationDate || null) === (exp || null); });
+          if (existing) {
+            existing.remainingQty += qty;
+            return;
+          }
+        }
+        batches.push({
+          txnId: t.id,
+          date: t.date,
+          expirationDate: exp || null,
+          initialQty: qty,
+          remainingQty: qty
+        });
+      } else if (qty < 0) {
+        let toDeduct = Math.abs(qty);
+        if (exp) {
+          const targeted = batches.filter(function (b) { return b.remainingQty > 0 && b.expirationDate === exp; }).sort(function (a, b) { return new Date(a.date) - new Date(b.date); });
+          for (let i = 0; i < targeted.length && toDeduct > 0; i++) {
+            const take = Math.min(targeted[i].remainingQty, toDeduct);
+            targeted[i].remainingQty -= take;
+            toDeduct -= take;
+          }
+        }
+        if (toDeduct > 0) {
+          const active = batches.filter(function (b) { return b.remainingQty > 0; }).sort(compareFefo);
+          for (let i = 0; i < active.length && toDeduct > 0; i++) {
+            const take = Math.min(active[i].remainingQty, toDeduct);
+            active[i].remainingQty -= take;
+            toDeduct -= take;
+          }
+        }
+      }
+    });
+    return batches;
   },
   reportError(err) {
     if (typeof showToast === 'function') showToast(err && err.message ? err.message : 'Something went wrong.', 'danger');
@@ -529,7 +676,7 @@ const Boot = (function () {
   function showFatal(message) {
     const bar = document.createElement('div');
     bar.setAttribute('role', 'alert');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b3261e;color:#fff;padding:12px 16px;font:600 14px system-ui,sans-serif;text-align:center;';
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#b3261e;color:#fff;padding:12px 16px;font:600 14px var(--font-body, system-ui, sans-serif);text-align:center;';
     bar.textContent = message + ' ';
     const retry = document.createElement('button');
     retry.textContent = 'Retry'; retry.style.cssText = 'margin-left:8px;padding:2px 10px;cursor:pointer;';

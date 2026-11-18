@@ -1,11 +1,11 @@
 const router = require('express').Router();
-const { Customer, Sale, Warranty } = require('../models');
+const { Customer, Sale, Warranty, Product } = require('../models');
 const { adminOnly } = require('../middleware/auth');
 const { wrap, bad, notFound, conflict } = require('../utils/errors');
 const { nextId } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
 const { withItems, withClaims } = require('../services/serialize');
-const { warrantyStatus } = require('../utils/warranty');
+const { warrantyStatus, hasConfiguredWarranty } = require('../utils/warranty');
 const { today } = require('../utils/dates');
 
 const PHONE_RE = /^[0-9+()\-\s]{7,20}$/;
@@ -52,11 +52,17 @@ router.get('/', wrap(async (req, res) => {
 router.get('/:id', wrap(async (req, res) => {
   const c = await Customer.findOne({ id: req.params.id }).lean();
   if (!c) throw notFound('Customer not found.');
-  const [stats, sales, warranties] = await Promise.all([
+  const [stats, sales, rawWarranties, products] = await Promise.all([
     statsMap(c.id),
     Sale.find({ customerId: c.id }).sort({ date: -1 }).limit(500).lean().then(withItems),
-    Warranty.find({ customerId: c.id }).sort({ warrantyStart: -1 }).lean().then(withClaims)
+    Warranty.find({ customerId: c.id }).sort({ warrantyStart: -1 }).lean().then(withClaims),
+    Product.find({}).select('id warrantyDuration warrantyDays').lean()
   ]);
+  const prodById = new Map(products.map(p => [p.id, p]));
+  const warranties = rawWarranties.filter(x => {
+    const prod = prodById.get(x.productId);
+    return !(prod && !hasConfiguredWarranty(prod));
+  });
   warranties.forEach(x => { x.status = warrantyStatus(x, x.claims); });
   res.json({ customer: decorate(c, stats), sales, warranties });
 }));

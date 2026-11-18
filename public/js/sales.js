@@ -73,7 +73,7 @@ Boot.ready(function () {
     return src;
   }
 
-  const pgSales = createPager(document.getElementById('salesPager'), function () { renderOrders(); });
+  const pgSales = createPager(document.getElementById('salesPager'), function () { renderOrders(); }, { size: 5, sizes: [5, 10, 25, 50] });
   function renderOrders() {
     const q = document.getElementById('salesSearch').value.trim().toLowerCase();
     const list = filterSales(document.getElementById('salesFilter').value).filter(function (s) {
@@ -94,8 +94,8 @@ Boot.ready(function () {
             '<td><span class="pay-chip">' + s.paymentMethod + '</span></td>' +
             '<td>' + Utils.saleStatusBadge(s.status) + '</td>' +
             '<td class="text-right mono-num" style="font-weight:700;">' + Utils.formatPHP(s.total) + '</td>' +
-            '<td style="white-space:nowrap;"><button class="icon-btn" title="View All Items" aria-label="View all items in ' + s.id + '" data-view-sale="' + s.id + '">' + icon('eye') + '</button>' +
-            '<button class="icon-btn" title="Reprint receipt (marked DUPLICATE)" aria-label="Reprint receipt for ' + s.id + '" data-reprint-sale="' + s.id + '">' + icon('download') + '</button></td></tr>';
+            '<td class="col-actions" style="white-space:nowrap;"><div class="flex gap-8" style="display:flex;gap:0.5rem;align-items:center;"><button class="icon-btn" title="View All Items" aria-label="View all items in ' + s.id + '" data-view-sale="' + s.id + '">' + icon('eye') + '</button>' +
+            '<button class="icon-btn" title="Reprint receipt (marked DUPLICATE)" aria-label="Reprint receipt for ' + s.id + '" data-reprint-sale="' + s.id + '">' + icon('download') + '</button></div></td></tr>';
         }).join('')
       : '<tr><td colspan="8"><div class="empty-state">' + icon('sales') + '<h3>No sales for this period</h3></div></td></tr>';
   }

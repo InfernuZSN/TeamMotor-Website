@@ -8,11 +8,9 @@ const { getSettings, shopSnapshot } = require('./settings');
 const { changeStock } = require('./inventory');
 const { withItems } = require('./serialize');
 const { refreshNotifications } = require('./notifications');
+const { hasConfiguredWarranty } = require('../utils/warranty');
 
 const PAYMENT_METHODS = ['Cash', 'GCash'];   // NEW sales only (public/js/mock-data.js + local-api.js match). The Sale model enum still lists the legacy methods so old sales stay valid.
-const RUBBER_WARRANTY_DAYS = 7;
-const RUBBER_COVERAGE = 'Manufacturing defects only \u2014 ' + RUBBER_WARRANTY_DAYS + ' days from purchase (tires/rubber)';
-const isRubber = (p) => p.rubber === true || /\b(tires?|tyres?|rubber)\b/i.test(p.name || '');
 
 /* ---------------------------------------------------------------------------------------------
    createSale — the ONLY way a sale is recorded. Prices, totals, VAT and stock all come from the
@@ -137,20 +135,20 @@ async function createSale(input, user) {
       else await SaleItem.insertMany(itemDocs);
       createdDocs.items = true;
 
-      // automatic warranty records
+      // automatic warranty records (only for products where a warranty was configured in Add/Edit Product)
       const warranties = [];
       const startDate = manilaDate(now);
       for (const l of lines) {
         const p = byId.get(l.productId);
+        if (!hasConfiguredWarranty(p)) continue;
         const hasDuration = p.warrantyDuration && Number(p.warrantyDuration) > 0;
-        if (!hasDuration && !isRubber(p)) continue;
-        const duration = hasDuration ? Number(p.warrantyDuration) : RUBBER_WARRANTY_DAYS;
+        const duration = hasDuration ? Number(p.warrantyDuration) : Number(p.warrantyDays);
         const unit = hasDuration ? (p.warrantyUnit || 'months') : 'days';
         const warDoc = {
           id: await nextId('WAR', 3, undefined, session), customerId: customer ? customer.id : null, saleId,
           productId: p.id, productName: p.name, purchaseDate: startDate, warrantyStart: startDate,
           warrantyExpiration: calculateWarrantyExpiry(startDate, duration, unit),
-          coverage: p.warrantyType || (isRubber(p) ? RUBBER_COVERAGE : 'Standard parts warranty'), status: 'Active'
+          coverage: p.warrantyType || 'Standard parts warranty', status: 'Active'
         };
         const w = session
           ? (await Warranty.create([warDoc], { session }))[0]
@@ -223,7 +221,7 @@ async function voidSale(saleId, type, reason, user) {
     try {
       const r = await changeStock({
         productId: it.productId, delta: it.qty, type: 'Void Restock', user: user.name,
-        reference: saleId, reason: type, notes: type + ' sale ' + saleId + ': ' + why.slice(0, 120), date: nowISO
+        reference: saleId, reason: type, notes: type + ' sale (' + saleId + '): ' + why.slice(0, 120), date: nowISO
       });
       restocked.push({ productId: it.productId, name: it.name, qty: it.qty, newStock: r.txn.newStock });
     } catch (err) {

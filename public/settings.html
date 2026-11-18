@@ -8,7 +8,7 @@
 <link rel="shortcut icon" type="image/x-icon" href="img/favicon.ico?v=4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Space+Mono:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/responsive.css">
 </head>
@@ -31,7 +31,7 @@
     </header>
 
     <main class="page">
-      <div class="grid-2" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.25rem;align-items:start;">
+      <div class="grid-2 settings-grid">
         <form class="card" id="settingsForm" onsubmit="return false;" novalidate style="padding:1.25rem;">
           <h3 style="margin-top:0;">Shop details (printed on receipts)</h3>
           <div class="field"><label for="sTagline">Tagline</label><input type="text" id="sTagline" maxlength="80"></div>
@@ -59,8 +59,9 @@
 <script src="js/store.js"></script>
 <script src="js/analytics.js"></script>
 <script src="js/receipt.js"></script>
-<script src="js/app.js"></script>
+<script src="js/app.js?v=7"></script>
 <script src="js/notifications.js"></script>
+<script src="js/guide.js"></script>
 <script src="js/settings.js"></script>
 
 </body>

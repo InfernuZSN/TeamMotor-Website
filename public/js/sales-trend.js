@@ -23,16 +23,20 @@ Boot.ready(function () {
     chartEl.innerHTML = buckets.map(function (d, idx) {
       const pct = Math.round((d.total / maxTotal) * 100);
       const isPeak = d.total === maxTotal && d.total > 0;
+      const hPct = Math.max(pct, d.total > 0 ? 6 : 2);
       let label = d.label;
       if (dense) {
-        label = d.shortLabel + ((idx === 0 || d.shortLabel === '1') ? '<small>' + d.monthLabel + '</small>' : '');
+        label = d.shortLabel + '<small>' + d.monthLabel + '</small>';
       } else if (yearly && (idx === 0 || d.month === 0)) {
         label = d.label + '<small>' + d.year + '</small>';
+      } else if (!yearly) {
+        label = d.label + ' ' + d.shortLabel + '<small>' + d.monthLabel + '</small>';
       }
       return '<div class="bar-col" title="' + d.title + ': ' + Utils.formatPHP(d.total) + '">' +
-        '<div class="bar' + (isPeak ? ' is-peak' : '') + '" style="height:' + Math.max(pct, d.total > 0 ? 6 : 2) + '%">' +
-          (d.total > 0 && !dense ? '<span class="bar-value">' + Utils.formatPHP(d.total) + '</span>' : '') +
-        '</div>' +
+        '<div class="bar-track"><div class="bar' + (isPeak ? ' is-peak' : '') + '" style="height:' + hPct + '%; --bar-w:' + hPct + '%;">' +
+          '<span class="bar-value' + (d.total === 0 ? ' is-zero' : '') + '">' + Utils.formatPHP(d.total) + '</span>' +
+        '</div></div>' +
+        '<span class="bar-val-mobile' + (d.total === 0 ? ' is-zero' : '') + '">' + Utils.formatPHP(d.total) + '</span>' +
         '<div class="bar-label">' + label + '</div>' +
       '</div>';
     }).join('');

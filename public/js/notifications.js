@@ -14,6 +14,13 @@ const Notifications = (function () {
     return Store.get('notifications', []).slice().sort((a, b) => new Date(b.date) - new Date(a.date));
   }
 
+  function toneForType(type) {
+    if (type === 'stock-in' || type === 'product-unarchive') return 'ok';
+    if (type === 'restock-reminder' || type === 'warranty-expiring' || type === 'expiring-soon' ||
+        type === 'stock-out' || type === 'stock-adjust' || type === 'product-archive') return 'warn';
+    return 'danger';
+  }
+
   function render() {
     const notifs = recompute();
     const unread = notifs.filter(n => !n.read).length;
@@ -28,23 +35,37 @@ const Notifications = (function () {
     if (!panel) return;
     const listHtml = notifs.length
       ? notifs.slice(0, 25).map(n => {
-          const tone = (n.type === 'restock-reminder' || n.type === 'warranty-expiring' || n.type === 'expiring-soon') ? 'warn' : 'danger';
-          return '<div class="notif-item tone-' + tone + (n.read ? ' is-read' : ' is-unread') + '" data-link="' + (n.link || '') + '" data-notif-id="' + n.id + '" style="cursor:' + (n.link ? 'pointer' : 'default') + ';">' +
+          const tone = toneForType(n.type);
+          return '<div class="notif-item tone-' + tone + (n.read ? ' is-read' : ' is-unread') + '" data-link="' + Utils.escapeHtml(n.link || '') + '" data-notif-id="' + Utils.escapeHtml(n.id) + '" style="cursor:' + (n.link ? 'pointer' : 'default') + ';">' +
             '<span class="dot" aria-label="' + (n.read ? 'Read' : 'Unread') + '"></span>' +
             '<div class="body"><strong>' + Utils.escapeHtml(n.title) + '</strong>' +
             '<p>' + Utils.escapeHtml(n.message) + '</p>' +
-            '<time>' + Utils.timeAgo(n.date) + '</time></div></div>';
+            '<time>' + Utils.timeAgo(n.date) + '</time></div>' +
+            '<button type="button" class="notif-del-btn" data-del-notif="' + Utils.escapeHtml(n.id) + '" aria-label="Delete notification" title="Delete notification">&times;</button>' +
+            '</div>';
         }).join('')
-      : '<div class="empty-state">' + icon('bell') + '<h3>All caught up</h3><p>No stock or expiry alerts right now.</p></div>';
+      : '<div class="empty-state">' + icon('bell') + '<h3>All caught up</h3><p>No stock, activity, or expiry alerts right now.</p></div>';
 
     panel.innerHTML =
       '<div class="notif-panel-header"><h3>Notifications</h3>' +
-      '<button type="button" id="markAllReadBtn" class="btn-sm btn-ghost">Mark all read</button></div>' +
+      '<div class="notif-header-actions">' +
+      '<button type="button" id="markAllReadBtn" class="btn-sm btn-ghost"' + (!notifs.length ? ' disabled' : '') + '>Mark all read</button>' +
+      '<button type="button" id="clearAllNotifsBtn" class="btn-sm btn-ghost notif-clear-btn"' + (!notifs.length ? ' disabled' : '') + '>Clear all</button>' +
+      '</div></div>' +
       '<div class="notif-list">' + listHtml + '</div>' +
-      '<div class="notif-panel-footer"><span style="color:var(--steel);font-size:.74rem;">Alerts update automatically as stock changes</span></div>';
+      '<div class="notif-panel-footer"><span style="color:var(--steel);font-size:.74rem;">Alerts update automatically as inventory changes</span></div>';
+
+    panel.querySelectorAll('.notif-del-btn').forEach(function (btn) {
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        e.preventDefault();
+        deleteOne(btn.dataset.delNotif);
+      });
+    });
 
     panel.querySelectorAll('.notif-item[data-link]').forEach(function (item) {
-      item.addEventListener('click', function () {
+      item.addEventListener('click', function (e) {
+        if (e.target.closest('.notif-del-btn')) return;
         const link = item.dataset.link;
         const notifId = item.dataset.notifId;
         Store.set('notifications', Store.get('notifications', []).map(function (n) {
@@ -63,12 +84,47 @@ const Notifications = (function () {
         markAllRead();
       });
     }
+
+    const clearBtn = document.getElementById('clearAllNotifsBtn');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!recompute().length) return;
+        confirmDialog(
+          'Delete all notifications?',
+          'Are you sure you want to delete all notifications? This action cannot be undone.',
+          function () { clearAll(); },
+          'Delete All'
+        );
+      });
+    }
   }
 
   async function markAllRead() {
     try { await Api.post('/notifications/read-all'); } catch (err) { showToast(err.message, 'danger'); return; }
     Store.set('notifications', Store.get('notifications', []).map(n => Object.assign({}, n, { read: true })));
     render();
+  }
+
+  async function deleteOne(notifId) {
+    if (!notifId) return;
+    const prev = Store.get('notifications', []);
+    Store.set('notifications', prev.filter(n => n.id !== notifId));
+    render();
+    try {
+      await Api.del('/notifications/' + encodeURIComponent(notifId), { keepalive: true });
+    } catch (err) {
+      Store.set('notifications', prev);
+      render();
+      if (typeof showToast === 'function') showToast(err.message, 'danger');
+    }
+  }
+
+  async function clearAll() {
+    try { await Api.del('/notifications/clear-all'); } catch (err) { showToast(err.message, 'danger'); return; }
+    Store.set('notifications', []);
+    render();
+    if (typeof showToast === 'function') showToast('All notifications deleted.', 'ok');
   }
 
   /* Pull fresh alerts from the server (another cashier may have sold the last unit). */
@@ -90,13 +146,17 @@ const Notifications = (function () {
         panel.classList.toggle('open');
       });
     }
+    const panel = document.getElementById('notifPanel');
+    if (panel) {
+      panel.addEventListener('click', (e) => { e.stopPropagation(); });
+    }
     document.addEventListener('click', () => {
       const panel = document.getElementById('notifPanel');
       if (panel) panel.classList.remove('open');
     });
   }
 
-  return { init, render, recompute, markAllRead };
+  return { init, render, recompute, markAllRead, deleteOne, clearAll, poll };
 })();
 /* Explicit window property: notifications.js uses `const`, and top-level
    const/let bindings do NOT auto-attach to window like var/function

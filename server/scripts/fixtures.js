@@ -93,12 +93,15 @@ const Utils = {
      Rubber items (tires) only carry a short, defect-only warranty:
      RUBBER_WARRANTY_DAYS (7 days) from the purchase date. */
   isRubberItem(product) {
-    if (!product) return false;
-    if (product.rubber === true) return true;
-    return /\b(tires?|tyres?|rubber)\b/i.test(product.name || '');
+    return Boolean(product && (Number(product.warrantyDuration) > 0 || Number(product.warrantyDays) > 0));
   },
   warrantyDaysFor(product) {
-    return Utils.isRubberItem(product) ? RUBBER_WARRANTY_DAYS : null;
+    if (!product) return null;
+    if (Number(product.warrantyDuration) > 0) {
+      const unit = String(product.warrantyUnit || 'months').toLowerCase();
+      return Number(product.warrantyDuration) * (unit.startsWith('day') ? 1 : unit.startsWith('year') ? 365 : 30);
+    }
+    return Number(product.warrantyDays) > 0 ? Number(product.warrantyDays) : null;
   },
   /* 'YYYY-MM-DD' + n days -> 'YYYY-MM-DD' (no timezone drift) */
   addDaysISO(iso, days) {
@@ -327,7 +330,7 @@ const PRODUCTS = [
   { id: 'ENG-001', sku: 'TM-ENG-001', name: 'Motul 5100 10W-40 (1L)', brand: 'Motul', category: 'engine-oils', compatibility: [UNIVERSAL_FIT], compatYears: 'All Years', supplier: 'SUP-002', supplierRef: 'YGP-OIL-5100', description: 'Ester-based semi-synthetic engine oil, 1 liter bottle. Safe for wet clutch systems.', costPrice: 340, sellingPrice: 460, stock: 30, reorderLevel: 15, image: 'engine-oils', archived: false },
   { id: 'ENG-002', sku: 'TM-ENG-002', name: 'Yamaha Genuine Air Filter', brand: 'Yamaha Genuine', category: 'engine-parts', compatibility: ['Yamaha NMAX', 'Yamaha Aerox'], compatYears: '2018-2024', supplier: 'SUP-002', supplierRef: 'YGP-AF-118', description: 'OEM-spec air filter element for Yamaha NMAX and Aerox.', costPrice: 260, sellingPrice: 420, stock: 3, reorderLevel: 8, image: 'engine-parts', archived: false },
   { id: 'ENG-003', sku: 'TM-ENG-003', name: 'Chain and Sprocket Set 428H', brand: 'RK Chains', category: 'engine-parts', compatibility: ['Suzuki Raider R150'], compatYears: '2017-2023', supplier: 'SUP-001', supplierRef: 'ABC-CS-428', description: 'Complete drive chain and front/rear sprocket set for the Suzuki Raider R150.', costPrice: 1650, sellingPrice: 2350, stock: 6, reorderLevel: 5, image: 'engine-parts', archived: false },
-  { id: 'OTH-001', sku: 'TM-OTH-001', name: 'Motorcycle Tire 90/80-14', brand: 'IRC', category: 'other-parts', compatibility: ['Yamaha NMAX', 'Honda Click 125i', 'Honda Beat'], compatYears: 'All Years', supplier: 'SUP-003', supplierRef: 'RGA-TIRE-9080', description: 'Tubeless scooter tire, common 90/80-14 fitment for front or rear.', costPrice: 1450, sellingPrice: 1950, stock: 12, reorderLevel: 6, image: 'other-parts', rubber: true, warrantyDays: RUBBER_WARRANTY_DAYS, warrantyType: 'Defects only', archived: false },
+  { id: 'OTH-001', sku: 'TM-OTH-001', name: 'Motorcycle Tire 90/80-14', brand: 'IRC', category: 'other-parts', compatibility: ['Yamaha NMAX', 'Honda Click 125i', 'Honda Beat'], compatYears: 'All Years', supplier: 'SUP-003', supplierRef: 'RGA-TIRE-9080', description: 'Tubeless scooter tire, common 90/80-14 fitment for front or rear.', costPrice: 1450, sellingPrice: 1950, stock: 12, reorderLevel: 6, image: 'other-parts', rubber: false, warrantyDuration: RUBBER_WARRANTY_DAYS, warrantyUnit: 'days', warrantyDays: RUBBER_WARRANTY_DAYS, warrantyType: 'Defects only', archived: false },
   { id: 'LGT-001', sku: 'TM-LGT-001', name: 'LED Headlight', brand: 'Generic', category: 'lights', compatibility: ['Yamaha NMAX', 'Honda Click 125i'], compatYears: '2018-2025', supplier: 'SUP-001', supplierRef: 'ABC-LH-201', description: 'Bright white LED headlight bulb upgrade with plug-and-play connector.', costPrice: 620, sellingPrice: 980, stock: 15, reorderLevel: 8, image: 'lights', archived: false },
   { id: 'LGT-002', sku: 'TM-LGT-002', name: 'Signal Light (Turn Signal)', brand: 'Generic', category: 'lights', compatibility: [UNIVERSAL_FIT], compatYears: 'All Years', supplier: 'SUP-001', supplierRef: 'ABC-SL-055', description: 'Amber turn signal lamp, universal mount bracket included.', costPrice: 90, sellingPrice: 180, stock: 40, reorderLevel: 15, image: 'lights', archived: false },
   { id: 'LGT-003', sku: 'TM-LGT-003', name: 'Tail Light Assembly', brand: 'Generic', category: 'lights', compatibility: ['Honda Click 125i'], compatYears: '2019-2024', supplier: 'SUP-001', supplierRef: 'ABC-TL-087', description: 'Complete rear tail light housing with brake and running light.', costPrice: 380, sellingPrice: 620, stock: 9, reorderLevel: 10, image: 'lights', archived: false },

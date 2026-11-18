@@ -23,6 +23,7 @@ const Shifts = (function () {
     const list = all().filter(function (s) { return s.id !== rec.id; });
     list.unshift(rec);
     Store.set(KEY, list);
+    if (typeof renderSidebar === 'function') renderSidebar();
   }
 
   /* The person's ongoing shift, or null. */

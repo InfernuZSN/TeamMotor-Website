@@ -8,9 +8,9 @@
 <link rel="shortcut icon" type="image/x-icon" href="img/favicon.ico?v=4">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@200;400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Space+Mono:wght@700&display=swap">
-<link rel="stylesheet" href="css/style.css">
-<link rel="stylesheet" href="css/responsive.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Poppins:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/responsive.css?v=5">
 </head>
 <body>
 
@@ -180,21 +180,35 @@
             <label for="pCost">Cost / Acquisition Price (₱)</label>
             <input type="number" id="pCost" min="0" step="0.01" required>
           </div>
-          <div class="field">
+          <div class="field" id="pStockField">
             <label for="pStock">Quantity</label>
             <input type="number" id="pStock" min="0" step="1" required>
             <div class="hint" id="stockEditHint" style="display:none;">Use Stock In / Stock Out to change stock after a product is created.</div>
           </div>
-          <div class="field">
-            <label for="pReorder">Reorder Level</label>
+          <div class="field" id="pReorderField">
+            <label for="pReorder">Low Stock Indicator</label>
             <input type="number" id="pReorder" min="0" step="1" required>
             <div class="hint">Products at or below this number are flagged Low Stock.</div>
           </div>
         </div>
-        <div class="field">
-          <label for="pExpiry">Expiration Date (optional)</label>
-          <input type="date" id="pExpiry">
-          <div class="hint">Only for perishable items (oils, fluids, sprays).</div>
+        <div class="form-grid">
+          <div class="field" id="pShelfLifeField">
+            <label for="pShelfLifeDuration" id="pShelfLifeLabel">Product Shelf Life (optional)</label>
+            <div class="flex gap-8" style="max-width:320px;">
+              <input type="number" id="pShelfLifeDuration" min="1" step="1" placeholder="e.g. 8" style="flex:1;">
+              <select id="pShelfLifeUnit" style="width:auto;">
+                <option value="days" selected>days</option>
+                <option value="months">months</option>
+                <option value="years">years</option>
+              </select>
+            </div>
+            <div class="hint" id="pShelfLifeHint">Shelf-life duration per batch — counts down relative to when each stock batch is added.</div>
+          </div>
+          <div class="field" id="pExpiryField">
+            <label for="pExpiry" id="pExpiryLabel">Initial Batch Expiration Date (optional)</label>
+            <input type="date" id="pExpiry">
+            <div class="hint" id="pExpiryHint">Auto-calculated from shelf life, or pick a specific date.</div>
+          </div>
         </div>
         <div class="field">
           <label for="pStorageLocation">Storage Location (optional)</label>
@@ -206,6 +220,7 @@
           <div class="check-row">
             <input type="checkbox" id="pHasWarranty"><label for="pHasWarranty" style="margin:0;font-weight:500;">This product has a warranty</label>
           </div>
+          <div class="hint">Customer warranty — counts down only from the moment a customer buys the product at POS.</div>
         </div>
         <div class="form-grid" id="warrantyFields" style="display:none;">
           <div class="field">
@@ -299,12 +314,16 @@
     </div>
     <div class="modal-body">
       <div id="viewModalHead" style="margin-bottom:1rem;"></div>
-      <div class="tabs" id="viewTabs">
-        <button class="tab-btn active" data-tab="overview">Overview</button>
-        <button class="tab-btn" data-tab="inventory">Inventory</button>
-        <button class="tab-btn" data-tab="sales">Sales</button>
-        <button class="tab-btn" data-tab="supplier">Supplier</button>
-        <button class="tab-btn" data-tab="activity">Activity</button>
+      <div class="view-tabs-nav">
+        <button type="button" class="view-tabs-arrow view-tabs-prev" id="viewTabsPrev" aria-label="Scroll tabs left"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+        <div class="tabs" id="viewTabs">
+          <button class="tab-btn active" data-tab="overview">Overview</button>
+          <button class="tab-btn" data-tab="inventory">Inventory</button>
+          <button class="tab-btn" data-tab="sales">Sales</button>
+          <button class="tab-btn" data-tab="supplier">Supplier</button>
+          <button class="tab-btn" data-tab="activity">Activity</button>
+        </div>
+        <button type="button" class="view-tabs-arrow view-tabs-next" id="viewTabsNext" aria-label="Scroll tabs right"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
       </div>
       <div class="tab-panel active" id="vtab-overview"></div>
       <div class="tab-panel" id="vtab-inventory"></div>
@@ -328,6 +347,13 @@
     <div class="modal-body">
       <input type="hidden" id="adjProductId">
       <p class="text-muted" id="adjProductName" style="margin-top:0;font-weight:600;"></p>
+      <div class="field" id="adjBatchField" style="display:none;">
+        <label for="adjBatch">Batch to Adjust (optional)</label>
+        <select id="adjBatch">
+          <option value="">Auto FEFO (Earliest Expiring Batch)</option>
+        </select>
+        <div class="hint">If not specified, adjustments automatically use FEFO (earliest expiring batch first).</div>
+      </div>
       <div class="field"><label for="adjQty">Actual (counted) quantity *</label><input type="number" id="adjQty" min="0" step="1"></div>
       <div class="field"><label for="adjReason">Reason *</label><textarea id="adjReason" rows="2" maxlength="200" placeholder="e.g. Recount found 2 units damaged in storage"></textarea></div>
       <div class="form-error" id="adjError" role="alert"></div>
@@ -558,10 +584,11 @@
   </div>
 </div>
 
-<script src="js/store.js"></script>
-<script src="js/analytics.js"></script>
-<script src="js/app.js"></script>
-<script src="js/notifications.js"></script>
-<script src="js/inventory.js"></script>
+<script src="js/store.js?v=2"></script>
+<script src="js/analytics.js?v=2"></script>
+<script src="js/app.js?v=7"></script>
+<script src="js/notifications.js?v=2"></script>
+<script src="js/guide.js"></script>
+<script src="js/inventory.js?v=10"></script>
 </body>
 </html>
