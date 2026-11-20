@@ -151,7 +151,7 @@ const Sale = make('Sale', 'sales', {
   vatableAmount: { type: Number, default: 0 },
   vatAmount: { type: Number, default: 0 },
   total: { type: Number, required: true },
-  paymentMethod: { type: String, enum: ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Other'], required: true },   // Maya / Bank Transfer / Other = legacy history only; new sales are Cash or GCash (services/sales.js)
+  paymentMethod: { type: String, enum: ['Cash', 'GCash', 'Maya', 'Other'], required: true },
   amountReceived: { type: Number, default: 0 },
   changeAmount: { type: Number, default: 0 },
   reference: { type: String, default: null },

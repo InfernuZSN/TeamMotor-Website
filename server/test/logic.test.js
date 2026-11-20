@@ -369,7 +369,9 @@ test('POS Payment Methods: only Cash and GCash are accepted for new sales; legac
   const svc = fs.readFileSync(resolveRoot('server/src/services/sales.js'), 'utf8');
   assert.ok(svc.includes("const PAYMENT_METHODS = ['Cash', 'GCash'];"), 'server allowlist must match the frontend list');
   const model = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
-  ['Cash', 'GCash', 'Maya', 'Bank Transfer', 'Other'].forEach(m => assert.ok(model.includes("'" + m + "'"), m + ' must stay in the Sale model enum (historical sales)'));
+  ['Cash', 'GCash', 'Maya', 'Other'].forEach(m => assert.ok(model.includes("'" + m + "'"), m + ' must stay in the Sale model enum (historical sales)'));
+  assert.ok(!model.includes("'Bank Transfer'"), 'Bank Transfer must be removed from Sale model enum');
+  assert.ok(!storeCode.includes("'Bank Transfer'"), 'Bank Transfer must be removed from store.js');
 
   const eng003 = ctx.PRODUCTS.find(p => p.id === 'ENG-003');
   assert.ok(eng003, 'ENG-003 must exist in PRODUCTS');
@@ -1452,4 +1454,22 @@ test('Mobile Card Alignment, Responsive Actions, and Display Card Truncation ove
   assert.ok(styleCss.includes('#tab-products th:nth-child(7)') && styleCss.includes('width: 6rem;'), 'Stock column must have ample 6rem width');
   assert.ok(styleCss.includes('#tab-products th:nth-child(6)') && styleCss.includes('padding-right: 1.25rem;'), 'Price column must have right padding for spacing');
   assert.ok(styleCss.includes('#tab-products th:nth-child(7)') && styleCss.includes('padding-right: 1.25rem;'), 'Stock column must have right padding for spacing');
+
+  // 8. Payment Method Summary modern design, visible progress bars, and exclusion of Bank Transfer
+  const salesHtml = fs.readFileSync(resolveRoot('public/sales.html'), 'utf8');
+  assert.ok(salesHtml.includes('Breakdown of recorded revenue by payment method'), 'sales.html must include subtitle for Payment Method Summary');
+  assert.ok(salesJs.includes('const methods = PAYMENT_METHODS;'), 'sales.js renderPaymentSummary must use active PAYMENT_METHODS only without Bank Transfer');
+  assert.ok(styleCss.includes('.pay-summary-list') && styleCss.includes('.pay-summary-item'), 'style.css must style payment summary list');
+
+  // 9. Sales Analysis 3-card grid layout: Payment Method Summary, Top-Selling, Slow-Moving
+  assert.ok(salesHtml.includes('class="analysis-cards-grid"'), 'sales.html must use analysis-cards-grid for the 3 analysis cards');
+  assert.ok(styleCss.includes('.analysis-cards-grid') && styleCss.includes('repeat(3, minmax(0, 1fr))'), 'style.css must define 3-column equal grid for analysis cards');
+
+  // 10. Product Movement compact sizing & proportional columns
+  assert.ok(salesJs.includes('Math.min(5, Math.ceil(ranked.length / 2))'), 'sales.js fastList must be capped at 5 rows');
+  assert.ok(salesJs.includes('Math.min(5, Math.floor(ranked.length / 2))'), 'sales.js slowList must be capped at 5 rows');
+  assert.ok(styleCss.includes('.page-sales #tab-movement .movement-table'), 'style.css must scope movement table');
+  assert.ok(styleCss.includes('.page-sales #tab-movement th:nth-child(1)'), 'style.css must allocate proportional widths for movement columns');
+  assert.ok(!salesHtml.includes('High Demand'), 'High Demand badge must be removed from Product Movement card');
+  assert.ok(!salesHtml.includes('Low Turnover'), 'Low Turnover badge must be removed from Product Movement card');
 });

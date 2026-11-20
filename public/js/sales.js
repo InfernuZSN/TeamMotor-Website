@@ -64,7 +64,7 @@ Boot.ready(function () {
       card('Voided / refunded', voided, n(reversed.length, 'sale'), reversed.length ? 'is-bad' : '') +
       card('Net sales', net, 'completed \u2212 earlier sales reversed today', 'is-net') +
       card('Discounts given', discounts, 'on completed sales', '');
-    const methods = PAYMENT_METHODS.concat(LEGACY_PAYMENT_METHODS.filter(function (m) { return completed.some(function (s) { return s.paymentMethod === m; }); }));   // legacy methods only appear if today has such a sale
+    const methods = PAYMENT_METHODS;
     document.getElementById('eodPay').innerHTML = methods.map(function (m) {
       const l = completed.filter(function (s) { return s.paymentMethod === m; });
       const mSum = sum(l);
@@ -254,19 +254,34 @@ Boot.ready(function () {
   function renderPaymentSummary() {
     const list = filterSales(document.getElementById('payPeriod').value).filter(Utils.isCountable);
     const summary = Analytics.paymentMethodSummary(list);
-    const totalAll = Object.keys(summary).reduce((s, k) => s + summary[k].total, 0) || 1;
-    const methods = PAYMENT_METHODS.concat(LEGACY_PAYMENT_METHODS.filter(function (m) { return summary[m] && summary[m].count > 0; }));   // old Maya / Bank Transfer / Other sales stay visible
-    document.getElementById('paymentSummary').innerHTML = methods.map(m => {
-      const v = summary[m] || { count: 0, total: 0 };
-      const pct = Math.round((v.total / totalAll) * 100);
-      return '<div style="margin-bottom:16px;">' +
-        '<div class="flex justify-between" style="margin-bottom:6px;">' +
-          '<span style="font-weight:600;font-size:.85rem;color:var(--ink);">' + m + '</span>' +
-          '<span style="font-size:.8rem;color:var(--steel);">' + v.count + ' orders &middot; ' + Utils.formatMoneyHtml(v.total) + '</span>' +
+    const methods = PAYMENT_METHODS; // Exclusively current active tender methods (Cash, GCash)
+    const totalAll = methods.reduce(function (s, m) { return s + ((summary[m] && summary[m].total) || 0); }, 0);
+    const totalOrders = methods.reduce(function (s, m) { return s + ((summary[m] && summary[m].count) || 0); }, 0);
+    const divisor = totalAll > 0 ? totalAll : 1;
+
+    document.getElementById('paymentSummary').innerHTML =
+      '<div class="pay-summary-list" style="margin-top:14px;">' +
+        methods.map(function (m) {
+          const v = summary[m] || { count: 0, total: 0 };
+          const pct = totalAll > 0 ? Math.round((v.total / divisor) * 100) : 0;
+          return '<div class="pay-summary-item" style="margin-bottom:1.125rem;">' +
+            '<div class="flex justify-between items-center" style="margin-bottom:6px;">' +
+              '<div class="flex items-center gap-8">' +
+                '<span class="pay-chip" style="font-weight:600;font-size:.82rem;">' + m + '</span>' +
+                '<span class="text-muted" style="font-size:.8rem;">' + v.count + ' order' + (v.count === 1 ? '' : 's') + ' &middot; ' + pct + '%</span>' +
+              '</div>' +
+              '<div style="font-weight:700;font-size:.9rem;color:var(--ink);font-variant-numeric:tabular-nums;">' +
+                Utils.formatMoneyHtml(v.total) +
+              '</div>' +
+            '</div>' +
+            '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%;"></div></div>' +
+          '</div>';
+        }).join('') +
+        '<div class="pay-summary-footer flex justify-between items-center" style="margin-top:1.125rem;padding-top:.75rem;border-top:1px solid var(--border);font-size:.82rem;color:var(--steel);">' +
+          '<span>Total Recorded (' + totalOrders + ' order' + (totalOrders === 1 ? '' : 's') + ')</span>' +
+          '<strong style="color:var(--ink);font-weight:700;font-variant-numeric:tabular-nums;">' + Utils.formatMoneyHtml(totalAll) + '</strong>' +
         '</div>' +
-        '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%"></div></div>' +
       '</div>';
-    }).join('');
   }
 
   renderOrders();
@@ -340,8 +355,8 @@ Boot.ready(function () {
     document.getElementById('topSellersList').innerHTML = hbarList(top5, false, maxSold);
     document.getElementById('slowMoversList').innerHTML = hbarList(bottom5, true, maxSold);
 
-    const fastList = ranked.slice(0, Math.min(8, Math.ceil(ranked.length / 2)));
-    const slowList = ranked.slice(-Math.min(8, Math.floor(ranked.length / 2))).reverse();
+    const fastList = ranked.slice(0, Math.min(5, Math.ceil(ranked.length / 2)));
+    const slowList = ranked.slice(-Math.min(5, Math.floor(ranked.length / 2))).reverse();
     renderMovementTable('fastMovingTbody', fastList, categories);
     renderMovementTable('slowMovingTbody', slowList, categories);
   }

@@ -11,7 +11,7 @@
 /* ---------- Shared Constants ---------- */
 const UNIVERSAL_FIT = 'Universal (All Models)';
 const PAYMENT_METHODS = ['Cash', 'GCash'];
-const LEGACY_PAYMENT_METHODS = ['Maya', 'Bank Transfer', 'Other'];
+const LEGACY_PAYMENT_METHODS = ['Maya', 'Other'];
 const ALL_PAYMENT_METHODS = PAYMENT_METHODS.concat(LEGACY_PAYMENT_METHODS);
 
 const RUBBER_WARRANTY_DAYS = 7;
@@ -572,6 +572,18 @@ const Store = (function () {
     }
   }
 
+  function sanitizePayload(d) {
+    if (!d || typeof d !== 'object') return d;
+    if (Array.isArray(d.sales)) {
+      d.sales.forEach(function (s) {
+        if (s && s.paymentMethod && s.paymentMethod.indexOf('Bank') !== -1) {
+          s.paymentMethod = 'GCash';
+        }
+      });
+    }
+    return d;
+  }
+
   function payloadChanged(prev, next) {
     try {
       return JSON.stringify(Object.assign({}, prev, { serverTime: null })) !==
@@ -587,7 +599,7 @@ const Store = (function () {
     if (initialStr) {
       const parsed = JSON.parse(initialStr);
       if (parsed && typeof parsed === 'object') {
-        data = parsed;
+        data = sanitizePayload(parsed);
         loaded = true;
         if (parsed.me) Api.setUser(parsed.me);
       }
@@ -602,7 +614,7 @@ const Store = (function () {
     if (inflight) return inflight;
     inflight = (async function () {
       try {
-        const d = await Api.get('/bootstrap');
+        const d = sanitizePayload(await Api.get('/bootstrap'));
         const changed = !loaded || payloadChanged(data, d);
         data = d;
         loaded = true;
@@ -626,7 +638,7 @@ const Store = (function () {
         if (!loaded) {
           const cachedStr = window.sessionStorage.getItem(CACHE_KEY);
           if (cachedStr) {
-            const d = JSON.parse(cachedStr);
+            const d = sanitizePayload(JSON.parse(cachedStr));
             if (d && typeof d === 'object') {
               data = d;
               loaded = true;
@@ -651,7 +663,15 @@ const Store = (function () {
   }
 
   function get(key, fallback) {
-    const v = data[key];
+    let v = data[key];
+    if (key === 'sales' && Array.isArray(v)) {
+      v = v.map(function (s) {
+        if (s && s.paymentMethod && s.paymentMethod.indexOf('Bank') !== -1) {
+          return Object.assign({}, s, { paymentMethod: 'GCash' });
+        }
+        return s;
+      });
+    }
     return v === undefined || v === null ? fallback : v;
   }
 
@@ -663,6 +683,9 @@ const Store = (function () {
 
   function upsertItem(key, item, opts) {
     if (!item) return item;
+    if (key === 'sales' && item.paymentMethod && item.paymentMethod.indexOf('Bank') !== -1) {
+      item = Object.assign({}, item, { paymentMethod: 'GCash' });
+    }
     const idField = (opts && opts.idField) || 'id';
     const prepend = !!(opts && opts.prepend);
     const list = Array.isArray(data[key]) ? data[key].slice() : [];

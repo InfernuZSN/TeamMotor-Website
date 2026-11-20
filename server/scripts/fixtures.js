@@ -265,7 +265,7 @@ const Utils = {
 
 const UNIVERSAL_FIT = 'Universal (All Models)';
 const PAYMENT_METHODS = ['Cash', 'GCash'];   // accepted for NEW sales — keep in sync with server/src/services/sales.js and local-api.js
-const LEGACY_PAYMENT_METHODS = ['Maya', 'Bank Transfer', 'Other'];   // no longer accepted for new sales; old sales that used them stay visible in history and reports
+const LEGACY_PAYMENT_METHODS = ['Maya', 'Other'];
 const ALL_PAYMENT_METHODS = PAYMENT_METHODS.concat(LEGACY_PAYMENT_METHODS);
 
 /* Warranty limit for rubber items (tires): defects only, 7 days from purchase. */
@@ -383,7 +383,7 @@ function makeRng(seed) {
 function buildSales() {
   const rng = makeRng(20260830);
   const staffPool = ['Juan Dela Cruz', 'Maria Santos', 'Ana Reyes'];
-  const paymentPool = ['Cash', 'Cash', 'Cash', 'GCash', 'GCash', 'Bank Transfer'];
+  const paymentPool = ['Cash', 'Cash', 'Cash', 'GCash', 'GCash'];
   const weights = [
     ['LGT-001', 17], ['BRK-001', 13], ['LGT-002', 10], ['BRK-002', 7],
     ['ELC-002', 6], ['ACC-001', 5], ['ELC-001', 5], ['ENG-001', 4],
@@ -451,8 +451,8 @@ const RETIRED_MOTORCYCLE_UNITS = [
   { id: 'MOT-003', name: 'Suzuki Raider R150', sellingPrice: 114000 }
 ];
 const MOTORCYCLE_SALES = [
-  { customerId: 'CUST-001', productId: 'MOT-001', date: '2025-09-18T10:15:00', staff: 'Juan Dela Cruz', payment: 'Bank Transfer' },
-  { customerId: 'CUST-002', productId: 'MOT-002', date: '2026-03-10T14:40:00', staff: 'Maria Santos', payment: 'Bank Transfer' },
+  { customerId: 'CUST-001', productId: 'MOT-001', date: '2025-09-18T10:15:00', staff: 'Juan Dela Cruz', payment: 'GCash' },
+  { customerId: 'CUST-002', productId: 'MOT-002', date: '2026-03-10T14:40:00', staff: 'Maria Santos', payment: 'GCash' },
   { customerId: 'CUST-003', productId: 'MOT-003', date: '2024-06-05T11:00:00', staff: 'Juan Dela Cruz', payment: 'Cash' },
   { customerId: 'CUST-004', productId: 'MOT-001', date: '2025-01-10T09:30:00', staff: 'Ana Reyes', payment: 'GCash' }
 ];

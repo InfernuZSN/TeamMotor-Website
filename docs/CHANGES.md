@@ -31,7 +31,7 @@
 # POS terminal redesign (step 1 of the HCI redesign)
 * `pos.html`, `css/pos.css`, `js/pos.js` rebuilt as a single-screen touch terminal; `js/pos-receipt.js` removed (its job is now inside pos.js, using the shared `receipt.js`).
 * Colour-coded categories (tab, tile, cart line); 11 shop categories; demo products for the new ones.
-* Payment methods Cash / GCash / Maya / Bank Transfer / Other accepted by the server and offline API (the Sale model already allowed them).
+* Payment methods Cash / GCash / Maya / Other accepted by the server and offline API (the Sale model already allowed them).
 * Hold / resume orders (saved in the browser, shared by this terminal), barcode auto-add, "Fits my bike" filter, discount chips, keypad payment modal, receipt screen + New Sale.
 * `server/src/services/categories.js` + `ensureDefaultCategories()` in local-api.js add/rename categories in an existing database without touching custom names.
 
@@ -60,7 +60,7 @@
 ## Production hardening
 **Audit** — server routes + `local-api.js` now write matching enriched details (names, before/after changed fields only, never passwords/hashes). `settings.update` is `{ changed: {key:{from,to}} }`. Admin password reset writes `user.update` (passwordReset:true) AND `user.password_change` (changedBy:'admin'). Audit page: friendly labels (stored codes unchanged), one-line summaries, "Sensitive only" filter (`GET /audit?sensitive=1`), View modal with Summary + Before/After table + full details, server-side pagination.
 **Void / discount** — Void: Admin-only API, reason required (API + UI), dialog shows sale total; Staff get a clear message. Discount: **Option A, Admin only**, enforced in `createSale` (server + offline) and in the POS UI. Sale stores `discountMode` / `discountValue`; audit `sale.create` includes them. No new settings keys.
-**End of day** — "Today's sales summary" on Sales → Transactions: completed (count/₱), voided today, net, discounts, Cash/GCash/Maya/Bank Transfer/Other breakdown. Read-only, live data, no cash-drawer count.
+**End of day** — "Today's sales summary" on Sales → Transactions: completed (count/₱), voided today, net, discounts, Cash/GCash/Maya/Other breakdown. Read-only, live data, no cash-drawer count.
 **58 mm receipt (OC-58IIH)** — `@page 58mm`, 50 mm content, item rows re-flowed (name line, then qty × price … amount). Wording stays "SALES RECEIPT". No drawer commands.
 **Inventory layout** — fixed-layout tables, no horizontal scroll ≥ ~900px, Last Updated / Brand / Supplier columns drop out as the window narrows, truncation with tooltips, page fits the viewport and only the table body scrolls; pager under the table.
 **Pagination** — shared `createPager()` in `app.js` (25/50 rows): Inventory Products + History, Sales Transactions, Customers, Warranty (client-side), Audit (server-side). Filters/search reset to page 1.
@@ -71,7 +71,7 @@ Shop setup: set OC-58IIH as the Windows default printer (paper 58 mm, margins mi
 1. **Manage Suppliers modal** — fixed-layout table (no horizontal scroll), 10 rows/page with Previous/Next + numbers + "Showing a–b of n"; supplier name, contact line and email truncate with tooltips; search resets to page 1; pager is a fixed footer of the list.
 2. **Stock In / Stock Out** — Product dropdown removed; the product from the clicked inventory row is shown read-only (`#sProductLabel`) and carried in a hidden `#sProduct`; saving is refused if that product no longer exists.
 3. **Product View** — Sales and Activity tabs paginate at 10/page with independent page state (each resets to page 1 when a product is opened); the old "latest 8" limit is gone.
-4. **Payments** — new sales accept Cash and GCash only (POS UI, `local-api.js`, `server/src/services/sales.js`; unsupported values return 400). The Sale model enum and reports still recognise Maya / Bank Transfer / Other so history is untouched. New constants: `LEGACY_PAYMENT_METHODS`, `ALL_PAYMENT_METHODS` (mock-data.js).
+4. **Payments** — new sales accept Cash and GCash only (POS UI, `local-api.js`, `server/src/services/sales.js`; unsupported values return 400). The Sale model enum and reports still recognise Maya / Other so history is untouched. New constants: `LEGACY_PAYMENT_METHODS`, `ALL_PAYMENT_METHODS` (mock-data.js).
 5. **Payment modal** — header / scrolling body / pinned footer (Cancel + Confirm), capped to the viewport; compact spacing under 820px tall.
 6. **Login** — Sign up link removed (signup.html file left in place, unlinked).
 7. **Login hero/typography** — complete artwork (`img/sidebar-logo.jpg`, `object-fit: contain`) over a dark panel; one Inter-based type scale for labels, inputs, buttons and notes.
