@@ -40,8 +40,8 @@
 @view-transition {
   navigation: auto;
 }
-.pos-terminal > .sidebar {
-  view-transition-name: none;
+.pos-terminal .app-shell > .sidebar {
+  view-transition-name: sidebar;
 }
 html:has(body.pos-terminal) { font-size: 16px; }   /* style.css shrinks the root on small screens; a touch terminal must not */
 .pos-terminal * { touch-action: manipulation; }
@@ -55,17 +55,80 @@ html:has(body.pos-terminal) { font-size: 16px; }   /* style.css shrinks the root
 /* Toasts: top-centre so they never cover the Pay button */
 .pos-terminal .toast-container { top: calc(var(--pt-head-h) + 0.5rem); bottom: auto; right: 50%; transform: translateX(50%); z-index: 400; }
 
-/* ---------- Sidebar as a drawer ---------- */
-.pos-terminal .sidebar {
-  position: fixed; left: 0; top: 0; bottom: 0; height: 100vh; height: 100dvh; width: var(--sidebar-w);
-  transform: translateX(-100%); transition: transform .2s ease; z-index: 300;
+/* ---------- Sidebar in POS ---------- */
+.pos-terminal .app-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
+  transition: grid-template-columns .2s ease;
+  position: relative;
 }
-.pos-terminal .sidebar.open { transform: none; }
-.pos-terminal .sidebar-scrim { display: none; position: fixed; inset: 0; background: rgba(20, 23, 31, .5); z-index: 290; }
-.pos-terminal .sidebar-scrim.open { display: block; }
+.pos-terminal .sidebar-toggle {
+  z-index: 120;
+}
+
+@media (min-width: 769px) {
+  .pos-terminal .app-shell.is-collapsed {
+    --sidebar-w: var(--sidebar-w-collapsed);
+  }
+  .pos-terminal .sidebar {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100dvh;
+    transform: none;
+    z-index: 100;
+  }
+  .pos-terminal .sidebar-scrim {
+    display: none !important;
+  }
+  .pos-terminal #hamburgerBtn {
+    display: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .pos-terminal .app-shell {
+    grid-template-columns: 1fr;
+  }
+  .pos-terminal .sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    height: 100vh;
+    height: 100dvh;
+    width: min(18rem, 82vw);
+    transform: translateX(-100%);
+    transition: transform .2s ease;
+    z-index: 300;
+  }
+  .pos-terminal .sidebar.open {
+    transform: translateX(0) !important;
+  }
+  .pos-terminal .sidebar-scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(20, 23, 31, .5);
+    z-index: 290;
+  }
+  .pos-terminal .sidebar-scrim.open {
+    display: block !important;
+  }
+  .pos-terminal #hamburgerBtn {
+    display: inline-flex;
+  }
+}
 
 /* ---------- Layout ---------- */
-.pt-app { display: flex; flex-direction: column; height: 100%; }
+.pt-app { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; }
 .pt-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(23rem, 1fr); gap: 0; }
 
 /* ---------- Buttons ---------- */

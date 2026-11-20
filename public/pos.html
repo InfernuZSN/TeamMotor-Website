@@ -14,7 +14,8 @@
 </head>
 <body class="pos-terminal">
 
-<!-- Main navigation stays available as a slide-in drawer (same sidebar as every other page) so the terminal itself can use the whole screen. -->
+<!-- Main navigation sidebar is docked on desktop and available via drawer on mobile -->
+<div class="app-shell">
 <div class="sidebar-scrim" id="sidebarScrim"></div>
 <aside class="sidebar" id="sidebar"></aside>
 
@@ -155,6 +156,7 @@
     <strong id="cartBarTotal">&#8369;0.00</strong>
   </button>
 </div>
+</div> <!-- /.app-shell -->
 
 <!-- ======================= Payment ======================= -->
 <div class="pt-overlay" id="payOverlay" role="dialog" aria-modal="true" aria-labelledby="payTitle">

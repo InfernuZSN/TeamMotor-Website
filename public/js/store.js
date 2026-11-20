@@ -53,6 +53,49 @@ const Utils = {
     const digits = Number.isInteger(n) ? 0 : 2;
     return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   },
+  formatCardPHP(amount) {
+    const n = Number(amount) || 0;
+    const abs = Math.abs(n);
+    if (abs < 10000000) {
+      return Utils.formatPHP(n);
+    }
+    const SCALES = [
+      { val: 1e33, suffix: 'Dc' },
+      { val: 1e30, suffix: 'No' },
+      { val: 1e27, suffix: 'Oc' },
+      { val: 1e24, suffix: 'Sp' },
+      { val: 1e21, suffix: 'Sx' },
+      { val: 1e18, suffix: 'Q' },
+      { val: 1e15, suffix: 'P' },
+      { val: 1e12, suffix: 'T' },
+      { val: 1e9,  suffix: 'B' },
+      { val: 1e6,  suffix: 'M' }
+    ];
+    let matched = null;
+    for (let i = 0; i < SCALES.length; i++) {
+      if (abs >= SCALES[i].val) {
+        matched = SCALES[i];
+        break;
+      }
+    }
+    let formatted;
+    if (matched) {
+      const scaled = abs / matched.val;
+      formatted = (scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(1).replace(/\.0$/, '')) + matched.suffix;
+    } else {
+      formatted = abs.toExponential(1).replace('+', '');
+    }
+    return (n < 0 ? '₱-' : '₱') + formatted;
+  },
+  formatMoneyHtml(amount) {
+    const n = Number(amount) || 0;
+    const full = Utils.formatPHP(n);
+    if (Math.abs(n) < 10000000) {
+      return full;
+    }
+    const abbr = Utils.formatCardPHP(n);
+    return '<span class="abbr-money" data-tooltip="' + Utils.escapeHtml(full) + '" title="' + Utils.escapeHtml(full) + '">' + abbr + '</span>';
+  },
   formatDate(iso) {
     const d = new Date(iso);
     return d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -696,4 +739,126 @@ const Boot = (function () {
     while (queue.length) run(queue.shift());
   }
   return { ready: ready, dom: dom };
+})();
+
+/* ==========================================================================
+   Global Floating Money Tooltip
+   Custom pop-up matching Sales Trend 1 Month (.bar-chart.is-dense .bar-value)
+   for abbreviated monetary numbers and data-tooltip elements.
+   ========================================================================== */
+(function () {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
+  if (typeof document.addEventListener !== 'function') return;
+
+  let tipEl = null;
+  function getTip() {
+    if (!tipEl && document.body && typeof document.createElement === 'function') {
+      tipEl = document.createElement('div');
+      tipEl.className = 'tm-money-tooltip';
+      tipEl.setAttribute('role', 'tooltip');
+      tipEl.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(tipEl);
+    }
+    return tipEl;
+  }
+
+  function positionTip(target) {
+    if (!target) return;
+    const text = target.getAttribute('data-tooltip') || target.getAttribute('data-full-val') || target.getAttribute('title');
+    if (!text) return;
+
+    // Suppress native OS tooltip on target AND any ancestor while hovering so generic OS tooltips can never appear
+    let curr = target;
+    while (curr && curr !== document.body) {
+      if (curr.hasAttribute && curr.hasAttribute('title')) {
+        curr.setAttribute('data-full-val', curr.getAttribute('title'));
+        curr.removeAttribute('title');
+      }
+      curr = curr.parentElement;
+    }
+
+    const tip = getTip();
+    if (!tip) return;
+    tip.textContent = text;
+    tip.classList.remove('is-visible', 'is-below');
+
+    const rect = target.getBoundingClientRect();
+    const scrollX = window.pageXOffset || (document.documentElement && document.documentElement.scrollLeft) || 0;
+    const scrollY = window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0;
+
+    // Measure tip
+    tip.style.visibility = 'hidden';
+    tip.style.display = 'block';
+    const tipRect = tip.getBoundingClientRect();
+
+    let left = rect.left + scrollX + (rect.width / 2);
+    let top = rect.top + scrollY - tipRect.height - 7;
+    let isBelow = false;
+
+    // If near the top of viewport, show below target instead
+    if (rect.top - tipRect.height - 7 < 0) {
+      top = rect.bottom + scrollY + 7;
+      isBelow = true;
+    }
+
+    // Clamp horizontal position so tooltip stays within viewport padding (10px)
+    const winWidth = window.innerWidth || (document.documentElement && document.documentElement.clientWidth) || 1200;
+    const minCenter = scrollX + (tipRect.width / 2) + 10;
+    const maxCenter = scrollX + winWidth - (tipRect.width / 2) - 10;
+    if (left < minCenter) left = minCenter;
+    if (left > maxCenter) left = maxCenter;
+
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+    if (isBelow) {
+      tip.classList.add('is-below');
+    }
+
+    // Position arrow relative to the target center
+    const targetCenterX = rect.left + scrollX + (rect.width / 2);
+    const arrowOffset = targetCenterX - (left - (tipRect.width / 2));
+    tip.style.setProperty('--arrow-left', Math.max(8, Math.min(tipRect.width - 8, arrowOffset)) + 'px');
+
+    tip.style.visibility = '';
+    void tip.offsetHeight; // force reflow for smooth transition
+    tip.classList.add('is-visible');
+  }
+
+  function hideTip(target) {
+    if (!target) return;
+    let curr = target;
+    while (curr && curr !== document.body) {
+      if (curr && curr.hasAttribute && curr.hasAttribute('data-full-val')) {
+        curr.setAttribute('title', curr.getAttribute('data-full-val'));
+      }
+      curr = curr ? curr.parentElement : null;
+    }
+    if (tipEl) {
+      tipEl.classList.remove('is-visible');
+    }
+  }
+
+  document.addEventListener('mouseover', function (e) {
+    const el = e.target && e.target.closest ? e.target.closest('.abbr-money, [data-tooltip], .cell-total') : null;
+    if (el) {
+      const target = el.classList && el.classList.contains('cell-total') ? (el.querySelector('.abbr-money') || el) : el;
+      positionTip(target);
+    }
+  });
+
+  document.addEventListener('mouseout', function (e) {
+    const el = e.target && e.target.closest ? e.target.closest('.abbr-money, [data-tooltip], .cell-total') : null;
+    if (el) {
+      const target = el.classList && el.classList.contains('cell-total') ? (el.querySelector('.abbr-money') || el) : el;
+      hideTip(target);
+    }
+  });
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('scroll', function () {
+      if (tipEl && tipEl.classList.contains('is-visible')) {
+        tipEl.classList.remove('is-visible');
+      }
+    }, { passive: true });
+  }
 })();

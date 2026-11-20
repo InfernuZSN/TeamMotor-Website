@@ -32,7 +32,7 @@ Boot.ready(function () {
         '<td>' + Utils.escapeHtml(c.contactNumber) + '</td>' +
         '<td>' + Utils.escapeHtml(c.email || '\u2014') + '</td>' +
         '<td class="text-right mono-num">' + (c.totalPurchases || 0) + '</td>' +
-        '<td class="text-right mono-num">' + Utils.formatPHP(c.totalSpent || 0) + '</td>' +
+        '<td class="text-right mono-num">' + Utils.formatMoneyHtml(c.totalSpent || 0) + '</td>' +
         '<td class="text-muted">' + (c.lastPurchase ? Utils.formatDate(c.lastPurchase) : '\u2014') + '</td>' +
         '<td><span class="badge ' + (inactive ? 'badge-neutral' : 'badge-ok') + '">' + c.status + '</span></td>' +
         '<td><div class="flex gap-8">' +
@@ -83,12 +83,12 @@ Boot.ready(function () {
         '<div class="kv-grid" style="margin-bottom:14px;">' +
           kv('Phone', Utils.escapeHtml(c.contactNumber)) + kv('Email', Utils.escapeHtml(c.email || '\u2014')) + kv('Address', Utils.escapeHtml(c.address || '\u2014')) +
           kv('Registered', c.dateRegistered ? Utils.formatDate(c.dateRegistered + 'T00:00:00') : '\u2014') + kv('Status', '<span class="badge ' + (c.status === 'Active' ? 'badge-ok' : 'badge-neutral') + '">' + c.status + '</span>') +
-          kv('Total purchases', c.totalPurchases) + kv('Total spent', Utils.formatPHP(c.totalSpent)) + kv('Last purchase', c.lastPurchase ? Utils.formatDate(c.lastPurchase) : '\u2014') +
+          kv('Total purchases', c.totalPurchases) + kv('Total spent', Utils.formatMoneyHtml(c.totalSpent)) + kv('Last purchase', c.lastPurchase ? Utils.formatDate(c.lastPurchase) : '\u2014') +
         '</div>' + (c.notes ? '<p class="text-muted"><strong>Notes:</strong> ' + Utils.escapeHtml(c.notes) + '</p>' : '') +
         '<h4 style="margin:12px 0 6px;">Purchase history</h4>' +
         (d.sales.length ? '<div class="table-wrap is-scroll" style="max-height:14rem;"><table><thead><tr><th>Sale</th><th>Date</th><th>Items</th><th>Status</th><th class="text-right">Total</th></tr></thead><tbody>' +
           d.sales.map(function (s) { return '<tr class="' + (Utils.isCountable(s) ? '' : 'sale-voided-row') + '"><td>' + s.id + '</td><td class="text-muted">' + Utils.formatDateTime(s.date) + '</td><td>' +
-            Utils.escapeHtml(s.items.map(function (i) { return i.qty + '\u00d7 ' + i.name; }).join(', ')) + '</td><td>' + Utils.saleStatusBadge(s.status) + '</td><td class="text-right mono-num">' + Utils.formatPHP(s.total) + '</td></tr>'; }).join('') +
+            Utils.escapeHtml(s.items.map(function (i) { return i.qty + '\u00d7 ' + i.name; }).join(', ')) + '</td><td>' + Utils.saleStatusBadge(s.status) + '</td><td class="text-right mono-num">' + Utils.formatMoneyHtml(s.total) + '</td></tr>'; }).join('') +
           '</tbody></table></div>' : '<p class="text-muted">No purchases yet.</p>') +
         '<h4 style="margin:14px 0 6px;">Warranties</h4>' +
         (d.warranties.length ? '<div class="table-wrap"><table><thead><tr><th>Warranty</th><th>Product</th><th>Sale</th><th>Expires</th><th>Status</th></tr></thead><tbody>' +

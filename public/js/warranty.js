@@ -133,9 +133,11 @@ Boot.ready(function () {
         : '<p class="hint">No claims filed.</p>');
 
     const claimBtn = document.getElementById('viewClaimBtn');
+    const viewFooter = document.getElementById('warrantyViewFooter');
     if (claimBtn) {
       const canClaim = currentStatus === 'Active' || currentStatus === 'Expiring Soon';
       claimBtn.style.display = canClaim ? 'inline-flex' : 'none';
+      if (viewFooter) viewFooter.style.display = canClaim ? 'flex' : 'none';
       claimBtn.dataset.warrantyId = w.id;
     }
   }

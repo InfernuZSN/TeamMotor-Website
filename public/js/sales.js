@@ -13,16 +13,20 @@ Boot.ready(function () {
     const today = Analytics.salesToday(sales, now);
     const week = Analytics.salesInLastDays(sales, now, 7);
     const month = Analytics.salesInCurrentMonth(sales, now);
+    const todayTotal = Analytics.sumTotal(today);
+    const weekTotal = Analytics.sumTotal(week);
+    const monthTotal = Analytics.sumTotal(month);
+    const avgTotal = sales.length ? Analytics.sumTotal(sales) / sales.length : 0;
     const stats = [
-      { label: "Today's Sales", value: Utils.formatPHP(Analytics.sumTotal(today)), sub: today.length + ' transaction' + (today.length === 1 ? '' : 's'), iconName: 'trendUp', tone: 'ok' },
-      { label: 'Weekly Sales', value: Utils.formatPHP(Analytics.sumTotal(week)), sub: week.length + ' transactions', iconName: 'sales', tone: 'accent' },
-      { label: 'Monthly Sales', value: Utils.formatPHP(Analytics.sumTotal(month)), sub: month.length + ' transactions', iconName: 'sales', tone: 'accent' },
-      { label: 'Total Transactions', value: sales.length, sub: 'All-time (completed sales)', iconName: 'cart', tone: 'warn' },
-      { label: 'Average Transaction', value: Utils.formatPHP(sales.length ? Analytics.sumTotal(sales) / sales.length : 0), sub: 'Per completed sale', iconName: 'trendUp', tone: 'accent' }
+      { label: "Today's Sales", value: Utils.formatCardPHP(todayTotal), title: Utils.formatPHP(todayTotal), sub: today.length + ' transaction' + (today.length === 1 ? '' : 's'), iconName: 'trendUp', tone: 'ok' },
+      { label: 'Weekly Sales', value: Utils.formatCardPHP(weekTotal), title: Utils.formatPHP(weekTotal), sub: week.length + ' transactions', iconName: 'sales', tone: 'accent' },
+      { label: 'Monthly Sales', value: Utils.formatCardPHP(monthTotal), title: Utils.formatPHP(monthTotal), sub: month.length + ' transactions', iconName: 'sales', tone: 'accent' },
+      { label: 'Total Transactions', value: sales.length >= 10000000 ? (sales.length >= 1e9 ? (sales.length / 1e9).toFixed(1) + 'B' : (sales.length / 1e6).toFixed(1) + 'M') : sales.length.toLocaleString('en-PH'), title: sales.length.toLocaleString('en-PH'), sub: 'All-time (completed sales)', iconName: 'cart', tone: 'warn' },
+      { label: 'Average Transaction', value: Utils.formatCardPHP(avgTotal), title: Utils.formatPHP(avgTotal), sub: 'Per completed sale', iconName: 'trendUp', tone: 'accent' }
     ];
     document.getElementById('salesStatGrid').className = 'stat-grid stat-grid-5';
     document.getElementById('salesStatGrid').innerHTML = stats.map(s =>
-      '<div class="stat-card tone-' + s.tone + '">' +
+      '<div class="stat-card tone-' + s.tone + '" title="' + Utils.escapeHtml(s.title || '') + '">' +
         '<div class="stat-icon tone-' + s.tone + '">' + icon(s.iconName) + '</div>' +
         '<div class="stat-label">' + s.label + '</div>' +
         '<div class="stat-value">' + s.value + '</div>' +
@@ -44,18 +48,27 @@ Boot.ready(function () {
     const sum = function (l) { return Math.round(l.reduce(function (n, s) { return n + (Number(s.total) || 0); }, 0) * 100) / 100; };
     const gross = sum(completed), voided = sum(reversed), earlierAmt = sum(earlier), net = Math.round((gross - earlierAmt) * 100) / 100;
     const discounts = Math.round(completed.reduce(function (n, s) { return n + (Number(s.discount) || 0); }, 0) * 100) / 100;
-    const card = function (lbl, val, sub, cls) { return '<div class="eod-stat ' + (cls || '') + '"><div class="eod-lbl">' + lbl + '</div><div class="eod-val">' + val + '</div><div class="eod-sub">' + sub + '</div></div>'; };
+    const card = function (lbl, rawAmt, sub, cls) {
+      const full = peso(rawAmt);
+      const display = Utils.formatCardPHP(rawAmt);
+      return '<div class="eod-stat ' + (cls || '') + '" title="' + Utils.escapeHtml(full) + '">' +
+        '<div class="eod-lbl">' + lbl + '</div>' +
+        '<div class="eod-val">' + display + '</div>' +
+        '<div class="eod-sub">' + sub + '</div>' +
+      '</div>';
+    };
     const n = function (c, w) { return c + ' ' + w + (c === 1 ? '' : 's'); };
     document.getElementById('eodDate').textContent = ref.toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
     document.getElementById('eodGrid').innerHTML =
-      card('Completed sales', peso(gross), n(completed.length, 'sale'), 'is-ok') +
-      card('Voided / refunded', peso(voided), n(reversed.length, 'sale'), reversed.length ? 'is-bad' : '') +
-      card('Net sales', peso(net), 'completed \u2212 earlier sales reversed today', 'is-net') +
-      card('Discounts given', peso(discounts), 'on completed sales', '');
+      card('Completed sales', gross, n(completed.length, 'sale'), 'is-ok') +
+      card('Voided / refunded', voided, n(reversed.length, 'sale'), reversed.length ? 'is-bad' : '') +
+      card('Net sales', net, 'completed \u2212 earlier sales reversed today', 'is-net') +
+      card('Discounts given', discounts, 'on completed sales', '');
     const methods = PAYMENT_METHODS.concat(LEGACY_PAYMENT_METHODS.filter(function (m) { return completed.some(function (s) { return s.paymentMethod === m; }); }));   // legacy methods only appear if today has such a sale
     document.getElementById('eodPay').innerHTML = methods.map(function (m) {
       const l = completed.filter(function (s) { return s.paymentMethod === m; });
-      return '<div class="eod-pm' + (l.length ? '' : ' is-zero') + '"><span>' + m + '</span><strong>' + peso(sum(l)) + '</strong><small>' + n(l.length, 'sale') + '</small></div>';
+      const mSum = sum(l);
+      return '<div class="eod-pm' + (l.length ? '' : ' is-zero') + '" title="' + Utils.escapeHtml(peso(mSum)) + '"><span>' + m + '</span><strong>' + Utils.formatCardPHP(mSum) + '</strong><small>' + n(l.length, 'sale') + '</small></div>';
     }).join('');
     document.getElementById('eodNote').textContent = 'Read-only. Calculated from today\u2019s recorded sales \u2014 this is not a cash-drawer count.' +
       (earlier.length ? ' ' + n(earlier.length, 'earlier sale') + ' (' + peso(earlierAmt) + ') reversed today ' + (earlier.length === 1 ? 'is' : 'are') + ' subtracted from net.' : '');
@@ -82,20 +95,25 @@ Boot.ready(function () {
     });
     const counted = list.filter(Utils.isCountable);
     const recent = pgSales.slice(Analytics.recentSales(list, list.length), q + '|' + document.getElementById('salesFilter').value);
-    document.getElementById('ordersSummary').textContent = counted.length + ' order' + (counted.length === 1 ? '' : 's') + ' \u00b7 ' + Utils.formatPHP(Analytics.sumTotal(counted)) +
+    const sumVal = Analytics.sumTotal(counted);
+    const sumHtml = Math.abs(sumVal) >= 10000000
+      ? '<span class="abbr-money" data-tooltip="' + Utils.escapeHtml(Utils.formatPHP(sumVal)) + '" title="' + Utils.escapeHtml(Utils.formatPHP(sumVal)) + '">' + Utils.formatCardPHP(sumVal) + '</span>'
+      : Utils.formatPHP(sumVal);
+    document.getElementById('ordersSummary').innerHTML = counted.length + ' order' + (counted.length === 1 ? '' : 's') + ' \u00b7 ' + sumHtml +
       (list.length !== counted.length ? ' (+' + (list.length - counted.length) + ' voided/refunded)' : '');
     document.getElementById('recentOrdersTbody').innerHTML = recent.length
       ? recent.map(s => {
           const itemSummary = s.items.length === 1 ? s.items[0].name : s.items[0].name + ' +' + (s.items.length - 1) + ' more';
-          return '<tr class="' + (Utils.isCountable(s) ? '' : 'sale-voided-row') + '"><td style="font-weight:700;color:var(--ink);">' + s.id + '</td>' +
-            '<td class="text-muted">' + Utils.formatDateTime(s.date) + '</td>' +
-            '<td>' + Utils.escapeHtml(itemSummary) + '</td>' +
-            '<td>' + Utils.escapeHtml(s.staff) + '</td>' +
-            '<td><span class="pay-chip">' + s.paymentMethod + '</span></td>' +
-            '<td>' + Utils.saleStatusBadge(s.status) + '</td>' +
-            '<td class="text-right mono-num" style="font-weight:700;">' + Utils.formatPHP(s.total) + '</td>' +
-            '<td class="col-actions" style="white-space:nowrap;"><div class="flex gap-8" style="display:flex;gap:0.5rem;align-items:center;"><button class="icon-btn" title="View All Items" aria-label="View all items in ' + s.id + '" data-view-sale="' + s.id + '">' + icon('eye') + '</button>' +
-            '<button class="icon-btn" title="Reprint receipt (marked DUPLICATE)" aria-label="Reprint receipt for ' + s.id + '" data-reprint-sale="' + s.id + '">' + icon('download') + '</button></div></td></tr>';
+          return '<tr class="' + (Utils.isCountable(s) ? '' : 'sale-voided-row') + '">' +
+            '<td data-label="Order" class="mobile-cell-primary" style="font-weight:700;color:var(--ink);">' + s.id + '</td>' +
+            '<td data-label="Date" class="text-muted">' + Utils.formatDateTime(s.date) + '</td>' +
+            '<td data-label="Items" class="cell-items">' + Utils.escapeHtml(itemSummary) + '</td>' +
+            '<td data-label="Staff" class="cell-staff">' + Utils.escapeHtml(s.staff) + '</td>' +
+            '<td data-label="Payment"><span class="pay-chip">' + s.paymentMethod + '</span></td>' +
+            '<td data-label="Status">' + Utils.saleStatusBadge(s.status) + '</td>' +
+            '<td data-label="Total" class="text-right mono-num cell-total" style="font-weight:700;">' + Utils.formatMoneyHtml(s.total) + '</td>' +
+            '<td data-label="Actions" class="col-actions mobile-cell-actions"><div class="flex gap-8" style="display:flex;gap:0.5rem;align-items:center;"><button class="icon-btn" title="View All Items" aria-label="View all items in ' + s.id + '" data-mobile-label="View" data-view-sale="' + s.id + '">' + icon('eye') + '</button>' +
+            '<button class="icon-btn" title="Reprint receipt (marked DUPLICATE)" aria-label="Reprint receipt for ' + s.id + '" data-mobile-label="Reprint" data-reprint-sale="' + s.id + '">' + icon('download') + '</button></div></td></tr>';
         }).join('')
       : '<tr><td colspan="8"><div class="empty-state">' + icon('sales') + '<h3>No sales for this period</h3></div></td></tr>';
   }
@@ -133,13 +151,13 @@ Boot.ready(function () {
       '</div>' +
       '<div class="table-wrap is-scroll" style="max-height:20rem;"><table><thead><tr><th>#</th><th>Product</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Subtotal</th></tr></thead><tbody>' +
         s.items.map((i, n) => '<tr><td class="text-muted">' + (n + 1) + '</td><td style="font-weight:600;color:var(--ink);">' + Utils.escapeHtml(i.name) + '</td>' +
-          '<td class="text-right mono-num">' + i.qty + '</td><td class="text-right mono-num">' + Utils.formatPHP(i.price) + '</td>' +
-          '<td class="text-right mono-num">' + Utils.formatPHP(i.subtotal) + '</td></tr>').join('') +
+          '<td class="text-right mono-num">' + i.qty + '</td><td class="text-right mono-num">' + Utils.formatMoneyHtml(i.price) + '</td>' +
+          '<td class="text-right mono-num">' + Utils.formatMoneyHtml(i.subtotal) + '</td></tr>').join('') +
       '</tbody></table></div>' +
       '<div style="margin-top:14px;text-align:right;font-size:.88rem;">' +
         (discount > 0 ? '<div class="text-muted">Subtotal ' + Utils.formatPHP(subtotal) + ' &nbsp;&middot;&nbsp; Discount -' + Utils.formatPHP(discount) + '</div>' : '') +
         (s.vatEnabled && s.vatAmount > 0 ? '<div class="text-muted">VATable ' + Receipt.peso(s.vatableAmount) + ' &nbsp;&middot;&nbsp; VAT ' + (Math.round(s.vatRate * 10000) / 100) + '% ' + Receipt.peso(s.vatAmount) + (s.vatMode === 'exclusive' ? ' (added)' : ' (included)') + '</div>' : '') +
-        '<div style="font-weight:700;color:var(--ink);font-size:1rem;">Total ' + Utils.formatPHP(s.total) + '</div>' +
+        '<div style="font-weight:700;color:var(--ink);font-size:1rem;">Total ' + Utils.formatMoneyHtml(s.total) + '</div>' +
       '</div>';
     const voidBtn = document.getElementById('saleVoidBtn');
     voidBtn.style.display = Utils.isCountable(s) ? 'inline-flex' : 'none';     // Staff see it too and get a clear 'Admin only' message; the API enforces it as well
@@ -163,7 +181,13 @@ Boot.ready(function () {
     if (!openSaleId) return;
     if (!isAdmin) { showToast('Only an Admin can void, cancel or refund a sale. Please ask an Admin.', 'danger'); return; }
     const sale = Store.get('sales', []).find(function (x) { return x.id === openSaleId; });
-    document.getElementById('voidSaleTotal').textContent = sale ? Utils.formatPHP(sale.total) + ' \u00b7 ' + (sale.paymentMethod || '') : '';
+    const voidTotalStr = sale ? (Math.abs(Number(sale.total) || 0) >= 10000000 ? Utils.formatCardPHP(sale.total) : Utils.formatPHP(sale.total)) + ' \u00b7 ' + (sale.paymentMethod || '') : '';
+    document.getElementById('voidSaleTotal').textContent = voidTotalStr;
+    if (sale && Math.abs(Number(sale.total) || 0) >= 10000000) {
+      document.getElementById('voidSaleTotal').title = Utils.formatPHP(sale.total);
+    } else {
+      document.getElementById('voidSaleTotal').removeAttribute('title');
+    }
     document.getElementById('voidSaleLabel').textContent = openSaleId;
     document.getElementById('voidType').value = 'Voided';
     document.getElementById('voidReason').value = '';
@@ -238,7 +262,7 @@ Boot.ready(function () {
       return '<div style="margin-bottom:16px;">' +
         '<div class="flex justify-between" style="margin-bottom:6px;">' +
           '<span style="font-weight:600;font-size:.85rem;color:var(--ink);">' + m + '</span>' +
-          '<span style="font-size:.8rem;color:var(--steel);">' + v.count + ' orders &middot; ' + Utils.formatPHP(v.total) + '</span>' +
+          '<span style="font-size:.8rem;color:var(--steel);">' + v.count + ' orders &middot; ' + Utils.formatMoneyHtml(v.total) + '</span>' +
         '</div>' +
         '<div class="hbar-track"><div class="hbar-fill" style="width:' + pct + '%"></div></div>' +
       '</div>';
@@ -294,9 +318,9 @@ Boot.ready(function () {
             '<td><div style="font-weight:600;color:var(--ink);">' + Utils.escapeHtml(p.name) + '</div>' +
               '<div class="text-muted" style="font-size:.78rem;">' + Utils.escapeHtml(p.id) + (p.brand ? ' &middot; ' + Utils.escapeHtml(p.brand) : '') + '</div></td>' +
             '<td>' + Utils.escapeHtml(cat ? cat.name : (p.category || '\u2014')) + '</td>' +
-            '<td class="text-right mono-num">' + Utils.formatPHP(p.sellingPrice) + '</td>' +
+            '<td class="text-right mono-num">' + Utils.formatMoneyHtml(p.sellingPrice) + '</td>' +
             '<td class="text-right mono-num" style="font-weight:700;">' + r.unitsSold + '</td>' +
-            '<td class="text-right mono-num" style="font-weight:600;">' + Utils.formatPHP(revenue) + '</td>' +
+            '<td class="text-right mono-num" style="font-weight:600;">' + Utils.formatMoneyHtml(revenue) + '</td>' +
             '<td class="text-right mono-num">' + p.stock + '</td>' +
             '<td><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span></td>' +
           '</tr>';

@@ -1321,11 +1321,135 @@ test('Inventory Table Typography & Responsiveness: Full visibility for product n
   assert.ok(invJs.includes('data-label="Status"'), 'renderProductsTable must label Status cell');
 });
 
+test('Modal Footer Cleanups, Product Image Clear Control, and Sales Transactions Responsiveness', () => {
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  const salesHtml = fs.readFileSync(resolveRoot('public/sales.html'), 'utf8');
+  const usersHtml = fs.readFileSync(resolveRoot('public/users.html'), 'utf8');
+  const warrantyHtml = fs.readFileSync(resolveRoot('public/warranty.html'), 'utf8');
+  const auditHtml = fs.readFileSync(resolveRoot('public/audit.html'), 'utf8');
+  const guideJs = fs.readFileSync(resolveRoot('public/js/guide.js'), 'utf8');
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  const salesJs = fs.readFileSync(resolveRoot('public/js/sales.js'), 'utf8');
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
 
+  // 1. Inventory modal footers
+  assert.ok(!invHtml.includes('data-close="productModalOverlay">Cancel</button>'), 'Product modal must not contain Cancel button');
+  assert.ok(!invHtml.includes('data-close="viewModalOverlay">Close</button>'), 'View product modal must not contain Close button');
+  assert.ok(!invHtml.includes('data-close="adjustModalOverlay" type="button">Cancel</button>'), 'Adjust stock modal must not contain Cancel button');
+  assert.ok(!invHtml.includes('data-close="stockModalOverlay">Cancel</button>'), 'Stock In/Out modal must not contain Cancel button');
 
+  // 2. Sales modal footer
+  assert.ok(!salesHtml.includes('data-close="saleModalOverlay">Close</button>'), 'Sale detail modal must not contain Close button');
 
+  // 3. Users modal footers
+  assert.ok(!usersHtml.includes('data-close="userModalOverlay">Cancel</button>'), 'User modal must not contain Cancel button');
+  assert.ok(!usersHtml.includes('data-close="shiftModalOverlay">Close</button>'), 'Shift history modal must not contain Close button');
 
+  // 4. Warranty modal footers
+  assert.ok(!warrantyHtml.includes('data-close="warrantyViewOverlay">Close</button>'), 'Warranty view modal must not contain Close button');
+  assert.ok(!warrantyHtml.includes('data-close="warrantyClaimOverlay">Cancel</button>'), 'Warranty claim modal must not contain Cancel button');
 
+  // 5. Guide modal
+  assert.ok(!guideJs.includes('Close Guide'), 'Guide modal must not contain Close Guide button');
 
+  // 6. Audit modal footer
+  assert.ok(!auditHtml.includes('data-close="auDetailOverlay">Close</button>'), 'Audit modal must not contain Close button');
 
+  // 6b. Customer details modal footer
+  const custHtml = fs.readFileSync(resolveRoot('public/customers.html'), 'utf8');
+  assert.ok(!custHtml.includes('data-close="custViewOverlay" type="button">Close</button>'), 'Customer view modal must not contain Close button');
 
+  // 7. Product image clear button
+  assert.ok(invHtml.includes('id="clearImageBtn"'), 'inventory.html must include clear image button');
+  assert.ok(invJs.includes('clearImgBtn.addEventListener'), 'inventory.js must attach clear image button handler');
+  assert.ok(styleCss.includes('.image-clear-btn'), 'style.css must style .image-clear-btn');
+
+  // 8. Sales transactions responsiveness and zero horizontal scroll
+  assert.ok(styleCss.includes('.page-sales #tab-overview .table-wrap') && styleCss.includes('overflow-x: hidden;'), 'Sales overview table-wrap must enforce overflow-x: hidden');
+  assert.ok(styleCss.includes('.page-sales #tab-overview table') && styleCss.includes('table-layout: fixed;'), 'Sales overview table must use table-layout: fixed');
+  assert.ok(salesJs.includes('data-label="Order"') && salesJs.includes('data-label="Total"'), 'sales.js must assign data-label attributes to cells');
+
+  // 9. Audit trail view button consistency
+  const auditJs = fs.readFileSync(resolveRoot('public/js/audit.js'), 'utf8');
+  assert.ok(auditJs.includes('class="icon-btn au-view-btn"'), 'audit.js must use icon-btn for view button consistency');
+  assert.ok(!auditJs.includes('View</button>'), 'audit.js view button must not include text inside the icon button');
+  assert.ok(styleCss.includes('.au-table .icon-btn') || styleCss.includes('.au-view-btn'), 'style.css must style audit view button');
+
+  // 10. POS sidebar availability
+  const posHtml = fs.readFileSync(resolveRoot('public/pos.html'), 'utf8');
+  const posCss = fs.readFileSync(resolveRoot('public/css/pos.css'), 'utf8');
+  assert.ok(posHtml.includes('class="app-shell"') && posHtml.includes('id="sidebar"'), 'pos.html must wrap sidebar and app inside app-shell');
+  assert.ok(posCss.includes('.pos-terminal .app-shell'), 'pos.css must configure app-shell grid for POS terminal');
+  assert.ok(posCss.includes('.pos-terminal .sidebar') && posCss.includes('position: sticky;'), 'pos.css must dock sidebar on desktop');
+});
+
+test('Mobile Card Alignment, Responsive Actions, and Display Card Truncation over 10M', () => {
+  const storeJs = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  const salesJs = fs.readFileSync(resolveRoot('public/js/sales.js'), 'utf8');
+  const usersJs = fs.readFileSync(resolveRoot('public/js/users.js'), 'utf8');
+  const respCss = fs.readFileSync(resolveRoot('public/css/responsive.css'), 'utf8');
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+
+  // 1. Utils.formatCardPHP definition and behavior
+  assert.ok(storeJs.includes('formatCardPHP(amount)'), 'store.js must define formatCardPHP');
+  const ctx = {
+    URLSearchParams,
+    CustomEvent: function (name) { this.type = name; },
+    window: { location: { origin: 'http://localhost' } },
+    document: { addEventListener: () => {} },
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp
+  };
+  vm.runInNewContext(storeJs + '; this.Utils = Utils;', ctx);
+  assert.strictEqual(ctx.Utils.formatCardPHP(90634), '₱90,634');
+  assert.strictEqual(ctx.Utils.formatCardPHP(-23366), '₱-23,366');
+  assert.strictEqual(ctx.Utils.formatCardPHP(10000000), '₱10M');
+  assert.strictEqual(ctx.Utils.formatCardPHP(10500000), '₱10.5M');
+  assert.strictEqual(ctx.Utils.formatCardPHP(3200000000), '₱3.2B');
+  assert.strictEqual(ctx.Utils.formatCardPHP(-15000000), '₱-15M');
+  assert.strictEqual(ctx.Utils.formatCardPHP(3.2e18), '₱3.2Q');
+  assert.strictEqual(ctx.Utils.formatCardPHP(3.2e33), '₱3.2Dc');
+
+  // 1b. Utils.formatMoneyHtml with native title hover for true value
+  assert.strictEqual(typeof ctx.Utils.formatMoneyHtml, 'function', 'store.js must define formatMoneyHtml');
+  assert.strictEqual(ctx.Utils.formatMoneyHtml(88924), '₱88,924');
+  const hugeHtml = ctx.Utils.formatMoneyHtml(3.2e33);
+  assert.ok(hugeHtml.includes('class="abbr-money"') && hugeHtml.includes('₱3.2Dc'), 'formatMoneyHtml must abbreviate huge values to ₱3.2Dc');
+  assert.ok(hugeHtml.includes('title="₱'), 'formatMoneyHtml must include native title attribute showing the true full value');
+  assert.ok(salesJs.includes('Utils.formatMoneyHtml(s.total)'), 'sales.js transactions table must use formatMoneyHtml for s.total');
+  assert.ok(!salesJs.includes('cellTitle'), 'sales.js transactions table must not include redundant cellTitle on td');
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('Utils.formatMoneyHtml(p.sellingPrice)'), 'inventory.js must use formatMoneyHtml for p.sellingPrice');
+  assert.ok(styleCss.includes('.abbr-money'), 'style.css must style .abbr-money');
+
+  // 2. Sales display cards use formatCardPHP
+  assert.ok(salesJs.includes('Utils.formatCardPHP(gross)') || salesJs.includes('formatCardPHP(rawAmt)'), 'sales.js must format display card totals with formatCardPHP');
+  assert.ok(salesJs.includes('Utils.formatCardPHP(todayTotal)'), 'sales.js KPI cards must format totals with formatCardPHP');
+
+  // 3. CSS overflow prevention on display cards
+  assert.ok(styleCss.includes('.eod-val') && styleCss.includes('overflow: hidden;') && styleCss.includes('text-overflow: ellipsis;'), 'style.css must prevent overflow on eod-val');
+  assert.ok(respCss.includes('.eod-val') && respCss.includes('text-overflow: ellipsis !important;'), 'responsive.css must enforce text-overflow: ellipsis on mobile eod-val');
+
+  // 4. Mobile card alignment: Items, Compatibility, Supplier flush with padding 0 and transparent background
+  assert.ok(respCss.includes('td[data-label="Items"]') && respCss.includes('background: transparent !important;') && respCss.includes('padding: 0 !important;'), 'responsive.css must align Items flush');
+  assert.ok(respCss.includes('td[data-label="Compatibility"]') && respCss.includes('background: transparent !important;'), 'responsive.css must align Compatibility flush');
+  assert.ok(respCss.includes('td[data-label="Supplier"]') && respCss.includes('background: transparent !important;'), 'responsive.css must align Supplier flush');
+
+  // 5. Users card layout and responsive full-width actions
+  assert.ok(respCss.includes('#usersTbody td[data-label="Username"]') && respCss.includes('#usersTbody td[data-label="Role"]'), 'responsive.css must balance users grid fields');
+  assert.ok(respCss.includes('td.mobile-cell-actions .row-actions') && respCss.includes('flex: 1 1 0 !important;'), 'responsive.css must stretch user card actions across full width');
+  assert.ok(usersJs.includes('data-mobile-label="Edit"') && usersJs.includes('data-mobile-label="Shifts"') && usersJs.includes('data-mobile-label="Delete"'), 'users.js must provide mobile labels for action buttons');
+
+  // 6. Custom money hover pop-up matching sales trend 1 month & removal of question mark cursor
+  assert.ok(!styleCss.includes('.abbr-money {\n  cursor: help;'), 'style.css must not use cursor: help to prevent question mark cursor');
+  assert.ok(styleCss.includes('.abbr-money') && styleCss.includes('cursor: pointer;'), 'style.css must use pointer cursor on .abbr-money');
+  assert.ok(styleCss.includes('.tm-money-tooltip') && styleCss.includes('background: var(--ink, #111827);'), 'style.css must define dark pop-up matching sales trend 1 month');
+  assert.ok(storeJs.includes('tm-money-tooltip') && storeJs.includes('positionTip'), 'store.js must initialize global money pop-up handler');
+
+  // 7. Even spacing for Price and Stock in inventory table
+  assert.ok(styleCss.includes('#tab-products th:nth-child(6)') && styleCss.includes('width: 7.5rem;'), 'Price column must have ample 7.5rem width');
+  assert.ok(styleCss.includes('#tab-products th:nth-child(7)') && styleCss.includes('width: 6rem;'), 'Stock column must have ample 6rem width');
+  assert.ok(styleCss.includes('#tab-products th:nth-child(6)') && styleCss.includes('padding-right: 1.25rem;'), 'Price column must have right padding for spacing');
+  assert.ok(styleCss.includes('#tab-products th:nth-child(7)') && styleCss.includes('padding-right: 1.25rem;'), 'Stock column must have right padding for spacing');
+});

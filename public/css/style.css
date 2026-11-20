@@ -600,6 +600,37 @@ input::placeholder, textarea::placeholder { color: var(--steel-light); }
 .image-drop {
   border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); padding: 1.125rem;
   display: flex; align-items: center; gap: 0.875rem; background: var(--paper); cursor: pointer;
+  position: relative;
+}
+.image-clear-btn {
+  position: absolute;
+  top: 0.65rem;
+  right: 0.65rem;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  color: var(--steel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  z-index: 5;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+.image-clear-btn:hover {
+  background: var(--danger-bg);
+  border-color: var(--danger);
+  color: var(--danger);
+  transform: scale(1.05);
+}
+.image-clear-btn svg {
+  width: 0.95rem;
+  height: 0.95rem;
+  stroke: currentColor;
+  stroke-width: 2.2;
 }
 .image-drop .drop-preview {
   width: 3.5rem; height: 3.5rem; border-radius: var(--radius-sm); flex-shrink: 0; overflow: hidden;
@@ -1593,18 +1624,139 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 .chip-count.is-ok { background: var(--ok-bg); border-color: var(--ok); color: var(--ok); }
 .badge-info { background: #e3ecfb; color: #1d4ed8; }
 
-/* ---- Sales: the transactions list matches inventory; it displays naturally without internal vertical scrolling ---- */
-.page-sales #tab-overview .table-wrap, .page-sales #tab-overview .table-wrap.is-scroll { max-height: none; overflow-y: visible; overflow-x: auto; }
-.orders-card .search-input { min-width: 15rem; }
-.orders-card .card-title-row { flex-wrap: wrap; gap: .75rem; }
+/* ---- Sales: Transactions table responsive & zero horizontal scroll ---- */
+.page-sales #tab-overview .table-wrap,
+.page-sales #tab-overview .table-wrap.is-scroll {
+  width: 100%;
+  max-height: none;
+  overflow-y: visible;
+  overflow-x: hidden;
+}
+.page-sales #tab-overview table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+.orders-card .search-input { min-width: 12rem; max-width: 100%; }
+.orders-card .card-title-row { flex-wrap: wrap; gap: .75rem; justify-content: space-between; align-items: center; }
+
+/* Column allocations: 1 Order, 2 Date, 3 Items, 4 Staff, 5 Payment, 6 Status, 7 Total, 8 Actions */
+.page-sales #tab-overview th:nth-child(1), .page-sales #tab-overview td:nth-child(1) { width: 5.75rem; }
+.page-sales #tab-overview th:nth-child(2), .page-sales #tab-overview td:nth-child(2) { width: 7.5rem; }
+.page-sales #tab-overview th:nth-child(3), .page-sales #tab-overview td:nth-child(3) { width: auto; min-width: 0; }
+.page-sales #tab-overview th:nth-child(4), .page-sales #tab-overview td:nth-child(4) { width: 7.25rem; }
+.page-sales #tab-overview th:nth-child(5), .page-sales #tab-overview td:nth-child(5) { width: 5rem; }
+.page-sales #tab-overview th:nth-child(6), .page-sales #tab-overview td:nth-child(6) { width: 6.25rem; }
+.page-sales #tab-overview th:nth-child(7), .page-sales #tab-overview td:nth-child(7) { width: 7rem; text-align: right; }
+.page-sales #tab-overview th:nth-child(8), .page-sales #tab-overview td:nth-child(8) { width: 5.25rem; text-align: center; }
+
+.page-sales #tab-overview td {
+  padding: 0.6rem 0.5rem;
+  font-size: .82rem;
+  vertical-align: middle;
+}
+.page-sales #tab-overview .cell-items {
+  white-space: normal;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  line-height: 1.3;
+}
+.page-sales #tab-overview .cell-staff {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.page-sales #tab-overview .cell-total {
+  white-space: nowrap;
+  word-break: normal;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+.abbr-money {
+  cursor: pointer;
+  display: inline-block;
+  max-width: 100%;
+  position: relative;
+}
+/* Pop-up design matching Sales Trend 1 month (.bar-chart.is-dense .bar-value) */
+.tm-money-tooltip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  background: var(--ink, #111827);
+  color: #fff;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: .72rem;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace), system-ui;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-50%) translateY(4px);
+  transition: opacity .15s ease, transform .15s ease, visibility .15s ease;
+  z-index: 999999;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.22);
+}
+.tm-money-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) translateY(0);
+}
+.tm-money-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: var(--arrow-left, 50%);
+  transform: translateX(-50%);
+  border: 4px solid transparent;
+  border-top-color: var(--ink, #111827);
+}
+.tm-money-tooltip.is-below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--ink, #111827);
+}
+.page-sales #tab-overview .col-actions .flex,
+.page-sales #tab-overview .col-actions .actions-flex {
+  display: inline-flex;
+  gap: 0.35rem;
+  align-items: center;
+  justify-content: center;
+}
+.page-sales #tab-overview td > .icon-btn + .icon-btn { margin-left: 0.5rem; }
+.page-sales #tab-overview .col-actions .icon-btn {
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.page-sales #tab-overview td > .icon-btn + .icon-btn { margin-left: 0.5rem; }
+
+@media (max-width: 1150px) {
+  .page-sales #tab-overview th:nth-child(4),
+  .page-sales #tab-overview td:nth-child(4) { display: none; }
+}
+@media (max-width: 950px) {
+  .page-sales #tab-overview th:nth-child(5),
+  .page-sales #tab-overview td:nth-child(5) { display: none; }
+}
+@media (max-width: 840px) {
+  .page-sales #tab-overview th:nth-child(2),
+  .page-sales #tab-overview td:nth-child(2) { display: none; }
+}
+
 /* Inventory list: let product take the flexible rest of the table card without forcing horizontal scroll */
 .page-inventory #tab-products th:first-child, .page-inventory #tab-products td:first-child { min-width: 0; }
 .page-inventory #tab-products th:nth-child(5), .page-inventory #tab-products td:nth-child(5) { min-width: 0; }
 .page-inventory #tab-products th:nth-child(4), .page-inventory #tab-products td:nth-child(4) { min-width: 0; }
-.page-sales #tab-overview td:nth-child(2), .page-sales #tab-overview td:nth-child(4) { white-space: nowrap; }
-.page-sales #tab-overview td:last-child { white-space: nowrap; }
-.page-sales #tab-overview td .flex { display: flex; gap: 0.5rem; align-items: center; }
-.page-sales #tab-overview td > .icon-btn + .icon-btn { margin-left: 0.5rem; }
 
 /* ---- Audit trail ---- */
 .au-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1.25rem; flex-wrap: wrap; }
@@ -1661,13 +1813,42 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 #auDetailBody .badge::before { display: none !important; content: none !important; }
 .au-table { min-width: 0; width: 100%; table-layout: fixed; }
 .au-table th:nth-child(1) { width: 8.5rem; } .au-table th:nth-child(2) { width: 8rem; } .au-table th:nth-child(3) { width: 13.5rem; } .au-table th:nth-child(4) { width: 6.5rem; }
-.au-table th:nth-child(6) { width: 4.25rem; } .au-table th:nth-child(7) { width: 6rem; text-align: center; }
+.au-table th:nth-child(6) { width: 4.25rem; } .au-table th:nth-child(7) { width: 4.75rem; text-align: center; }
 .au-table td:nth-child(6) { font-size: .75rem; }
 .au-table td:nth-child(7) { text-align: center; }
 .au-table td { overflow-wrap: anywhere; }
-.au-view-btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: .32rem .65rem; font-size: .78rem; font-weight: 600; line-height: 1.2; white-space: nowrap; border-radius: var(--radius-sm); color: var(--ink); background: var(--surface); border: 1px solid var(--border-strong); cursor: pointer; transition: all .15s ease; }
-.au-view-btn svg { width: .95rem; height: .95rem; stroke: currentColor; fill: none; stroke-width: 2; flex-shrink: 0; }
-.au-view-btn:hover { border-color: var(--ink); background: var(--paper); }
+.au-table .icon-btn,
+.au-view-btn {
+  width: 2.25rem;
+  height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0 auto;
+  transition: all .15s ease;
+}
+.au-table .icon-btn svg,
+.au-view-btn svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  flex-shrink: 0;
+}
+.au-table .icon-btn:hover,
+.au-view-btn:hover {
+  border-color: var(--steel);
+  background: var(--paper);
+}
 .au-sum { font-size: .82rem; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .au-summary { background: var(--paper); border: 1px solid var(--border); border-radius: 8px; padding: .625rem .875rem; margin-bottom: 1rem; font-size: .9rem; }
 .au-h { font-size: .9rem; margin: 1rem 0 .5rem; }
@@ -1677,14 +1858,16 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 /* ---- Today's sales summary ---- */
 .page-sales .eod-card, .eod-card { margin-bottom: 1.5rem; }
 .eod-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .75rem; }
-.eod-stat { border: 1px solid var(--border); border-radius: 10px; padding: .625rem .875rem; background: var(--surface); }
+.eod-stat { border: 1px solid var(--border); border-radius: 10px; padding: .625rem .875rem; background: var(--surface); min-width: 0; overflow: hidden; }
 .eod-stat.is-ok { border-left: 4px solid var(--ok); } .eod-stat.is-bad { border-left: 4px solid var(--danger); } .eod-stat.is-net { border-left: 4px solid var(--ink); background: var(--paper); }
-.eod-lbl { font: 700 .7rem var(--font-label); text-transform: uppercase; letter-spacing: .05em; color: var(--steel); }
-.eod-val { font: 700 1.35rem var(--font-label); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); margin: .15rem 0; }
-.eod-sub { font-size: .75rem; color: var(--steel); }
+.eod-lbl { font: 700 .7rem var(--font-label); text-transform: uppercase; letter-spacing: .05em; color: var(--steel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eod-val { font: 700 1.35rem var(--font-label); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; color: var(--ink); margin: .15rem 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eod-sub { font-size: .75rem; color: var(--steel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .eod-pay { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: .5rem; margin-top: .75rem; }
-.eod-pm { display: flex; flex-direction: column; gap: .1rem; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .75rem; font-size: .8rem; }
-.eod-pm span { font-weight: 600; color: var(--steel); } .eod-pm strong { font-family: var(--font-label); font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); } .eod-pm small { color: var(--steel-light); }
+.eod-pm { display: flex; flex-direction: column; gap: .1rem; border: 1px solid var(--border); border-radius: 8px; padding: .5rem .75rem; font-size: .8rem; min-width: 0; overflow: hidden; }
+.eod-pm span { font-weight: 600; color: var(--steel); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eod-pm strong { font-family: var(--font-label); font-size: 1rem; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eod-pm small { color: var(--steel-light); }
 .eod-pm.is-zero strong { color: var(--steel-light); }
 @media (max-width: 900px) { .eod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .eod-pay { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
@@ -1738,13 +1921,26 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 #tab-products table { width: 100%; min-width: 0; table-layout: fixed; }
 #tab-products .table-wrap { overflow-x: hidden; }
 #tab-products th:nth-child(1), #tab-products td:nth-child(1) { width: auto; min-width: 0; }
-#tab-products th:nth-child(2) { width: 5.75rem; }
-#tab-products th:nth-child(3) { width: 6.5rem; }
-#tab-products th:nth-child(4) { width: 7rem; }
-#tab-products th:nth-child(5) { width: 7.75rem; }
-#tab-products th:nth-child(6) { width: 4.75rem; }
-#tab-products th:nth-child(7) { width: 3.5rem; }
-#tab-products th:nth-child(8) { width: 7rem; }
+#tab-products th:nth-child(2) { width: 5.5rem; }
+#tab-products th:nth-child(3) { width: 6.25rem; }
+#tab-products th:nth-child(4) { width: 6.5rem; }
+#tab-products th:nth-child(5) { width: 7.25rem; }
+#tab-products th:nth-child(6),
+#tab-products td:nth-child(6),
+#tab-products td[data-label="Price"] {
+  width: 7.5rem;
+  text-align: right;
+  padding-right: 1.25rem;
+}
+#tab-products th:nth-child(7),
+#tab-products td:nth-child(7),
+#tab-products td[data-label="Stock"] {
+  width: 6rem;
+  text-align: right;
+  padding-left: 0.5rem;
+  padding-right: 1.25rem;
+}
+#tab-products th:nth-child(8) { width: 6.75rem; }
 #tab-products th.col-actions, #tab-products th:nth-child(9) { width: 13.25rem; text-align: left; padding-left: 0.5rem; }
 #tab-products th:nth-child(10) { width: 13.25rem; }
 @media (max-width: 1299px) { #tab-products th:nth-child(2), #tab-products td:nth-child(2) { display: none; } }
@@ -1781,7 +1977,7 @@ a.sidebar-user:hover { background: var(--ink-soft); text-decoration: none; }
 }
 @media (max-width: 1179px) { #tab-history th:nth-child(5), #tab-history td:nth-child(5) { display: none; } }
 
-.page-sales #tab-overview .table-wrap, .page-sales #tab-overview .table-wrap.is-scroll { max-height: none; overflow-y: visible; overflow-x: auto; }
+.page-sales #tab-overview .table-wrap, .page-sales #tab-overview .table-wrap.is-scroll { max-height: none; overflow-y: visible; overflow-x: hidden; }
 .orders-card .pg-bar { margin: 0 -0.25rem; }
 
 /* ---- Inventory modals: Manage Suppliers (no horizontal scroll, 10/page), read-only product in Stock In/Out, Product View lists ---- */

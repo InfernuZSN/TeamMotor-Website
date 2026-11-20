@@ -75,7 +75,7 @@ Boot.ready(function () {
     }
     const unitsSold = unitsIn(d.periodSales);
     const cards = [
-      { view: 'recent', label: "Today's Sales", value: Utils.formatPHP(todayTotal), sub: salesSub, icon: 'trendUp', tone: salesTone },
+      { view: 'recent', label: "Today's Sales", value: Utils.formatCardPHP(todayTotal), title: Utils.formatPHP(todayTotal), sub: salesSub, icon: 'trendUp', tone: salesTone },
       { href: 'inventory.html', label: 'Total Products', value: d.products.length, sub: d.categories.length + ' categories \u00B7 ' + d.units.toLocaleString('en-PH') + ' units in stock', icon: 'box', tone: 'neutral' },
       { view: 'low', label: 'Low Stock', value: d.low.length, sub: d.low.length ? '! At or below reorder level' : '\u2713 All above reorder level', icon: 'alertTriangle', tone: d.low.length ? 'danger' : 'ok' },
       { view: 'out', label: 'Out of Stock', value: d.out.length, sub: d.out.length ? '! Needs immediate restock' : '\u2713 Nothing sold out', icon: 'xCircle', tone: d.out.length ? 'danger' : 'ok' },
@@ -86,9 +86,10 @@ Boot.ready(function () {
       const inner = '<div class="stat-icon tone-' + c.tone + '">' + icon(c.icon) + '</div>' +
         '<div class="stat-label">' + c.label + '</div><div class="stat-value">' + c.value + '</div><div class="stat-sub">' + c.sub + '</div>';
       const aria = ' aria-label="' + esc(c.label + ': ' + String(c.value).replace(/<[^>]*>/g, '') + '. ' + c.sub.replace(/^[\u2713!\u25B2\u25BC]\s*/, '')) + '"';
+      const titleAttr = c.title ? ' title="' + esc(c.title) + '"' : '';
       return c.href
-        ? '<a class="stat-card tone-' + c.tone + '" href="' + c.href + '"' + aria + '>' + inner + '</a>'
-        : '<button type="button" class="stat-card tone-' + c.tone + '" data-view="' + c.view + '"' + aria + '>' + inner + '</button>';
+        ? '<a class="stat-card tone-' + c.tone + '" href="' + c.href + '"' + aria + titleAttr + '>' + inner + '</a>'
+        : '<button type="button" class="stat-card tone-' + c.tone + '" data-view="' + c.view + '"' + aria + titleAttr + '>' + inner + '</button>';
     }).join('');
   }
 
@@ -125,7 +126,7 @@ Boot.ready(function () {
         rows.map(function (s) {
           const items = s.items.map(function (i) { return i.qty + '\u00D7 ' + esc(i.name); }).join(', ');
           return '<tr><td class="mono-num" style="font-weight:600;color:var(--ink);">' + esc(s.id) + '</td><td style="max-width:22rem;">' + items + '</td>' +
-            '<td class="text-right mono-num" style="font-weight:700;">' + Utils.formatPHP(s.total) + '</td><td><span class="pay-chip">' + esc(s.paymentMethod) + '</span></td>' +
+            '<td class="text-right mono-num" style="font-weight:700;">' + Utils.formatMoneyHtml(s.total) + '</td><td><span class="pay-chip">' + esc(s.paymentMethod) + '</span></td>' +
             '<td class="text-muted">' + Utils.formatDateTime(s.date) + '</td></tr>';
         }).join('') + '</tbody></table></div>'
         : empty('sales', 'No sales yet'));

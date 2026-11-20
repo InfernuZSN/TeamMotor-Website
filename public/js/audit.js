@@ -167,7 +167,7 @@ Boot.ready(function () {
           '<td class="mono-num">' + esc(a.entityId || '\u2014') + '</td>' +
           '<td><span class="au-sum" title="' + esc(summary(a)) + '">' + esc(summary(a)) + '</span></td>' +
           '<td class="text-muted mono-num">' + esc(a.ip || '') + '</td>' +
-          '<td class="text-center"><button type="button" class="btn btn-secondary btn-sm au-view-btn" data-view="' + i + '">' + icon('eye') + ' View</button></td></tr>';
+          '<td class="text-center col-actions mobile-cell-actions" data-label="View"><button type="button" class="icon-btn au-view-btn" title="View details" aria-label="View details" data-mobile-label="View" data-view="' + i + '">' + icon('eye') + '</button></td></tr>';
       }).join('') : '<tr><td colspan="7"><div class="empty-state">' + icon('history') + '<h3>No matching entries</h3></div></td></tr>';
     } catch (err) { showToast(err.message, 'danger'); }
   }

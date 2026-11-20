@@ -28,6 +28,7 @@ Boot.ready(function () {
   let stockModalType = 'in';
   let showArchived = false;
   let pendingImage = '';   // resized data URL of the photo chosen in the Add/Edit form (saved on Save Product)
+  let imageRemoved = false; // set when user clicks 'x' to clear the current photo
 
   function openModal(id) { document.getElementById(id).classList.add('open'); }
   function closeModal(id) { document.getElementById(id).classList.remove('open'); }
@@ -214,7 +215,7 @@ Boot.ready(function () {
         '<td data-label="Category"><span class="cell-trunc" title="' + Utils.escapeHtml(cat ? cat.name : p.category) + '">' + Utils.escapeHtml(cat ? cat.name : p.category) + '</span></td>' +
         '<td class="mobile-cell-wide" data-label="Compatibility"><span class="cell-clamp" title="' + Utils.escapeHtml((p.compatibility || []).join(', ')) + '">' + Utils.escapeHtml(compatSummary(p.compatibility || [])) + '</span></td>' +
         '<td class="mobile-cell-wide" data-label="Supplier"><span class="cell-clamp" title="' + Utils.escapeHtml(sup ? sup.name : '') + '">' + (sup ? Utils.escapeHtml(sup.name) : '\u2014') + '</span></td>' +
-        '<td class="text-right mono-num" data-label="Price">' + Utils.formatPHP(p.sellingPrice) + '</td>' +
+        '<td class="text-right mono-num" data-label="Price">' + Utils.formatMoneyHtml(p.sellingPrice) + '</td>' +
         '<td class="text-right mono-num" data-label="Stock">' + p.stock + '</td>' +
         '<td class="col-status" data-label="Status"><span class="badge ' + Utils.statusClass(status) + '">' + status + '</span> ' + Utils.expiryBadge(p, expiryMonths()) + '</td>' +
         '<td class="col-actions mobile-cell-actions text-left" data-label="Actions"><div class="flex actions-flex">' +
@@ -376,15 +377,21 @@ Boot.ready(function () {
 
   /* ---------- Image preview ---------- */
   function updateImagePreviewFallback() {
-    const saved = editingProductId ? Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) : '';
+    const existingProd = editingProductId ? Store.get('products', []).find(p => p.id === editingProductId) : null;
+    const saved = (!imageRemoved && existingProd) ? Utils.productImage(existingProd) : '';
+    const clearBtn = document.getElementById('clearImageBtn');
     if (pendingImage || saved) {
       document.getElementById('imagePreview').innerHTML = '<img src="' + (pendingImage || saved) + '" alt="">';
-      document.getElementById('imageDropLabel').textContent = pendingImage ? document.getElementById('pImageFile').files[0].name : 'Click to change image';
+      document.getElementById('imageDropLabel').textContent = pendingImage
+        ? (document.getElementById('pImageFile').files && document.getElementById('pImageFile').files[0] ? document.getElementById('pImageFile').files[0].name : 'Image selected')
+        : 'Click to change image';
+      if (clearBtn) clearBtn.style.display = 'flex';
       return;
     }
     const cat = document.getElementById('pCategory').value;
     document.getElementById('imagePreview').innerHTML = '<svg viewBox="0 0 24 24" style="width:26px;height:26px;stroke:var(--steel);stroke-width:1.7;fill:none;">' + Utils.categoryIcon(cat) + '</svg>';
     document.getElementById('imageDropLabel').textContent = 'Click to choose an image';
+    if (clearBtn) clearBtn.style.display = 'none';
   }
 
   /* Shrinks the chosen photo (max 360 px, JPEG) so many product photos fit in the browser's ~5 MB of storage. */
@@ -466,6 +473,7 @@ Boot.ready(function () {
     compatSelections = [];
     document.getElementById('pImageFile').value = '';
     pendingImage = '';
+    imageRemoved = false;
 
     const stockInput = document.getElementById('pStock');
     const stockHint = document.getElementById('stockEditHint');
@@ -693,7 +701,7 @@ Boot.ready(function () {
       rubber: false,
       compatibility: compatibility,
       compatYears: document.getElementById('pCompatYears').value.trim() || 'All Years',
-      image: pendingImage || Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) || categoryId
+      image: imageRemoved ? categoryId : (pendingImage || (editingProductId ? Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) : '') || categoryId)
     };
     if (editingProductId) {
       const existing = Store.get('products', []).find(p => p.id === editingProductId);
@@ -742,7 +750,7 @@ Boot.ready(function () {
     document.getElementById('vSalesList').innerHTML = rows.length
       ? '<div class="table-wrap vt-scroll"><table class="vt-table"><thead><tr><th>Date</th><th class="text-right">Qty</th><th class="text-right">Amount</th></tr></thead><tbody>' +
         rows.map(function (r) {
-          return '<tr><td class="text-muted">' + Utils.formatDate(r.date) + '</td><td class="text-right mono-num">' + r.qty + '</td><td class="text-right mono-num">' + Utils.formatPHP(r.subtotal) + '</td></tr>';
+          return '<tr><td class="text-muted">' + Utils.formatDate(r.date) + '</td><td class="text-right mono-num">' + r.qty + '</td><td class="text-right mono-num">' + Utils.formatMoneyHtml(r.subtotal) + '</td></tr>';
         }).join('') + '</tbody></table></div>'
       : '<div class="empty-state">' + icon('sales') + '<h3>No sales yet</h3></div>';
   }
@@ -846,8 +854,8 @@ Boot.ready(function () {
     document.getElementById('vtab-overview').innerHTML =
       '<p style="color:var(--steel);font-size:.88rem;">' + Utils.escapeHtml(p.description || 'No description yet.') + '</p>' +
       '<div class="form-grid" style="margin-top:6px;">' +
-        viewField('Selling Price', Utils.formatPHP(p.sellingPrice)) +
-        viewField('Cost Price', Utils.formatPHP(p.costPrice)) +
+        viewField('Selling Price', Utils.formatMoneyHtml(p.sellingPrice)) +
+        viewField('Cost Price', Utils.formatMoneyHtml(p.costPrice)) +
         viewField('Product ID', Utils.escapeHtml(p.id)) +
         viewField('SKU', Utils.escapeHtml(skuDisplay)) +
         viewField('Brand', Utils.escapeHtml(p.brand || '\u2014')) +
@@ -878,7 +886,7 @@ Boot.ready(function () {
     document.getElementById('vSalesSummary').innerHTML =
       '<div class="form-grid" style="margin-bottom:14px;">' +
         viewField('Total Units Sold', String(unitsSold)) +
-        viewField('Total Revenue', Utils.formatPHP(revenue)) +
+        viewField('Total Revenue', Utils.formatMoneyHtml(revenue)) +
       '</div>';
     pgVSales.reset(); renderViewSales();
 
@@ -905,9 +913,13 @@ Boot.ready(function () {
     document.getElementById('vtab-overview').classList.add('active');
 
     const viewToEditBtn = document.getElementById('viewToEditBtn');
+    const viewFooter = document.getElementById('viewModalFooter');
     if (viewToEditBtn) {
       viewToEditBtn.dataset.productId = p.id;
       viewToEditBtn.style.display = isAdmin ? '' : 'none';
+    }
+    if (viewFooter) {
+      viewFooter.style.display = isAdmin ? '' : 'none';
     }
     openModal('viewModalOverlay');
   }
@@ -1623,11 +1635,22 @@ Boot.ready(function () {
     });
 
     document.getElementById('imageDropZone').addEventListener('click', function () { document.getElementById('pImageFile').click(); });
+    const clearImgBtn = document.getElementById('clearImageBtn');
+    if (clearImgBtn) {
+      clearImgBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        pendingImage = '';
+        imageRemoved = true;
+        document.getElementById('pImageFile').value = '';
+        updateImagePreviewFallback();
+      });
+    }
     document.getElementById('pImageFile').addEventListener('change', function (e) {
       const file = e.target.files[0];
       if (!file) return;
       resizeImage(file, function (dataUrl) {
         pendingImage = dataUrl;
+        imageRemoved = false;
         updateImagePreviewFallback();
       });
     });

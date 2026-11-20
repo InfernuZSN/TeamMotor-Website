@@ -281,6 +281,9 @@
               <strong id="imageDropLabel">Click to choose an image</strong>
               <span>Optional — shown in Product Details and in POS. Without a photo, the category icon is used.</span>
             </div>
+            <button type="button" class="image-clear-btn" id="clearImageBtn" title="Remove image" aria-label="Remove image" style="display:none;">
+              <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
             <input type="file" id="pImageFile" accept="image/*" style="display:none;">
           </div>
           <div id="productDeleteWrap" style="margin-top: 1.125rem; display: none;">
@@ -299,7 +302,6 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" data-close="productModalOverlay">Cancel</button>
       <button class="btn btn-primary" id="saveProductBtn">Save Product</button>
     </div>
   </div>
@@ -331,8 +333,7 @@
       <div class="tab-panel" id="vtab-supplier"></div>
       <div class="tab-panel" id="vtab-activity"><div id="vActList"></div><div id="vActPager"></div></div>
     </div>
-    <div class="modal-footer">
-      <button class="btn btn-secondary" data-close="viewModalOverlay">Close</button>
+    <div class="modal-footer" id="viewModalFooter">
       <button class="btn btn-primary" id="viewToEditBtn">Edit Product</button>
     </div>
   </div>
@@ -360,7 +361,6 @@
       <div class="hint">Recorded as an Adjustment in inventory history and the audit trail.</div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" data-close="adjustModalOverlay" type="button">Cancel</button>
       <button class="btn btn-primary" id="adjSaveBtn" type="button">Save Adjustment</button>
     </div>
   </div>
@@ -432,7 +432,6 @@
       </form>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" data-close="stockModalOverlay">Cancel</button>
       <button class="btn btn-primary" id="saveStockBtn">Confirm</button>
     </div>
   </div>

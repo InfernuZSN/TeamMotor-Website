@@ -643,24 +643,88 @@
     display: none;
   }
 
-  /* Wide detail cells (Compatibility, Supplier, Summary, Reason/Notes) span full card width so nothing is clipped */
-  table:not(.rcpt-items):not(.order-table):not(.au-table) tbody td.mobile-cell-wide {
-    grid-column: 1 / -1;
-    background: var(--paper);
-    padding: .45rem .625rem !important;
-    border-radius: .45rem;
-  }
-  /* In Customers mobile cards, Email spans full width but aligns flush with card content without a background box */
-  #custTbody td.mobile-cell-wide,
-  #custTbody td[data-label="Email"],
-  .page-customers tbody td.mobile-cell-wide,
-  .page-customers tbody td[data-label="Email"],
-  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Email"] {
+  /* Wide detail cells (Items, Compatibility, Supplier, Email, Summary, Reason/Notes) span full card width and align evenly with other fields */
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-wide,
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Items"],
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Compatibility"],
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Supplier"],
+  table:not(.rcpt-items):not(.order-table) tbody td[data-label="Email"],
+  #recentOrdersTbody td[data-label="Items"],
+  #productsTbody td[data-label="Compatibility"],
+  #productsTbody td[data-label="Supplier"],
+  #custTbody td[data-label="Email"] {
+    grid-column: 1 / -1 !important;
     background: transparent !important;
     padding: 0 !important;
     border-radius: 0 !important;
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  /* Users mobile card layout: balanced grid placement & flush alignment */
+  #usersTbody tr,
+  .page-users tbody tr {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: .5rem .75rem !important;
+  }
+  #usersTbody td[data-label="Username"],
+  .page-users tbody td[data-label="Username"] {
+    order: 1 !important;
+  }
+  #usersTbody td[data-label="Role"],
+  .page-users tbody td[data-label="Role"] {
+    order: 2 !important;
+  }
+  #usersTbody td[data-label="Email"],
+  .page-users tbody td[data-label="Email"] {
+    order: 3 !important;
+    grid-column: 1 / -1 !important;
+    background: transparent !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+  }
+  #usersTbody td[data-label="Status"],
+  .page-users tbody td[data-label="Status"] {
+    order: 4 !important;
+  }
+  #usersTbody td[data-label="Date Added"],
+  .page-users tbody td[data-label="Date Added"] {
+    order: 5 !important;
+  }
+  #usersTbody td.mobile-cell-actions,
+  .page-users tbody td.mobile-cell-actions {
+    order: 6 !important;
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+  }
+
+  /* Users mobile card action buttons: stretch across full width, no dead space */
+  #usersTbody td.mobile-cell-actions .row-actions,
+  .page-users tbody td.mobile-cell-actions .row-actions,
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions > .row-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    width: 100% !important;
+    gap: .5rem !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+  #usersTbody td.mobile-cell-actions .row-actions .icon-btn,
+  .page-users tbody td.mobile-cell-actions .row-actions .icon-btn,
+  table:not(.rcpt-items):not(.order-table) tbody td.mobile-cell-actions > .row-actions .icon-btn {
+    flex: 1 1 0 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    min-height: 2.75rem !important;
+    height: auto !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: .45rem .65rem !important;
+    box-sizing: border-box !important;
   }
 
   /* Un-truncate all text inside mobile cards so 100% of information is readable */
@@ -797,11 +861,38 @@
   .page-sales .stat-card {
     padding: .75rem .85rem;
     min-height: 6.25rem;
+    min-width: 0 !important;
+    overflow: hidden !important;
   }
   .stat-card .stat-value,
   .page-dashboard .stat-card .stat-value,
   .page-sales .stat-card .stat-value {
     font-size: 1.28rem;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .eod-stat {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  .eod-val {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+    font-size: clamp(1rem, 3.8vw, 1.35rem) !important;
+  }
+  .eod-pm {
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+  .eod-pm strong {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
   }
   .stat-card .stat-icon,
   .page-sales .stat-card .stat-icon {

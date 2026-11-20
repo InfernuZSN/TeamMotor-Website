@@ -463,7 +463,6 @@
         '</div>' +
         '<div class="modal-footer guide-footer">' +
           '<span class="text-muted" id="guideFooterNote" style="font-size:.78rem;margin-right:auto;"></span>' +
-          '<button type="button" class="btn btn-secondary" id="guideDoneBtn" data-close="guideModalOverlay">Close Guide</button>' +
         '</div>' +
       '</div>';
 
