@@ -555,13 +555,19 @@ Boot.ready(function () {
     const el = $(id); el.classList.add('open');
     if (openStack.indexOf(id) === -1) openStack.push(id);
     syncInert();
+    const toggleBtn = $('sidebarToggle');
+    if (toggleBtn) toggleBtn.style.display = 'none';
     const f = focusId && $(focusId); if (f) setTimeout(function () { f.focus(); }, 30);
   }
   function closeModal(id) {
     $(id).classList.remove('open');
     const i = openStack.indexOf(id); if (i !== -1) openStack.splice(i, 1);
     syncInert();
-    if (!openStack.length) focusSearch();
+    if (!openStack.length) {
+      const toggleBtn = $('sidebarToggle');
+      if (toggleBtn && window.innerWidth > 768) toggleBtn.style.display = '';
+      focusSearch();
+    }
   }
 
   /* ------------------------------------------------------------------ payment */

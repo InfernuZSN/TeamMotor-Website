@@ -412,10 +412,16 @@ function closeMobileSidebar() {
 function openModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.add('open');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  if (toggleBtn) toggleBtn.style.display = 'none';
 }
 function closeModal(id) {
   const el = document.getElementById(id);
   if (el) el.classList.remove('open');
+  if (!document.querySelector('.modal-overlay.open, .pt-overlay.open')) {
+    const toggleBtn = document.getElementById('sidebarToggle');
+    if (toggleBtn && window.innerWidth > 768) toggleBtn.style.display = '';
+  }
 }
 
 function renderTopbarActions() {

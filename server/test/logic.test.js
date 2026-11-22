@@ -1676,3 +1676,29 @@ test('Dashboard Status Cards: Staff excludes Today\'s Sales and Upcoming Warrant
   assert.ok(styleCss.includes('.dash-cards.has-5-cards') && styleCss.includes('repeat(5, minmax(0, 1fr))'), 'style.css must define 5-column grid for staff dashboard cards');
   assert.ok(styleCss.includes('.dash-cards.has-7-cards') && styleCss.includes('repeat(7, minmax(0, 1fr))'), 'style.css must define 7-column grid for admin dashboard cards');
 });
+
+/* ------------------------------------------------------------------------------
+   62. SIDEBAR TOGGLE IN POS & MODALS
+   ------------------------------------------------------------------------------ */
+test('Sidebar Toggle in POS & Modals: hidden on mobile, hidden during active modals/overlays, and restrained z-index', async () => {
+  const posCss = fs.readFileSync(resolveRoot('public/css/pos.css'), 'utf8');
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  const posJs = fs.readFileSync(resolveRoot('public/js/pos.js'), 'utf8');
+  const appJs = fs.readFileSync(resolveRoot('public/js/app.js'), 'utf8');
+
+  // 1. Mobile view: sidebar toggle must be strictly hidden in pos.css and style.css
+  assert.ok(posCss.includes('.pos-terminal .sidebar-toggle') && posCss.includes('display: none !important;'), 'pos.css must hide sidebar-toggle on mobile');
+  assert.ok(styleCss.includes('.sidebar-toggle') && styleCss.includes('display: none !important;'), 'style.css must hide sidebar-toggle on mobile');
+
+  // 2. Modals/overlays: sidebar toggle must be hidden when any modal overlay is active
+  assert.ok(posCss.includes(':has(.pt-overlay.open)') || posCss.includes(':has(.modal-overlay.open)'), 'pos.css must hide sidebar-toggle when modal overlays are active');
+  assert.ok(styleCss.includes(':has(.modal-overlay.open)') || styleCss.includes(':has(.pt-overlay.open)'), 'style.css must hide sidebar-toggle when modal overlays are active');
+
+  // 3. Script level modal protection
+  assert.ok(posJs.includes("toggleBtn.style.display = 'none'"), 'pos.js openModal must hide sidebarToggle');
+  assert.ok(appJs.includes("toggleBtn.style.display = 'none'"), 'app.js openModal must hide sidebarToggle');
+
+  // 4. Desktop z-index sanity: toggle must not exceed overlay z-index (100)
+  assert.ok(!posCss.includes('z-index: 120;'), 'pos.css must not assign z-index: 120 to sidebar-toggle');
+  assert.ok(posCss.includes('.pos-terminal .sidebar-toggle {\n  z-index: 35;'), 'pos.css must constrain sidebar-toggle to z-index: 35');
+});

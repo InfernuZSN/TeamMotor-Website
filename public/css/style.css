@@ -297,6 +297,17 @@ button { font-family: inherit; }
     transform: rotate(180deg) translateX(-0.5px);
   }
 }
+@media (max-width: 768px) {
+  .sidebar-toggle {
+    display: none !important;
+  }
+}
+
+/* Hide sidebar-toggle whenever any modal or overlay is open */
+body:has(.modal-overlay.open) .sidebar-toggle,
+body:has(.pt-overlay.open) .sidebar-toggle {
+  display: none !important;
+}
 
 /* Collapsed: icons only. Labels stay in the DOM but are visually hidden so
    screen readers (and the title tooltip on each link) still have a name. */
