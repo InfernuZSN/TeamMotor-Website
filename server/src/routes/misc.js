@@ -13,20 +13,47 @@ const { warrantyStatus, hasConfiguredWarranty } = require('../utils/warranty');
 const notifications = express.Router();
 notifications.get('/', wrap(async (req, res) => {
   await refreshNotifications({ throttled: true }).catch(e => console.error('[notifications] refresh failed:', e.message));
-  res.json(await Notification.find({ dismissed: { $ne: true } }).sort({ date: -1 }).lean());
+  const isAdmin = req.user && req.user.role === 'Admin';
+  const filter = { dismissed: { $ne: true } };
+  if (!isAdmin) {
+    filter.$or = [{ targetRole: null }, { targetRole: { $exists: false } }, { targetRole: '' }, { targetRole: 'Staff' }];
+  }
+  res.json(await Notification.find(filter).sort({ date: -1 }).lean());
 }));
-notifications.post('/read-all', wrap(async (req, res) => { await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { read: true } }); res.json({ ok: true }); }));
+notifications.post('/read-all', wrap(async (req, res) => {
+  const isAdmin = req.user && req.user.role === 'Admin';
+  const filter = { dismissed: { $ne: true } };
+  if (!isAdmin) {
+    filter.$or = [{ targetRole: null }, { targetRole: { $exists: false } }, { targetRole: '' }, { targetRole: 'Staff' }];
+  }
+  await Notification.updateMany(filter, { $set: { read: true } });
+  res.json({ ok: true });
+}));
 notifications.post('/:id/read', wrap(async (req, res) => { await Notification.updateOne({ id: req.params.id }, { $set: { read: true } }); res.json({ ok: true }); }));
 notifications.delete('/clear-all', wrap(async (req, res) => {
-  await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { dismissed: true, read: true } });
+  const isAdmin = req.user && req.user.role === 'Admin';
+  if (isAdmin) {
+    await Notification.deleteMany({});
+  } else {
+    await Notification.deleteMany({
+      $or: [{ targetRole: null }, { targetRole: { $exists: false } }, { targetRole: '' }, { targetRole: 'Staff' }]
+    });
+  }
   res.json({ ok: true });
 }));
 notifications.delete('/', wrap(async (req, res) => {
-  await Notification.updateMany({ dismissed: { $ne: true } }, { $set: { dismissed: true, read: true } });
+  const isAdmin = req.user && req.user.role === 'Admin';
+  if (isAdmin) {
+    await Notification.deleteMany({});
+  } else {
+    await Notification.deleteMany({
+      $or: [{ targetRole: null }, { targetRole: { $exists: false } }, { targetRole: '' }, { targetRole: 'Staff' }]
+    });
+  }
   res.json({ ok: true });
 }));
 notifications.delete('/:id', wrap(async (req, res) => {
-  await Notification.updateOne({ id: req.params.id }, { $set: { dismissed: true, read: true } });
+  await Notification.deleteOne({ id: req.params.id });
   res.json({ ok: true });
 }));
 
@@ -111,7 +138,12 @@ bootstrap.get('/', wrap(async (req, res) => {
     Sale.find({}).sort({ date: -1 }).limit(300).lean().then(withItems),
     InventoryTransaction.find({ type: { $ne: 'Product Edit' } }).sort({ date: -1 }).limit(300).lean(),
     Warranty.find({}).sort({ warrantyStart: -1, id: -1 }).lean().then(withClaims),
-    Notification.find({ dismissed: { $ne: true } }).sort({ date: -1 }).lean(),
+    isAdmin
+      ? Notification.find({ dismissed: { $ne: true } }).sort({ date: -1 }).lean()
+      : Notification.find({
+          dismissed: { $ne: true },
+          $or: [{ targetRole: null }, { targetRole: { $exists: false } }, { targetRole: '' }, { targetRole: 'Staff' }]
+        }).sort({ date: -1 }).lean(),
     isAdmin ? User.find({}).sort({ id: 1 }).lean() : (req.userDoc ? Promise.resolve([req.userDoc]) : User.find({ id: req.user.id }).lean()),
     isAdmin ? Shift.find({}).sort({ clockIn: -1 }).limit(300).lean() : Shift.find({ username: req.user.username }).sort({ clockIn: -1 }).limit(100).lean(),
     Brand.find({}).sort({ name: 1 }).lean(),

@@ -119,6 +119,7 @@ const Product = make('Product', 'products', {
   shelfLifeUnit: { type: String, default: null },
   expirationDate: { type: String, default: null },                        // optional 'YYYY-MM-DD' (earliest active batch)
   image: { type: String, default: '' },
+  thumbnail: { type: String, default: '' },
   storageLocation: { type: String, default: '' },
   archived: { type: Boolean, default: false },
   lastUpdated: { type: String }
@@ -210,6 +211,8 @@ const Warranty = make('Warranty', 'warranties', {
   purchaseDate: String,
   warrantyStart: { type: String, index: true },
   warrantyExpiration: String,
+  duration: { type: Number, default: null },
+  unit: { type: String, default: null },
   coverage: String,
   status: { type: String, default: 'Active' },                            // Active | Expiring Soon | Expired | Claimed | Voided
   notes: String
@@ -229,12 +232,13 @@ const WarrantyClaim = make('WarrantyClaim', 'warranty_claims', {
 const Notification = make('Notification', 'notifications', {
   id: { ...idField },
   key: { type: String, required: true, unique: true },                    // `${type}:${refId}` — one live alert per condition
-  type: { type: String, required: true },                                 // low-stock | out-of-stock | restock-reminder | expiring-soon | expired | warranty-expiring
+  type: { type: String, required: true },                                 // low-stock | out-of-stock | restock-reminder | expiring-soon | expired | warranty-expiring | staff-clock-in | staff-clock-out | product-add
   productId: String,
   warrantyId: String,
   title: String,
   message: String,
   link: String,
+  targetRole: { type: String, default: null },                            // 'Admin' (admin only) | null (all users)
   date: { type: String, index: true },
   read: { type: Boolean, default: false },
   dismissed: { type: Boolean, default: false }

@@ -179,6 +179,59 @@ test('Receipt: Duplicate reprint includes DUPLICATE COPY banner and reprint audi
   assert.ok(html.includes('Reprinted by: Admin User'), 'Must display reprinted by audit info');
 });
 
+test('Receipt: displays warranty information below change, groups identical products with quantity (Option A), and omits section when no warranty', () => {
+  const Receipt = loadReceiptEngine();
+
+  // 1. Sale with warranty items (2 units of same Headlight + 1 unit non-warranty item)
+  const saleWithWarranty = {
+    id: 'SALE-0085', date: '2026-11-22T17:51:00.000Z', staff: 'Juan Dela Cruz', paymentMethod: 'Cash',
+    subtotal: 1400, discount: 0, vatEnabled: false, vatRate: 0, vatableAmount: 1400, vatAmount: 0, total: 1400,
+    amountReceived: 1500, changeAmount: 100,
+    items: [
+      { productId: 'P-HD', name: 'Headlight (LED)', qty: 2, price: 550, subtotal: 1100 },
+      { productId: 'P-OIL', name: 'Chain Lube 400ml', qty: 1, price: 300, subtotal: 300 }
+    ],
+    warranties: [
+      {
+        productId: 'P-HD', productName: 'Headlight (LED)', id: 'WAR-0085',
+        duration: 6, unit: 'months', coverage: 'Standard parts warranty',
+        warrantyExpiration: '2027-05-22'
+      }
+    ]
+  };
+
+  const dataWithWar = Receipt.fromSale(saleWithWarranty);
+  const htmlWithWar = Receipt.html(dataWithWar);
+
+  assert.ok(htmlWithWar.includes('WARRANTY INFORMATION'), 'Must display WARRANTY INFORMATION section');
+  assert.ok(htmlWithWar.includes('2\u00D7 Headlight (LED)'), 'Must group identical products with quantity (Option A: 2× Headlight (LED))');
+  assert.ok(htmlWithWar.includes('WAR-0085'), 'Must display Warranty ID WAR-0085');
+  assert.ok(htmlWithWar.includes('6 Months (Standard parts warranty)'), 'Must display duration and coverage');
+  assert.ok(htmlWithWar.includes('May 22, 2027'), 'Must display formatted expiration date');
+  assert.ok(!htmlWithWar.includes('Chain Lube 400ml</div>\n    <div class="rcpt-warranty-row">'), 'Non-warranty items must NOT appear in warranty section');
+
+  // Verify Warranty section is placed below Change
+  const changePos = htmlWithWar.indexOf('Change');
+  const warrantyPos = htmlWithWar.indexOf('WARRANTY INFORMATION');
+  assert.ok(changePos !== -1 && warrantyPos !== -1, 'Both Change and Warranty Information must be present');
+  assert.ok(warrantyPos > changePos, 'Warranty Information must appear below Change');
+
+  // 2. Sale with NO warranty items
+  const saleNoWarranty = {
+    id: 'SALE-0086', date: '2026-11-22T18:00:00.000Z', staff: 'Juan Dela Cruz', paymentMethod: 'Cash',
+    subtotal: 300, discount: 0, vatEnabled: false, vatRate: 0, vatableAmount: 300, vatAmount: 0, total: 300,
+    amountReceived: 500, changeAmount: 200,
+    items: [
+      { productId: 'P-OIL', name: 'Chain Lube 400ml', qty: 1, price: 300, subtotal: 300 }
+    ],
+    warranties: []
+  };
+
+  const dataNoWar = Receipt.fromSale(saleNoWarranty);
+  const htmlNoWar = Receipt.html(dataNoWar);
+  assert.ok(!htmlNoWar.includes('WARRANTY INFORMATION'), 'Must omit WARRANTY INFORMATION section when sale has no warranty items');
+});
+
 /* ------------------------------------------------------------------------------
    4. TRANSACTION IDENTIFIERS & SEQUENCING
    ------------------------------------------------------------------------------ */
@@ -1472,4 +1525,154 @@ test('Mobile Card Alignment, Responsive Actions, and Display Card Truncation ove
   assert.ok(styleCss.includes('.page-sales #tab-movement th:nth-child(1)'), 'style.css must allocate proportional widths for movement columns');
   assert.ok(!salesHtml.includes('High Demand'), 'High Demand badge must be removed from Product Movement card');
   assert.ok(!salesHtml.includes('Low Turnover'), 'Low Turnover badge must be removed from Product Movement card');
+});
+
+/* ------------------------------------------------------------------------------
+   58. NOTIFICATION LIFECYCLE, STAFF SHIFTS, PRODUCT ADDITION & CIRCULAR BUTTONS
+   ------------------------------------------------------------------------------ */
+test('Notifications: Admin-only shift alerts, all-user product add alerts, circular buttons, and database deletion', async () => {
+  const modelsCode = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(modelsCode.includes('targetRole: { type: String, default: null }'), 'Notification schema must include targetRole field');
+
+  const notifService = fs.readFileSync(resolveRoot('server/src/services/notifications.js'), 'utf8');
+  assert.ok(notifService.includes("'staff-clock-in'"), 'EVENT_TYPES must include staff-clock-in');
+  assert.ok(notifService.includes("'staff-clock-out'"), 'EVENT_TYPES must include staff-clock-out');
+  assert.ok(notifService.includes("'product-add'"), 'EVENT_TYPES must include product-add');
+  assert.ok(notifService.includes('targetRole: targetRole || null'), 'createActivityNotification must persist targetRole');
+
+  const usersRoutes = fs.readFileSync(resolveRoot('server/src/routes/users.js'), 'utf8');
+  assert.ok(usersRoutes.includes("type: 'staff-clock-in'") && usersRoutes.includes("targetRole: 'Admin'"), 'clock-in must create admin-only notification');
+  assert.ok(usersRoutes.includes("type: 'staff-clock-out'") && usersRoutes.includes("targetRole: 'Admin'"), 'clock-out must create admin-only notification');
+
+  const catalogRoutes = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogRoutes.includes("type: 'product-add'") && catalogRoutes.includes("targetRole: null"), 'product addition must create notification for all users');
+
+  const miscRoutes = fs.readFileSync(resolveRoot('server/src/routes/misc.js'), 'utf8');
+  assert.ok(miscRoutes.includes('await Notification.deleteOne({ id: req.params.id })'), 'DELETE /:id must delete document from database');
+  assert.ok(miscRoutes.includes('await Notification.deleteMany'), 'DELETE /clear-all must delete documents from database');
+  assert.ok(miscRoutes.includes('targetRole: null') && miscRoutes.includes("targetRole: 'Staff'"), 'Notification query must filter out admin-only notifications for non-admins');
+
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(styleCss.includes('.notif-header-actions button') && styleCss.includes('border-radius: 9999px !important;'), 'style.css must style notification header buttons circular');
+
+  const notifsJs = fs.readFileSync(resolveRoot('public/js/notifications.js'), 'utf8');
+  assert.ok(notifsJs.includes("n.targetRole !== 'Admin'"), 'notifications.js recompute must filter admin notifications for staff');
+  assert.ok(notifsJs.includes("type === 'staff-clock-in'") && notifsJs.includes("type === 'product-add'"), 'toneForType must support staff-clock-in and product-add');
+});
+
+/* ------------------------------------------------------------------------------
+   59. PRODUCT THUMBNAIL COMPRESSION & INVENTORY TABLE HOVER PREVIEW POPOVER
+   ------------------------------------------------------------------------------ */
+test('Product Thumbnail: Auto-compression (~10 KB - 30 KB), model/route thumbnail support, and inventory icon hover preview popover', async () => {
+  // 1. Models: Product schema includes thumbnail
+  const modelsCode = fs.readFileSync(resolveRoot('server/src/models/index.js'), 'utf8');
+  assert.ok(modelsCode.includes("thumbnail: { type: String, default: '' }"), 'Product schema must include thumbnail field');
+
+  // 2. Catalog routes: PRODUCT_FIELDS and cleanProduct handle thumbnail
+  const catalogRoutes = fs.readFileSync(resolveRoot('server/src/routes/catalog.js'), 'utf8');
+  assert.ok(catalogRoutes.includes("'thumbnail'"), 'PRODUCT_FIELDS must include thumbnail');
+  assert.ok(catalogRoutes.includes('out.thumbnail.length > 250000'), 'cleanProduct must validate thumbnail length');
+  assert.ok(catalogRoutes.includes("k === 'thumbnail'"), 'PUT /:id must omit thumbnail from verbose changes diff');
+
+  // 3. Store.js: Utils.productImage and Utils.productThumbnail
+  const storeJs = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  assert.ok(storeJs.includes('productThumbnail(p)'), 'store.js must export Utils.productThumbnail');
+  const vm = require('vm');
+  const ctx = {
+    window: { location: { origin: 'http://localhost' } },
+    document: { addEventListener: () => {} },
+    localStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    sessionStorage: { getItem: () => null, setItem: () => {}, removeItem: () => {} },
+    console, Date, Math, Set, Array, Object, String, Number, JSON, RegExp
+  };
+  vm.runInNewContext(storeJs + '; this.Utils = Utils;', ctx);
+  assert.strictEqual(typeof ctx.Utils.productThumbnail, 'function');
+  assert.strictEqual(typeof ctx.Utils.productImage, 'function');
+  const mockProd = { id: 'P1', thumbnail: 'data:image/jpeg;base64,thumb123', image: 'data:image/jpeg;base64,img456' };
+  assert.strictEqual(ctx.Utils.productThumbnail(mockProd), 'data:image/jpeg;base64,thumb123');
+  assert.strictEqual(ctx.Utils.productImage(mockProd), 'data:image/jpeg;base64,img456');
+  const legacyProd = { id: 'P2', image: 'data:image/jpeg;base64,legacy' };
+  assert.strictEqual(ctx.Utils.productThumbnail(legacyProd), 'data:image/jpeg;base64,legacy');
+
+  // 4. Client-side auto-compression & thumbnail state in inventory.js
+  const invJs = fs.readFileSync(resolveRoot('public/js/inventory.js'), 'utf8');
+  assert.ok(invJs.includes('pendingThumbnail'), 'inventory.js must track pendingThumbnail state');
+  assert.ok(invJs.includes('resizeImage(file, done)') || invJs.includes('function resizeImage(file, done)'), 'inventory.js must define resizeImage');
+  assert.ok(invJs.includes('maxThumb = 160') || invJs.includes('scaleThumb'), 'resizeImage must create compact thumbnail');
+  assert.ok(invJs.includes('Optimized thumbnail'), 'updateImagePreviewFallback must show thumbnail optimization status');
+  assert.ok(invJs.includes("thumbnail: imageRemoved ? '' :"), 'saveProduct must store thumbnail in payload');
+
+  // 5. Inventory table icon hover popover
+  assert.ok(invJs.includes('data-prod-thumb-id='), 'renderProductsTable must attach data-prod-thumb-id to category icon');
+  assert.ok(!invJs.includes('has-custom-photo'), 'renderProductsTable must not include red dot indicator class');
+  assert.ok(!invJs.includes('<span class="popover-tag">Thumbnail</span>'), 'popover must not include Thumbnail tag');
+  assert.ok(!invJs.includes('popover-price'), 'popover must not include price row');
+  assert.ok(!invJs.includes('popover-badge'), 'popover must not include in-stock badge');
+  assert.ok(invJs.includes('product.brand'), 'popover must display product brand in subtitle');
+  assert.ok(invJs.includes('function showThumbPopover'), 'inventory.js must define showThumbPopover');
+  assert.ok(invJs.includes('function hideThumbPopover'), 'inventory.js must define hideThumbPopover');
+  assert.ok(invJs.includes("prodTbody.addEventListener('mouseover'"), 'inventory.js must attach mouseover listener to table rows');
+  assert.ok(invJs.includes("prodTbody.addEventListener('mouseout'"), 'inventory.js must attach mouseout listener to table rows');
+
+  // 6. CSS styling for popover and category icon hover
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(styleCss.includes('.prod-thumb-popover'), 'style.css must style .prod-thumb-popover');
+  assert.ok(styleCss.includes('.prod-thumb-popover.is-visible'), 'style.css must style .prod-thumb-popover.is-visible');
+  assert.ok(!styleCss.includes('.page-inventory .cell-thumb.has-custom-photo::after'), 'style.css must not render red dot on cell-thumb');
+  assert.ok(styleCss.includes('.page-inventory .cell-thumb:hover'), 'style.css must provide hover effect for table category icons');
+
+  // 7. Inventory HTML markup
+  const invHtml = fs.readFileSync(resolveRoot('public/inventory.html'), 'utf8');
+  assert.ok(invHtml.includes('id="imageDropSubtext"'), 'inventory.html must include imageDropSubtext for dynamic feedback');
+});
+
+/* ------------------------------------------------------------------------------
+   60. DASHBOARD PRODUCT LIST ICONS & HOVER THUMBNAIL POPOVER
+   ------------------------------------------------------------------------------ */
+test('Dashboard: Product list category icons and hover thumbnail popover in Expiring, Warranties, Stock-In, and Top / Slow Sellers', async () => {
+  const dashJs = fs.readFileSync(resolveRoot('public/js/dashboard.js'), 'utf8');
+
+  // 1. Category icons with data-prod-thumb-id across dashboard views
+  assert.ok(dashJs.includes("Utils.categoryIcon(p.category)"), 'stockTable must use Utils.categoryIcon');
+  assert.ok(dashJs.includes("Utils.categoryIcon(r.p.category)"), 'viewExpiring must use Utils.categoryIcon');
+  assert.ok(dashJs.includes("Utils.categoryIcon(pCat)"), 'viewWarranty and viewStockIn must use Utils.categoryIcon');
+  assert.ok(dashJs.includes("data-prod-thumb-id="), 'Dashboard views must attach data-prod-thumb-id to .cell-thumb');
+
+  // 2. Shared Utils thumbnail popover
+  const storeJs = fs.readFileSync(resolveRoot('public/js/store.js'), 'utf8');
+  assert.ok(storeJs.includes('showThumbPopover(targetEl)'), 'store.js Utils must define showThumbPopover');
+  assert.ok(storeJs.includes('hideThumbPopover()'), 'store.js Utils must define hideThumbPopover');
+  assert.ok(storeJs.includes("cell-thumb[data-prod-thumb-id]"), 'store.js must attach global hover listeners for thumbnail popovers');
+
+  // 3. Styling for dashboard table thumbs
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(styleCss.includes('.page-dashboard .cell-thumb'), 'style.css must style .page-dashboard .cell-thumb');
+  assert.ok(styleCss.includes('.page-dashboard .cell-thumb:hover'), 'style.css must style .page-dashboard .cell-thumb:hover');
+});
+
+/* ------------------------------------------------------------------------------
+   61. DASHBOARD STATUS CARDS LAYOUT (STAFF & ADMIN)
+   ------------------------------------------------------------------------------ */
+test('Dashboard Status Cards: Staff excludes Today\'s Sales and Upcoming Warranties, Admin includes all 7 cards, both feature Stocked Products between Total Products and Low Stock', async () => {
+  const dashJs = fs.readFileSync(resolveRoot('public/js/dashboard.js'), 'utf8');
+
+  // 1. Logic for staff cards vs admin cards
+  assert.ok(dashJs.includes("session.role === 'Staff'"), 'dashboard.js must detect Staff role from session');
+  assert.ok(dashJs.includes("label: 'Stocked Products'"), 'dashboard.js must define Stocked Products card');
+  assert.ok(dashJs.includes("icon: 'stockIn'"), 'Stocked Products card must use stockIn icon');
+  assert.ok(dashJs.includes("view: 'stockin'"), 'Stocked Products card must switch panel to stockin view');
+  assert.ok(dashJs.includes("unitsStocked"), 'dashboard.js must calculate unitsStocked in collect()');
+
+  // Check Admin includes Stocked Products in between Total Products and Low Stock
+  const adminCardsSection = dashJs.substring(dashJs.indexOf('// Admin Dashboard'));
+  const totalProductsIdx = adminCardsSection.indexOf("label: 'Total Products'");
+  const stockedProductsIdx = adminCardsSection.indexOf("label: 'Stocked Products'");
+  const lowStockIdx = adminCardsSection.indexOf("label: 'Low Stock'");
+  assert.ok(totalProductsIdx !== -1 && stockedProductsIdx !== -1 && lowStockIdx !== -1, 'Admin cards must contain Total Products, Stocked Products, and Low Stock');
+  assert.ok(totalProductsIdx < stockedProductsIdx && stockedProductsIdx < lowStockIdx, 'Stocked Products must be placed in between Total Products and Low Stock for Admin');
+
+  // 2. CSS for 5-card layout on desktop and 7-card layout
+  const styleCss = fs.readFileSync(resolveRoot('public/css/style.css'), 'utf8');
+  assert.ok(styleCss.includes('.dash-cards.has-5-cards') && styleCss.includes('repeat(5, minmax(0, 1fr))'), 'style.css must define 5-column grid for staff dashboard cards');
+  assert.ok(styleCss.includes('.dash-cards.has-7-cards') && styleCss.includes('repeat(7, minmax(0, 1fr))'), 'style.css must define 7-column grid for admin dashboard cards');
 });

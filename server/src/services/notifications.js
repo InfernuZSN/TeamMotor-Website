@@ -10,9 +10,9 @@ let lastRefreshAt = 0;
 let refreshInFlight = null;
 const THROTTLE_MS = 60 * 1000;
 
-const EVENT_TYPES = new Set(['stock-in', 'stock-out', 'stock-adjust', 'product-archive', 'product-unarchive', 'product-delete']);
+const EVENT_TYPES = new Set(['stock-in', 'stock-out', 'stock-adjust', 'product-archive', 'product-unarchive', 'product-delete', 'product-add', 'staff-clock-in', 'staff-clock-out']);
 
-async function createActivityNotification({ key, type, productId, title, message, link }) {
+async function createActivityNotification({ key, type, productId, title, message, link, targetRole }) {
   const id = await nextId('NTF', 4);
   const notifKey = key || ('event:' + type + ':' + (productId || 'item') + ':' + Date.now() + ':' + Math.random().toString(36).slice(2, 6));
   const doc = await Notification.create({
@@ -23,6 +23,7 @@ async function createActivityNotification({ key, type, productId, title, message
     title,
     message,
     link: link || 'inventory.html',
+    targetRole: targetRole || null,
     date: new Date().toISOString(),
     read: false,
     dismissed: false

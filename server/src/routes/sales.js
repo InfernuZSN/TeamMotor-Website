@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { Sale, SaleItem } = require('../models');
+const { Sale, SaleItem, Warranty } = require('../models');
 const { adminOnly } = require('../middleware/auth');
 const { wrap, bad, notFound, conflict } = require('../utils/errors');
 const { audit } = require('../utils/audit');
@@ -19,7 +19,9 @@ router.get('/', wrap(async (req, res) => {
 router.get('/:id', wrap(async (req, res) => {
   const sale = await Sale.findOne({ id: req.params.id }).lean();
   if (!sale) throw notFound('Sale not found.');
-  res.json(await withItems(sale));
+  const full = await withItems(sale);
+  full.warranties = await Warranty.find({ saleId: sale.id }).lean();
+  res.json(full);
 }));
 
 router.post('/', wrap(async (req, res) => {
@@ -57,6 +59,7 @@ router.post('/:id/reprint', wrap(async (req, res) => {
   await audit(req, 'sale.reprint', 'sale', sale.id, { reprintNumber: sale.reprintCount, status: sale.status, context: req.body.context || 'sales-page', saleId: sale.id, saleTotal: sale.total, paymentMethod: sale.paymentMethod });
   const full = await withItems(sale);
   if (!full.shop) full.shop = shopSnapshot(await getSettings());     // very old sales without a snapshot
+  full.warranties = await Warranty.find({ saleId: sale.id }).lean();
   res.json({ sale: full, reprintedAt, reprintNumber: sale.reprintCount, reprintedBy: req.user.name });
 }));
 

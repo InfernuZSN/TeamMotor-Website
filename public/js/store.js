@@ -178,7 +178,68 @@ const Utils = {
     return dt.toISOString().slice(0, 10);
   },
   productImage(p) {
-    return p && /^data:image\//.test(p.image || '') ? p.image : '';
+    if (!p) return '';
+    if (/^data:image\//.test(p.image || '')) return p.image;
+    if (/^data:image\//.test(p.thumbnail || '')) return p.thumbnail;
+    return '';
+  },
+  productThumbnail(p) {
+    if (!p) return '';
+    if (/^data:image\//.test(p.thumbnail || '')) return p.thumbnail;
+    if (/^data:image\//.test(p.image || '')) return p.image;
+    return '';
+  },
+  showThumbPopover(targetEl) {
+    if (!targetEl || !targetEl.dataset) return;
+    const prodId = targetEl.dataset.prodThumbId;
+    if (!prodId) return;
+    const product = Store.get('products', []).find(p => p.id === prodId);
+    if (!product) return;
+
+    const brand = product.brand ? product.brand : '\u2014';
+    const thumbSrc = Utils.productThumbnail(product) || Utils.productImage(product);
+
+    let popover = document.getElementById('prodThumbPopover');
+    if (!popover) {
+      popover = document.createElement('div');
+      popover.id = 'prodThumbPopover';
+      popover.className = 'prod-thumb-popover';
+      document.body.appendChild(popover);
+    }
+
+    popover.innerHTML =
+      '<div class="popover-media thumb-' + product.category + '">' +
+        (thumbSrc
+          ? '<img src="' + thumbSrc + '" alt="' + Utils.escapeHtml(product.name) + '">'
+          : '<div class="popover-fallback"><svg viewBox="0 0 24 24" style="stroke:currentColor;fill:none;">' + Utils.categoryIcon(product.category) + '</svg><span>' + Utils.escapeHtml(brand) + '</span><span style="font-size:.65rem;color:var(--steel);">(No custom photo)</span></div>') +
+      '</div>' +
+      '<div class="popover-title" title="' + Utils.escapeHtml(product.name) + '">' + Utils.escapeHtml(product.name) + '</div>' +
+      '<div class="popover-sub">' + Utils.escapeHtml(product.id) + ' &bull; ' + Utils.escapeHtml(brand) + '</div>';
+
+    const rect = targetEl.getBoundingClientRect();
+    const popoverWidth = 190;
+    const popoverHeight = 180;
+    const padding = 12;
+
+    let left = rect.right + 10;
+    if (left + popoverWidth > window.innerWidth - padding) {
+      left = rect.left - popoverWidth - 10;
+    }
+    if (left < padding) left = padding;
+
+    let top = rect.top + (rect.height / 2) - 60;
+    if (top < padding) top = padding;
+    if (top + popoverHeight > window.innerHeight - padding) {
+      top = window.innerHeight - popoverHeight - padding;
+    }
+
+    popover.style.left = Math.round(left) + 'px';
+    popover.style.top = Math.round(top) + 'px';
+    popover.classList.add('is-visible');
+  },
+  hideThumbPopover() {
+    const popover = document.getElementById('prodThumbPopover');
+    if (popover) popover.classList.remove('is-visible');
   },
   categoryIcon(categoryId) {
     const icons = {
@@ -862,6 +923,10 @@ const Boot = (function () {
   }
 
   document.addEventListener('mouseover', function (e) {
+    const thumb = e.target && e.target.closest ? e.target.closest('.cell-thumb[data-prod-thumb-id]') : null;
+    if (thumb) {
+      Utils.showThumbPopover(thumb);
+    }
     const el = e.target && e.target.closest ? e.target.closest('.abbr-money, [data-tooltip], .cell-total') : null;
     if (el) {
       const target = el.classList && el.classList.contains('cell-total') ? (el.querySelector('.abbr-money') || el) : el;
@@ -870,6 +935,13 @@ const Boot = (function () {
   });
 
   document.addEventListener('mouseout', function (e) {
+    const thumb = e.target && e.target.closest ? e.target.closest('.cell-thumb[data-prod-thumb-id]') : null;
+    if (thumb) {
+      const related = e.relatedTarget;
+      if (!thumb.contains(related)) {
+        Utils.hideThumbPopover();
+      }
+    }
     const el = e.target && e.target.closest ? e.target.closest('.abbr-money, [data-tooltip], .cell-total') : null;
     if (el) {
       const target = el.classList && el.classList.contains('cell-total') ? (el.querySelector('.abbr-money') || el) : el;
@@ -879,9 +951,13 @@ const Boot = (function () {
 
   if (typeof window.addEventListener === 'function') {
     window.addEventListener('scroll', function () {
+      Utils.hideThumbPopover();
       if (tipEl && tipEl.classList.contains('is-visible')) {
         tipEl.classList.remove('is-visible');
       }
+    }, { passive: true });
+    window.addEventListener('resize', function () {
+      Utils.hideThumbPopover();
     }, { passive: true });
   }
 })();

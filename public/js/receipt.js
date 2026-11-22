@@ -49,6 +49,28 @@ const Receipt = (function () {
         '<div><span>Change</span><span>' + peso(d.change) + '</span></div>'
       : '';
 
+    const warrantyItems = getWarrantyItems(d);
+    let warrantyRows = '';
+    if (warrantyItems.length) {
+      warrantyRows = '<div class="rcpt-warranty">' +
+        '<div class="rcpt-warranty-title">WARRANTY INFORMATION</div>' +
+        warrantyItems.map(function (w) {
+          const qtyPrefix = w.qty > 1 ? w.qty + '\u00D7 ' : '';
+          const idDisplay = w.id ? esc(w.id) : (d.isPreview ? 'Pending checkout' : (d.no || 'Active'));
+          let durDisplay = esc(w.duration || '');
+          if (w.coverage) {
+            durDisplay = durDisplay ? (durDisplay + ' (' + esc(w.coverage) + ')') : esc(w.coverage);
+          }
+          return '<div class="rcpt-warranty-item">' +
+            '<div class="rcpt-warranty-name">&#8226; ' + qtyPrefix + esc(w.name) + '</div>' +
+            '<div class="rcpt-warranty-row"><span>Warranty ID</span><span>: ' + idDisplay + '</span></div>' +
+            (durDisplay ? '<div class="rcpt-warranty-row"><span>Duration</span><span>: ' + durDisplay + '</span></div>' : '') +
+            (w.expires ? '<div class="rcpt-warranty-row"><span>Valid Until</span><span>: ' + esc(w.expires) + '</span></div>' : '') +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
+
     const reprintFoot = d.reprint
       ? '<div class="rcpt-reprint">Reprinted on: ' + esc(new Date(d.reprint.at).toLocaleString('en-PH', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })) +
         (d.reprint.by ? '<br>Reprinted by: ' + esc(d.reprint.by) : '') + '<br>Original sale: ' + esc(dateStr + ' ' + timeStr) + '</div>'
@@ -70,9 +92,116 @@ const Receipt = (function () {
         (d.reference ? '<div><span>Reference</span><span>' + esc(d.reference) + '</span></div>' : '') +
         tenderRows +
       '</div>' +
+      warrantyRows +
       '<div class="rcpt-foot">' + (shop.receiptFooter || []).map(esc).join('<br>') + '</div>' +
       reprintFoot +
     '</div>';
+  }
+
+  /* Extract warranty records for items on the receipt (Option A: groups identical products with quantity) */
+  function getWarrantyItems(d) {
+    if (!d || !Array.isArray(d.items) || !d.items.length) return [];
+
+    const grouped = [];
+    const groupedMap = new Map();
+    d.items.forEach(function (it) {
+      if (!it) return;
+      const key = (it.productId || it.name || '').trim();
+      if (!key) return;
+      if (groupedMap.has(key)) {
+        groupedMap.get(key).qty += (Number(it.qty) || 1);
+      } else {
+        const copy = { productId: it.productId || '', name: it.name || '', qty: Number(it.qty) || 1 };
+        groupedMap.set(key, copy);
+        grouped.push(copy);
+      }
+    });
+
+    const storeWarranties = (typeof Store !== 'undefined' && Store.get && Array.isArray(Store.get('warranties', []))) ? Store.get('warranties', []) : [];
+    const storeProducts = (typeof Store !== 'undefined' && Store.get && Array.isArray(Store.get('products', []))) ? Store.get('products', []) : [];
+    const explicitWarranties = Array.isArray(d.warranties) ? d.warranties : [];
+
+    const baseDate = d.date instanceof Date ? d.date : new Date(d.date || Date.now());
+    const baseDateStr = !isNaN(baseDate.getTime()) ? baseDate.toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
+
+    const out = [];
+    grouped.forEach(function (it) {
+      const pId = it.productId;
+      const pNameLower = (it.name || '').toLowerCase().trim();
+
+      // Match explicit warranties attached to sale or stored in Store
+      let matchedWar = explicitWarranties.find(function (w) {
+        return (pId && w.productId === pId) || ((w.productName || '').toLowerCase().trim() === pNameLower);
+      });
+
+      if (!matchedWar && d.no && storeWarranties.length) {
+        matchedWar = storeWarranties.find(function (w) {
+          return w.saleId === d.no && ((pId && w.productId === pId) || ((w.productName || '').toLowerCase().trim() === pNameLower));
+        });
+      }
+
+      // Match product definition in Store
+      let prod = null;
+      if (storeProducts.length) {
+        prod = (pId && storeProducts.find(function (p) { return p.id === pId; })) ||
+               storeProducts.find(function (p) { return (p.name || '').toLowerCase().trim() === pNameLower; });
+      }
+
+      const hasWarranty = matchedWar || (prod && typeof Utils !== 'undefined' && Utils.hasProductWarranty && Utils.hasProductWarranty(prod));
+      if (!hasWarranty) return;
+
+      let dur = '';
+      if (matchedWar && matchedWar.duration && matchedWar.unit) {
+        const n = Number(matchedWar.duration);
+        let u = String(matchedWar.unit || 'months');
+        u = (n === 1 ? u.replace(/s$/, '') : u);
+        u = u.charAt(0).toUpperCase() + u.slice(1);
+        dur = n + ' ' + u;
+      } else if (prod && Number(prod.warrantyDuration) > 0) {
+        const n = Number(prod.warrantyDuration);
+        let u = String(prod.warrantyUnit || 'months');
+        u = (n === 1 ? u.replace(/s$/, '') : u);
+        u = u.charAt(0).toUpperCase() + u.slice(1);
+        dur = n + ' ' + u;
+      } else if (prod && Number(prod.warrantyDays) > 0) {
+        const dDays = Number(prod.warrantyDays);
+        dur = dDays + ' ' + (dDays === 1 ? 'Day' : 'Days');
+      } else if (matchedWar && matchedWar.warrantyStart && matchedWar.warrantyExpiration) {
+        const diff = Math.round((new Date(matchedWar.warrantyExpiration) - new Date(matchedWar.warrantyStart)) / 86400000);
+        if (diff > 0) dur = diff + ' Days';
+      }
+
+      const coverage = (matchedWar && matchedWar.coverage) || (prod && prod.warrantyType) || 'Standard parts warranty';
+
+      let exp = matchedWar ? (matchedWar.warrantyExpiration || '') : '';
+      if (!exp && prod && typeof Utils !== 'undefined' && Utils.calculateWarrantyExpiry) {
+        if (Number(prod.warrantyDuration) > 0) {
+          exp = Utils.calculateWarrantyExpiry(baseDateStr, prod.warrantyDuration, prod.warrantyUnit || 'months');
+        } else if (Number(prod.warrantyDays) > 0) {
+          exp = Utils.calculateWarrantyExpiry(baseDateStr, prod.warrantyDays, 'days');
+        }
+      }
+
+      let expFormatted = exp;
+      if (exp) {
+        const expDt = new Date(exp.slice(0, 10) + 'T00:00:00');
+        if (!isNaN(expDt.getTime())) {
+          expFormatted = expDt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+      }
+
+      out.push({
+        productId: pId,
+        name: it.name,
+        qty: it.qty,
+        id: matchedWar ? matchedWar.id : '',
+        duration: dur,
+        coverage: coverage,
+        expires: expFormatted
+      });
+    });
+
+    return out;
   }
 
   /* Built purely from the stored sale. `reprint` = { number, at, by } when this is a duplicate copy. */
@@ -81,7 +210,7 @@ const Receipt = (function () {
     return {
       no: sale.id,
       date: sale.date, cashier: sale.staff, status: sale.status,
-      items: (sale.items || []).map(function (i) { return { name: i.name, qty: i.qty, price: i.price, subtotal: i.subtotal }; }),
+      items: (sale.items || []).map(function (i) { return { productId: i.productId, name: i.name, qty: i.qty, price: i.price, subtotal: i.subtotal }; }),
       subtotal: sale.subtotal != null ? sale.subtotal : sale.total,
       discount: sale.discount || 0,
       vat: { enabled: !!sale.vatEnabled && sale.vatAmount > 0, rate: sale.vatRate, mode: sale.vatMode, vatable: sale.vatableAmount, amount: sale.vatAmount },
@@ -90,6 +219,7 @@ const Receipt = (function () {
       tendered: isCash ? (sale.amountReceived != null ? sale.amountReceived : sale.total) : null,
       change: isCash ? (sale.changeAmount != null ? sale.changeAmount : 0) : null,
       shop: sale.shop || null,
+      warranties: sale.warranties || null,
       isPreview: false,
       reprint: reprint || null
     };

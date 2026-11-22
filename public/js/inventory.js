@@ -28,6 +28,8 @@ Boot.ready(function () {
   let stockModalType = 'in';
   let showArchived = false;
   let pendingImage = '';   // resized data URL of the photo chosen in the Add/Edit form (saved on Save Product)
+  let pendingThumbnail = ''; // compact thumbnail data URL (~10 KB – 30 KB)
+  let compressedSizeKb = null;
   let imageRemoved = false; // set when user clicks 'x' to clear the current photo
 
   function openModal(id) { document.getElementById(id).classList.add('open'); }
@@ -192,7 +194,12 @@ Boot.ready(function () {
     return vis || fallback;
   }
 
+  /* ---------- Hover Thumbnail Popover (Delegated to shared Utils helper) ---------- */
+  function showThumbPopover(targetEl) { Utils.showThumbPopover(targetEl); }
+  function hideThumbPopover() { Utils.hideThumbPopover(); }
+
   function renderProductsTable() {
+    hideThumbPopover();
     const categories = Store.get('categories', []);
     const suppliers = Store.get('suppliers', []);
     const all = getFilteredProducts();
@@ -208,8 +215,9 @@ Boot.ready(function () {
       const status = Utils.getStockStatus(p.stock, p.reorderLevel);
       const archivedRow = p.archived ? ' style="opacity:.6;"' : '';
       return '<tr' + archivedRow + '>' +
-        '<td class="mobile-cell-primary" data-label="Product"><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' +
-          '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
+        '<td class="mobile-cell-primary" data-label="Product"><div class="cell-product">' +
+          '<div class="cell-thumb thumb-' + p.category + '" data-prod-thumb-id="' + Utils.escapeHtml(p.id) + '" role="button" tabindex="0" aria-label="Preview ' + Utils.escapeHtml(p.name) + '">' +
+            '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
           '<div><div class="name" title="' + Utils.escapeHtml(p.name) + '">' + Utils.escapeHtml(p.name) + (p.archived ? ' <span class="badge badge-neutral">Archived</span>' : '') + '</div><div class="sub">' + p.id + '</div></div></div></td>' +
         '<td data-label="Brand"><span class="cell-trunc" title="' + Utils.escapeHtml(p.brand || '') + '">' + Utils.escapeHtml(p.brand || '\u2014') + '</span></td>' +
         '<td data-label="Category"><span class="cell-trunc" title="' + Utils.escapeHtml(cat ? cat.name : p.category) + '">' + Utils.escapeHtml(cat ? cat.name : p.category) + '</span></td>' +
@@ -378,37 +386,71 @@ Boot.ready(function () {
   /* ---------- Image preview ---------- */
   function updateImagePreviewFallback() {
     const existingProd = editingProductId ? Store.get('products', []).find(p => p.id === editingProductId) : null;
-    const saved = (!imageRemoved && existingProd) ? Utils.productImage(existingProd) : '';
+    const saved = (!imageRemoved && existingProd) ? (Utils.productThumbnail(existingProd) || Utils.productImage(existingProd)) : '';
     const clearBtn = document.getElementById('clearImageBtn');
-    if (pendingImage || saved) {
-      document.getElementById('imagePreview').innerHTML = '<img src="' + (pendingImage || saved) + '" alt="">';
-      document.getElementById('imageDropLabel').textContent = pendingImage
-        ? (document.getElementById('pImageFile').files && document.getElementById('pImageFile').files[0] ? document.getElementById('pImageFile').files[0].name : 'Image selected')
-        : 'Click to change image';
+    const labelEl = document.getElementById('imageDropLabel');
+    const subtextEl = document.getElementById('imageDropSubtext');
+    if (pendingThumbnail || pendingImage || saved) {
+      const previewSrc = pendingThumbnail || pendingImage || saved;
+      document.getElementById('imagePreview').innerHTML = '<img src="' + previewSrc + '" alt="">';
+      if (pendingImage || pendingThumbnail) {
+        const fileName = (document.getElementById('pImageFile').files && document.getElementById('pImageFile').files[0])
+          ? document.getElementById('pImageFile').files[0].name
+          : 'Image selected';
+        if (labelEl) labelEl.textContent = fileName;
+        if (subtextEl) {
+          const sizeStr = compressedSizeKb ? ' (~' + compressedSizeKb + ' KB)' : '';
+          subtextEl.innerHTML = '<span style="color:var(--ok);font-weight:600;">✓ Optimized thumbnail' + sizeStr + '</span> — storage efficient & instant loading in POS & Inventory.';
+        }
+      } else {
+        if (labelEl) labelEl.textContent = 'Click to change image';
+        if (subtextEl) subtextEl.textContent = 'Optional — shown in Product Details and in POS. Without a photo, the category icon is used.';
+      }
       if (clearBtn) clearBtn.style.display = 'flex';
       return;
     }
     const cat = document.getElementById('pCategory').value;
     document.getElementById('imagePreview').innerHTML = '<svg viewBox="0 0 24 24" style="width:26px;height:26px;stroke:var(--steel);stroke-width:1.7;fill:none;">' + Utils.categoryIcon(cat) + '</svg>';
-    document.getElementById('imageDropLabel').textContent = 'Click to choose an image';
+    if (labelEl) labelEl.textContent = 'Click to choose an image';
+    if (subtextEl) subtextEl.textContent = 'Optional — shown in Product Details and in POS. Without a photo, the category icon is used.';
     if (clearBtn) clearBtn.style.display = 'none';
   }
 
-  /* Shrinks the chosen photo (max 360 px, JPEG) so many product photos fit in the browser's ~5 MB of storage. */
+  /* Shrinks the chosen photo down to a lightweight thumbnail (~10 KB – 30 KB)
+     so thousands of product photos never bloat the database or browser storage. */
   function resizeImage(file, done) {
     const reader = new FileReader();
     reader.onload = function (ev) {
       const img = new Image();
       img.onload = function () {
-        const scale = Math.min(1, 360 / Math.max(img.width, img.height));
+        // Standard display image (max 320px, JPEG 0.72) -> ~15-25 KB
+        const maxDisplay = 320;
+        const scaleDisplay = Math.min(1, maxDisplay / Math.max(img.width, img.height));
         const canvas = document.createElement('canvas');
-        canvas.width = Math.round(img.width * scale);
-        canvas.height = Math.round(img.height * scale);
+        canvas.width = Math.max(1, Math.round(img.width * scaleDisplay));
+        canvas.height = Math.max(1, Math.round(img.height * scaleDisplay));
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = '#fff';   // JPEG has no transparency
         ctx.fillRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        done(canvas.toDataURL('image/jpeg', 0.75));
+        const displayDataUrl = canvas.toDataURL('image/jpeg', 0.72);
+
+        // Compact thumbnail (max 160px, JPEG 0.75) -> ~8-15 KB
+        const maxThumb = 160;
+        const scaleThumb = Math.min(1, maxThumb / Math.max(img.width, img.height));
+        const thumbCanvas = document.createElement('canvas');
+        thumbCanvas.width = Math.max(1, Math.round(img.width * scaleThumb));
+        thumbCanvas.height = Math.max(1, Math.round(img.height * scaleThumb));
+        const tctx = thumbCanvas.getContext('2d');
+        tctx.fillStyle = '#fff';
+        tctx.fillRect(0, 0, thumbCanvas.width, thumbCanvas.height);
+        tctx.drawImage(img, 0, 0, thumbCanvas.width, thumbCanvas.height);
+        const thumbDataUrl = thumbCanvas.toDataURL('image/jpeg', 0.75);
+
+        const thumbBytes = Math.round(thumbDataUrl.length * 0.75);
+        const sizeKb = Math.round((thumbBytes / 1024) * 10) / 10;
+
+        done(displayDataUrl, thumbDataUrl, { sizeKb });
       };
       img.onerror = function () { showToast('That file could not be read as an image.', 'danger'); };
       img.src = ev.target.result;
@@ -473,6 +515,8 @@ Boot.ready(function () {
     compatSelections = [];
     document.getElementById('pImageFile').value = '';
     pendingImage = '';
+    pendingThumbnail = '';
+    compressedSizeKb = null;
     imageRemoved = false;
 
     const stockInput = document.getElementById('pStock');
@@ -701,7 +745,8 @@ Boot.ready(function () {
       rubber: false,
       compatibility: compatibility,
       compatYears: document.getElementById('pCompatYears').value.trim() || 'All Years',
-      image: imageRemoved ? categoryId : (pendingImage || (editingProductId ? Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) : '') || categoryId)
+      image: imageRemoved ? categoryId : (pendingImage || (editingProductId ? Utils.productImage(Store.get('products', []).find(p => p.id === editingProductId)) : '') || categoryId),
+      thumbnail: imageRemoved ? '' : (pendingThumbnail || (editingProductId ? Utils.productThumbnail(Store.get('products', []).find(p => p.id === editingProductId)) : '') || '')
     };
     if (editingProductId) {
       const existing = Store.get('products', []).find(p => p.id === editingProductId);
@@ -1640,6 +1685,8 @@ Boot.ready(function () {
       clearImgBtn.addEventListener('click', function (e) {
         e.stopPropagation();
         pendingImage = '';
+        pendingThumbnail = '';
+        compressedSizeKb = null;
         imageRemoved = true;
         document.getElementById('pImageFile').value = '';
         updateImagePreviewFallback();
@@ -1648,9 +1695,11 @@ Boot.ready(function () {
     document.getElementById('pImageFile').addEventListener('change', function (e) {
       const file = e.target.files[0];
       if (!file) return;
-      resizeImage(file, function (dataUrl) {
+      resizeImage(file, function (dataUrl, thumbUrl, meta) {
         pendingImage = dataUrl;
+        pendingThumbnail = thumbUrl || dataUrl;
         imageRemoved = false;
+        compressedSizeKb = meta ? meta.sizeKb : null;
         updateImagePreviewFallback();
       });
     });
@@ -1820,24 +1869,50 @@ Boot.ready(function () {
       });
     }
 
-    document.getElementById('productsTbody').addEventListener('click', function (e) {
-      const viewBtn = e.target.closest('[data-view]');
-      const editBtn = e.target.closest('[data-edit]');
-      const inBtn = e.target.closest('[data-stockin]');
-      const outBtn = e.target.closest('[data-stockout]');
-      const adjustBtn = e.target.closest('[data-adjust]');
-      const archiveBtn = e.target.closest('[data-archive]');
-      const unarchiveBtn = e.target.closest('[data-unarchive]');
-      const delProdBtn = e.target.closest('[data-delete-prod]');
-      if (viewBtn) openViewModal(viewBtn.dataset.view);
-      else if (editBtn) openProductModal('edit', editBtn.dataset.edit);
-      else if (inBtn) openStockModal('in', inBtn.dataset.stockin);
-      else if (outBtn) openStockModal('out', outBtn.dataset.stockout);
-      else if (adjustBtn) openAdjustModal(adjustBtn.dataset.adjust);
-      else if (archiveBtn) archiveProduct(archiveBtn.dataset.archive);
-      else if (unarchiveBtn) unarchiveProduct(unarchiveBtn.dataset.unarchive);
-      else if (delProdBtn) deleteProduct(delProdBtn.dataset.deleteProd);
-    });
+    const prodTbody = document.getElementById('productsTbody');
+    if (prodTbody) {
+      prodTbody.addEventListener('click', function (e) {
+        const viewBtn = e.target.closest('[data-view]');
+        const editBtn = e.target.closest('[data-edit]');
+        const inBtn = e.target.closest('[data-stockin]');
+        const outBtn = e.target.closest('[data-stockout]');
+        const adjustBtn = e.target.closest('[data-adjust]');
+        const archiveBtn = e.target.closest('[data-archive]');
+        const unarchiveBtn = e.target.closest('[data-unarchive]');
+        const delProdBtn = e.target.closest('[data-delete-prod]');
+        const thumbBtn = e.target.closest('.cell-thumb[data-prod-thumb-id]');
+        if (thumbBtn && !viewBtn && !editBtn) openViewModal(thumbBtn.dataset.prodThumbId);
+        else if (viewBtn) openViewModal(viewBtn.dataset.view);
+        else if (editBtn) openProductModal('edit', editBtn.dataset.edit);
+        else if (inBtn) openStockModal('in', inBtn.dataset.stockin);
+        else if (outBtn) openStockModal('out', outBtn.dataset.stockout);
+        else if (adjustBtn) openAdjustModal(adjustBtn.dataset.adjust);
+        else if (archiveBtn) archiveProduct(archiveBtn.dataset.archive);
+        else if (unarchiveBtn) unarchiveProduct(unarchiveBtn.dataset.unarchive);
+        else if (delProdBtn) deleteProduct(delProdBtn.dataset.deleteProd);
+      });
+
+      prodTbody.addEventListener('mouseover', function (e) {
+        const thumb = e.target.closest('.cell-thumb[data-prod-thumb-id]');
+        if (thumb && prodTbody.contains(thumb)) {
+          showThumbPopover(thumb);
+        }
+      });
+      prodTbody.addEventListener('mouseout', function (e) {
+        const thumb = e.target.closest('.cell-thumb[data-prod-thumb-id]');
+        if (thumb) {
+          const related = e.relatedTarget;
+          if (!thumb.contains(related)) {
+            hideThumbPopover();
+          }
+        }
+      });
+    }
+
+    window.addEventListener('scroll', hideThumbPopover, { passive: true });
+    window.addEventListener('resize', hideThumbPopover, { passive: true });
+    const invTableWrap = document.querySelector('.page-inventory .table-wrap');
+    if (invTableWrap) invTableWrap.addEventListener('scroll', hideThumbPopover, { passive: true });
 
     document.getElementById('toggleArchivedChip').addEventListener('click', function () {
       showArchived = !showArchived;

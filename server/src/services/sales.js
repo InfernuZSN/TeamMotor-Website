@@ -148,16 +148,17 @@ async function createSale(input, user) {
           id: await nextId('WAR', 3, undefined, session), customerId: customer ? customer.id : null, saleId,
           productId: p.id, productName: p.name, purchaseDate: startDate, warrantyStart: startDate,
           warrantyExpiration: calculateWarrantyExpiry(startDate, duration, unit),
+          duration: duration, unit: unit,
           coverage: p.warrantyType || 'Standard parts warranty', status: 'Active'
         };
         const w = session
           ? (await Warranty.create([warDoc], { session }))[0]
           : await Warranty.create(warDoc);
         createdDocs.warranties.push(w.id);
-        warranties.push(w.id);
+        warranties.push(warDoc);
       }
 
-      return { sale, items: lines, stockChanges, warrantiesCreated: warranties.length };
+      return { sale, items: lines, stockChanges, warrantiesCreated: warranties.length, warranties };
     } catch (err) {
       if (!session) {
         // ---- compensating rollback for standalone MongoDB ----
@@ -178,7 +179,7 @@ async function createSale(input, user) {
   });
 
   refreshNotifications().catch(e => console.error('[notifications]', e.message));
-  const saleOut = Object.assign({}, txResult.sale.toJSON ? txResult.sale.toJSON() : txResult.sale, { items: txResult.items });
+  const saleOut = Object.assign({}, txResult.sale.toJSON ? txResult.sale.toJSON() : txResult.sale, { items: txResult.items, warranties: txResult.warranties || [] });
   return { sale: saleOut, stockChanges: txResult.stockChanges, warrantiesCreated: txResult.warrantiesCreated, duplicate: false, customerName: customer ? customer.name : null };
 }
 

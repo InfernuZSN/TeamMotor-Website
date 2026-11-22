@@ -6,6 +6,7 @@ const { wrap, bad, notFound, forbidden, conflict } = require('../utils/errors');
 const { nextId } = require('../utils/counters');
 const { audit, diff } = require('../utils/audit');
 const { today } = require('../utils/dates');
+const { createActivityNotification } = require('../services/notifications');
 
 const PW_RE = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const checkPw = (pw) => { if (!PW_RE.test(String(pw || ''))) throw bad('Password must be at least 8 characters and include a letter and a number.'); };
@@ -120,12 +121,32 @@ router.post('/shifts/clock-in', wrap(async (req, res) => {
   if (open) return res.json(open);
   const shift = await Shift.create({ id: await nextId('SHF', 4), username: req.user.username, name: req.user.name, clockIn: new Date().toISOString(), clockOut: null });
   await audit(req, 'shift.clock_in', 'shift', shift.id, { staffName: req.user.name });
+  if (req.user.role === 'Staff') {
+    const timeStr = new Date(shift.clockIn).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    await createActivityNotification({
+      type: 'staff-clock-in',
+      title: 'Staff Clocked In',
+      message: `${req.user.name || req.user.username} clocked in at ${timeStr}.`,
+      link: 'users.html',
+      targetRole: 'Admin'
+    });
+  }
   res.status(201).json(shift);
 }));
 router.post('/shifts/clock-out', wrap(async (req, res) => {
   const shift = await Shift.findOneAndUpdate({ username: req.user.username, clockOut: null }, { $set: { clockOut: new Date().toISOString() } }, { new: true });
   if (!shift) throw bad('You are not clocked in.');
   await audit(req, 'shift.clock_out', 'shift', shift.id, { staffName: req.user.name });
+  if (req.user.role === 'Staff') {
+    const timeStr = new Date(shift.clockOut).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    await createActivityNotification({
+      type: 'staff-clock-out',
+      title: 'Staff Clocked Out',
+      message: `${req.user.name || req.user.username} clocked out at ${timeStr}.`,
+      link: 'users.html',
+      targetRole: 'Admin'
+    });
+  }
   res.json(shift);
 }));
 

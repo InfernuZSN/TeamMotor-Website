@@ -645,7 +645,7 @@ Boot.ready(function () {
     const t = totals(), isCash = method === 'Cash', rec = parseFloat(tendered) || 0;
     return {
       no: $('ptInvoice').textContent, date: Utils.demoNow(), cashier: session().name || '',
-      items: cart.map(function (c) { return { name: c.name, qty: c.qty, price: c.price, subtotal: round2(c.qty * c.price) }; }),
+      items: cart.map(function (c) { return { productId: c.productId, name: c.name, qty: c.qty, price: c.price, subtotal: round2(c.qty * c.price) }; }),
       subtotal: t.subtotal, discount: t.discount,
       vat: { enabled: t.vatEnabled, rate: t.vatRate, mode: t.vatMode, vatable: t.vatableAmount, amount: t.vatAmount },
       total: t.total, method: method, reference: !isCash && $('payRef').value.trim() ? $('payRef').value.trim() : null,

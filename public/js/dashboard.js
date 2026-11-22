@@ -47,11 +47,19 @@ Boot.ready(function () {
 
     const pStart = startOfDay(now).getTime() - (PERIOD_DAYS[period] - 1) * DAY;
     const periodSales = sales.filter(function (s) { return new Date(s.date).getTime() >= pStart; });
+    const allTxns = Store.get('inventoryTransactions', []);
+    const periodStockIn = allTxns.filter(function (t) {
+      return t.type === 'Stock In' && new Date(t.date).getTime() >= pStart;
+    });
+    const unitsStocked = periodStockIn.reduce(function (sum, t) {
+      return sum + Math.max(0, Number(t.quantity) || 0);
+    }, 0);
 
     const withExpiry = products.filter(function (p) { return p.stock > 0 && p.expirationDate; });
     return {
       now: now, allProducts: allProducts, products: products, sales: sales, warranties: warranties, months: months,
       todaySales: todaySales, ySoFar: ySoFar, periodSales: periodSales,
+      unitsStocked: unitsStocked,
       low: Analytics.lowStockProducts(products), out: Analytics.outOfStockProducts(products),
       expired: withExpiry.filter(function (p) { return Utils.expiryStatus(p, months) === 'Expired'; }),
       expiring: withExpiry.filter(function (p) { return Utils.expiryStatus(p, months) === 'Expiring Soon'; }),
@@ -62,8 +70,10 @@ Boot.ready(function () {
     };
   }
 
-  /* ---------- the six cards ---------- */
+  /* ---------- the status cards ---------- */
   function renderCards(d) {
+    const session = getSession();
+    const isStaff = session ? session.role === 'Staff' : false;
     const todayTotal = Analytics.sumTotal(d.todaySales), yTotal = Analytics.sumTotal(d.ySoFar);
     let salesTone = 'neutral', salesSub;
     if (!d.todaySales.length) { salesSub = 'No sales yet today'; }
@@ -74,15 +84,36 @@ Boot.ready(function () {
       salesSub = (pct >= 0 ? '\u25B2 ' : '\u25BC ') + Math.abs(pct) + '% vs this time yesterday';
     }
     const unitsSold = unitsIn(d.periodSales);
-    const cards = [
-      { view: 'recent', label: "Today's Sales", value: Utils.formatCardPHP(todayTotal), title: Utils.formatPHP(todayTotal), sub: salesSub, icon: 'trendUp', tone: salesTone },
-      { href: 'inventory.html', label: 'Total Products', value: d.products.length, sub: d.categories.length + ' categories \u00B7 ' + d.units.toLocaleString('en-PH') + ' units in stock', icon: 'box', tone: 'neutral' },
-      { view: 'low', label: 'Low Stock', value: d.low.length, sub: d.low.length ? '! At or below reorder level' : '\u2713 All above reorder level', icon: 'alertTriangle', tone: d.low.length ? 'danger' : 'ok' },
-      { view: 'out', label: 'Out of Stock', value: d.out.length, sub: d.out.length ? '! Needs immediate restock' : '\u2713 Nothing sold out', icon: 'xCircle', tone: d.out.length ? 'danger' : 'ok' },
-      { view: 'perf', label: 'Products Sold', value: unitsSold.toLocaleString('en-PH'), sub: unitsSold ? '\u2713 units ' + PERIOD_LABEL[period] : 'No units sold ' + PERIOD_LABEL[period], icon: 'cart', tone: unitsSold ? 'ok' : 'neutral' },
-      { view: 'warranty', label: 'Upcoming Warranties', value: d.warrantySoon.length, sub: d.warrantySoon.length ? '! Expiring soon' : '\u2713 None expiring soon', icon: 'shield', tone: d.warrantySoon.length ? 'danger' : 'ok' }
-    ];
-    $('statGrid').innerHTML = cards.map(function (c) {
+
+    let cards;
+    if (isStaff) {
+      // Staff Dashboard: excludes Today's Sales and Upcoming Warranties; adds Stocked Products in between Total Products and Low Stock
+      cards = [
+        { href: 'inventory.html', label: 'Total Products', value: d.products.length, sub: d.categories.length + ' categories \u00B7 ' + d.units.toLocaleString('en-PH') + ' units in stock', icon: 'box', tone: 'neutral' },
+        { view: 'stockin', label: 'Stocked Products', value: (d.unitsStocked || 0).toLocaleString('en-PH'), sub: d.unitsStocked ? '\u2713 units added ' + PERIOD_LABEL[period] : 'No stock added ' + PERIOD_LABEL[period], icon: 'stockIn', tone: d.unitsStocked ? 'ok' : 'neutral' },
+        { view: 'low', label: 'Low Stock', value: d.low.length, sub: d.low.length ? '! At or below reorder level' : '\u2713 All above reorder level', icon: 'alertTriangle', tone: d.low.length ? 'danger' : 'ok' },
+        { view: 'out', label: 'Out of Stock', value: d.out.length, sub: d.out.length ? '! Needs immediate restock' : '\u2713 Nothing sold out', icon: 'xCircle', tone: d.out.length ? 'danger' : 'ok' },
+        { view: 'perf', label: 'Products Sold', value: unitsSold.toLocaleString('en-PH'), sub: unitsSold ? '\u2713 units ' + PERIOD_LABEL[period] : 'No units sold ' + PERIOD_LABEL[period], icon: 'cart', tone: unitsSold ? 'ok' : 'neutral' }
+      ];
+    } else {
+      // Admin Dashboard: shows all operational and financial overview cards (including Stocked Products in between Total Products and Low Stock)
+      cards = [
+        { view: 'recent', label: "Today's Sales", value: Utils.formatCardPHP(todayTotal), title: Utils.formatPHP(todayTotal), sub: salesSub, icon: 'trendUp', tone: salesTone },
+        { href: 'inventory.html', label: 'Total Products', value: d.products.length, sub: d.categories.length + ' categories \u00B7 ' + d.units.toLocaleString('en-PH') + ' units in stock', icon: 'box', tone: 'neutral' },
+        { view: 'stockin', label: 'Stocked Products', value: (d.unitsStocked || 0).toLocaleString('en-PH'), sub: d.unitsStocked ? '\u2713 units added ' + PERIOD_LABEL[period] : 'No stock added ' + PERIOD_LABEL[period], icon: 'stockIn', tone: d.unitsStocked ? 'ok' : 'neutral' },
+        { view: 'low', label: 'Low Stock', value: d.low.length, sub: d.low.length ? '! At or below reorder level' : '\u2713 All above reorder level', icon: 'alertTriangle', tone: d.low.length ? 'danger' : 'ok' },
+        { view: 'out', label: 'Out of Stock', value: d.out.length, sub: d.out.length ? '! Needs immediate restock' : '\u2713 Nothing sold out', icon: 'xCircle', tone: d.out.length ? 'danger' : 'ok' },
+        { view: 'perf', label: 'Products Sold', value: unitsSold.toLocaleString('en-PH'), sub: unitsSold ? '\u2713 units ' + PERIOD_LABEL[period] : 'No units sold ' + PERIOD_LABEL[period], icon: 'cart', tone: unitsSold ? 'ok' : 'neutral' },
+        { view: 'warranty', label: 'Upcoming Warranties', value: d.warrantySoon.length, sub: d.warrantySoon.length ? '! Expiring soon' : '\u2713 None expiring soon', icon: 'shield', tone: d.warrantySoon.length ? 'danger' : 'ok' }
+      ];
+    }
+
+    const grid = $('statGrid');
+    if (grid) {
+      grid.classList.toggle('has-5-cards', cards.length === 5);
+      grid.classList.toggle('has-7-cards', cards.length === 7);
+    }
+    grid.innerHTML = cards.map(function (c) {
       const inner = '<div class="stat-icon tone-' + c.tone + '">' + icon(c.icon) + '</div>' +
         '<div class="stat-label">' + c.label + '</div><div class="stat-value">' + c.value + '</div><div class="stat-sub">' + c.sub + '</div>';
       const aria = ' aria-label="' + esc(c.label + ': ' + String(c.value).replace(/<[^>]*>/g, '') + '. ' + c.sub.replace(/^[\u2713!\u25B2\u25BC]\s*/, '')) + '"';
@@ -164,7 +195,9 @@ Boot.ready(function () {
     return '<div class="table-wrap"><table><thead><tr><th>Product</th><th>Category</th><th>Supplier</th><th class="text-right">In stock</th><th class="text-right">Reorder at</th><th>Status</th></tr></thead><tbody>' +
       list.map(function (p) {
         const st = Utils.getStockStatus(p.stock, p.reorderLevel), cat = Store.get('categories', []).find(function (c) { return c.id === p.category; }), sup = suppliers.find(function (s) { return s.id === p.supplier; });
-        return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '">' + icon('box') + '</div><div><div class="name">' + esc(p.name) + '</div><div class="sub">' + esc(p.id) + '</div></div></div></td>' +
+        return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '" data-prod-thumb-id="' + esc(p.id) + '" role="button" tabindex="0" aria-label="Preview ' + esc(p.name) + '">' +
+          '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
+          '<div><div class="name">' + esc(p.name) + '</div><div class="sub">' + esc(p.id) + '</div></div></div></td>' +
           '<td>' + esc(cat ? cat.name : '\u2014') + '</td><td>' + esc(sup ? sup.name : '\u2014') + '</td>' +
           '<td class="text-right mono-num" style="font-weight:700;">' + p.stock + '</td><td class="text-right mono-num">' + p.reorderLevel + '</td>' +
           '<td><span class="badge ' + Utils.statusClass(st) + '">' + st + '</span></td></tr>';
@@ -182,7 +215,10 @@ Boot.ready(function () {
     return heading('Expiring Products', 'Expired items must be pulled from sale; warning window is ' + d.months + ' months', invLink) +
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Product</th><th class="text-right">In stock</th><th>Expires</th><th>Status</th></tr></thead><tbody>' +
         rows.map(function (r) {
-          return '<tr><td style="font-weight:600;color:var(--ink);">' + esc(r.p.name) + ' <span class="text-muted">(' + esc(r.p.id) + ')</span></td><td class="text-right mono-num">' + r.p.stock + '</td>' +
+          return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + r.p.category + '" data-prod-thumb-id="' + esc(r.p.id) + '" role="button" tabindex="0" aria-label="Preview ' + esc(r.p.name) + '">' +
+            '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(r.p.category) + '</svg></div>' +
+            '<div><div class="name">' + esc(r.p.name) + '</div><div class="sub">' + esc(r.p.id) + '</div></div></div></td>' +
+            '<td class="text-right mono-num">' + r.p.stock + '</td>' +
             '<td>' + Utils.formatDate(r.p.expirationDate + 'T00:00:00') + '</td><td><span class="badge ' + (r.st === 'Expired' ? 'badge-danger' : 'badge-warn') + '">' + r.st + '</span></td></tr>';
         }).join('') + '</tbody></table></div>'
         : empty('checkCircle', 'Nothing expired or expiring soon'));
@@ -197,24 +233,36 @@ Boot.ready(function () {
         rows.map(function (r) {
           const w = r.w, c = d.customers.find(function (x) { return x.id === w.customerId; }), p = d.allProducts.find(function (x) { return x.id === w.productId; });
           const left = Math.round((new Date(w.warrantyExpiration) - d.now) / DAY);
-          return '<tr><td style="font-weight:600;color:var(--ink);">' + esc(p ? p.name : (w.productName || 'Motorcycle')) + '</td><td>' + esc(c ? c.name : 'Walk-in Customer') + '</td>' +
+          const pCat = p ? p.category : 'motorcycles';
+          const pId = p ? p.id : (w.productId || '');
+          const pName = p ? p.name : (w.productName || 'Motorcycle');
+          return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + pCat + '"' + (pId ? ' data-prod-thumb-id="' + esc(pId) + '" role="button" tabindex="0" aria-label="Preview ' + esc(pName) + '"' : '') + '>' +
+            '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(pCat) + '</svg></div>' +
+            '<div><div class="name">' + esc(pName) + '</div><div class="sub">' + esc(pId || '\u2014') + '</div></div></div></td>' +
+            '<td>' + esc(c ? c.name : 'Walk-in Customer') + '</td>' +
             '<td>' + Utils.formatDate(w.warrantyExpiration) + '</td><td><span class="badge ' + (r.st === 'Expiring Soon' ? 'badge-warn' : 'badge-ok') + '">' + (r.st === 'Expiring Soon' ? left + 'd left' : 'Active') + '</span></td></tr>';
         }).join('') + '</tbody></table></div>'
         : empty('shield', 'No upcoming warranty activity'));
   }
 
-  function viewStockIn() {
+  function viewStockIn(d) {
     const rows = Store.get('inventoryTransactions', [])
       .filter(function (t) { return t.type === 'Stock In' && t.reference !== 'Opening count'; })
       .slice()
       .sort(function (a, b) { return new Date(b.date) - new Date(a.date); })
       .slice(0, 10);
     const suppliers = Store.get('suppliers', []);
+    const allProducts = (d && d.allProducts) || Store.get('products', []);
     return heading('Recent Stock-In', 'Latest deliveries received', invLink) +
       (rows.length ? '<div class="table-wrap"><table><thead><tr><th>Product</th><th class="text-right">Qty</th><th>Supplier</th><th>Reference</th><th>When</th></tr></thead><tbody>' +
         rows.map(function (t) {
           const sup = suppliers.find(function (s) { return s.id === t.supplierId; });
-          return '<tr><td style="font-weight:600;color:var(--ink);">' + esc(t.productName) + '</td><td class="text-right mono-num" style="font-weight:700;color:var(--ok);">+' + t.quantity + '</td>' +
+          const p = allProducts.find(function (x) { return x.id === t.productId; });
+          const pCat = p ? p.category : 'other-parts';
+          return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + pCat + '" data-prod-thumb-id="' + esc(t.productId) + '" role="button" tabindex="0" aria-label="Preview ' + esc(t.productName) + '">' +
+            '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(pCat) + '</svg></div>' +
+            '<div><div class="name">' + esc(t.productName) + '</div><div class="sub">' + esc(t.productId) + '</div></div></div></td>' +
+            '<td class="text-right mono-num" style="font-weight:700;color:var(--ok);">+' + t.quantity + '</td>' +
             '<td>' + esc(sup ? sup.name : '\u2014') + '</td><td class="text-muted">' + esc(t.reference || '\u2014') + '</td><td class="text-muted">' + Utils.timeAgo(t.date) + '</td></tr>';
         }).join('') + '</tbody></table></div>'
         : empty('stockIn', 'No recent stock-in'));
@@ -227,7 +275,11 @@ Boot.ready(function () {
     return heading('Top / Slow Sellers', 'Units sold ' + PERIOD_LABEL[period] + ' vs. what is in stock (change the period above the cards)') +
       (d.periodSales.length && rows.length ? '<div class="table-wrap"><table><thead><tr><th>Product</th><th class="text-right">Units sold</th><th class="text-right">In stock</th><th>Movement</th></tr></thead><tbody>' +
         rows.map(function (x) {
-          return '<tr><td style="font-weight:600;color:var(--ink);">' + esc(x.r.product.name) + '</td><td class="text-right mono-num">' + x.r.unitsSold + '</td><td class="text-right mono-num">' + x.r.product.stock + '</td>' +
+          const p = x.r.product;
+          return '<tr><td><div class="cell-product"><div class="cell-thumb thumb-' + p.category + '" data-prod-thumb-id="' + esc(p.id) + '" role="button" tabindex="0" aria-label="Preview ' + esc(p.name) + '">' +
+            '<svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke-width:1.8;fill:none;">' + Utils.categoryIcon(p.category) + '</svg></div>' +
+            '<div><div class="name">' + esc(p.name) + '</div><div class="sub">' + esc(p.id) + '</div></div></div></td>' +
+            '<td class="text-right mono-num">' + x.r.unitsSold + '</td><td class="text-right mono-num">' + p.stock + '</td>' +
             '<td><span class="badge ' + (x.fast ? 'badge-ok' : 'badge-neutral') + '">' + (x.fast ? 'Fast Moving' : 'Slow Moving') + '</span></td></tr>';
         }).join('') + '</tbody></table></div>'
         : empty('sales', 'No sales ' + PERIOD_LABEL[period] + ' yet'));
@@ -237,6 +289,7 @@ Boot.ready(function () {
 
   /* ---------- draw everything (scroll position is kept so an auto-refresh doesn't jump) ---------- */
   function render() {
+    Utils.hideThumbPopover();
     const d = collect(), body = $('dashBody'), top = body.scrollTop;
     renderCards(d); renderChips(d);
     body.innerHTML = VIEWS[view](d);
@@ -264,6 +317,9 @@ Boot.ready(function () {
     $('statGrid').addEventListener('click', function (e) { const c = e.target.closest('[data-view]'); if (c) setView(c.dataset.view); });
     $('dashViews').addEventListener('click', function (e) { const c = e.target.closest('[data-view]'); if (c) setView(c.dataset.view); });
     $('dashBody').addEventListener('click', function (e) { const t = e.target.closest('[data-trend]'); if (t) { trendRange = t.dataset.trend; render(); } });
+    $('dashBody').addEventListener('scroll', function () {
+      Utils.hideThumbPopover();
+    }, { passive: true });
     $('periodChips').addEventListener('click', function (e) {
       const c = e.target.closest('[data-period]'); if (!c) return;
       period = c.dataset.period;

@@ -202,7 +202,7 @@ motoBrands.delete('/:id/models/:model', adminOnly, wrap(async (req, res) => {
 
 /* ---------------- products ---------------- */
 const PRODUCT_FIELDS = ['name', 'brand', 'category', 'compatibility', 'compatYears', 'supplier', 'supplierRef', 'sku', 'description',
-  'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'shelfLifeDuration', 'shelfLifeUnit', 'expirationDate', 'image', 'storageLocation'];
+  'costPrice', 'sellingPrice', 'reorderLevel', 'warrantyDuration', 'warrantyUnit', 'warrantyType', 'warrantyDays', 'rubber', 'shelfLifeDuration', 'shelfLifeUnit', 'expirationDate', 'image', 'thumbnail', 'storageLocation'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function cleanProduct(body, isUpdate = false) {
@@ -246,6 +246,7 @@ function cleanProduct(body, isUpdate = false) {
     }
   }
   if (out.image && out.image.length > 600000) throw bad('Product image is too large — resize it first.');
+  if (out.thumbnail && out.thumbnail.length > 250000) throw bad('Product thumbnail is too large.');
   return out;
 }
 
@@ -335,8 +336,17 @@ products.post('/', wrap(async (req, res) => {
     stock > 0 ? nextId('TRX', 4) : Promise.resolve(null)
   ]);
 
+  const userName = (req.user && (req.user.name || req.user.username)) || 'A user';
   const postOps = [
-    audit(req, 'product.create', 'product', id, { name: product.name, category: product.category, initialStock: stock, sellingPrice: product.sellingPrice, costPrice: product.costPrice })
+    audit(req, 'product.create', 'product', id, { name: product.name, category: product.category, initialStock: stock, sellingPrice: product.sellingPrice, costPrice: product.costPrice }),
+    createActivityNotification({
+      type: 'product-add',
+      productId: id,
+      title: 'New Product Added',
+      message: `${userName} added product "${product.name}" (${id}).`,
+      link: 'inventory.html',
+      targetRole: null
+    })
   ];
   if (stock > 0) {
     postOps.push(InventoryTransaction.create({
@@ -371,7 +381,7 @@ products.put('/:id', adminOnly, wrap(async (req, res) => {
   const updated = await Product.findOneAndUpdate({ id: req.params.id }, { $set: data }, { new: true, runValidators: true });
   const changes = {};
   Object.keys(data).forEach(k => {
-    if (k === 'lastUpdated' || k === 'image') return;
+    if (k === 'lastUpdated' || k === 'image' || k === 'thumbnail') return;
     if (JSON.stringify(before[k]) !== JSON.stringify(updated[k])) changes[k] = { from: before[k], to: updated[k] };
   });
   await audit(req, 'product.update', 'product', updated.id, { name: updated.name, changes });
